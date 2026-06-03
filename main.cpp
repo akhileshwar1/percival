@@ -31,6 +31,12 @@ typedef struct
     char *name;
 } Security;
 
+typedef struct
+{
+    Exchange_rate exRates[10];
+    Security secs[100];
+} State;
+
 void
 LoadExchangeRate(Exchange_rate *exRate, char *line)
 {
@@ -96,6 +102,7 @@ main()
         return -1;
     }
 
+    State state = {};
     char line[1024];
     int i = 0;
     while (fgets(line, sizeof(line), exchangeRateFile))
@@ -109,7 +116,8 @@ main()
         if (tmp) *tmp = '\0';
         Exchange_rate exRate = {};
         LoadExchangeRate(&exRate, line);
-        printf("ex rate is %f\n", exRate.rate);
+        state.exRates[i - 1] = exRate; // it's a copy here.
+        printf("ex rate is %f\n", state.exRates[i - 1].rate);
     }
 
     FILE *securityFile = fopen("securities.csv", "r");
@@ -119,8 +127,8 @@ main()
         return -1;
     }
 
-    i = 0;
     // upload the securities.
+    i = 0;
     while (fgets(line, sizeof(line), securityFile))
     {
         if (i == 0)
@@ -132,6 +140,7 @@ main()
         if (tmp) *tmp = '\0';
         Security sec = {};
         LoadSecurity(&sec, line);
-        printf("security is %s\n", sec.name);
+        state.secs[i - 1] = sec;
+        printf("security is %s\n", state.secs[i - 1].name);
     }
 }

@@ -420,7 +420,7 @@ main()
                                 (1.0 - (trade.brokerage + trade.serviceTax) / 100.0);
 
                             // you always get less after selling.
-                            state.strategies[0].cash += trade.qty * priceAfterFee;
+                            state.strategies[0].cash -= trade.qty * priceAfterFee;
                             state.strategies[0].positions[i].price =
                                 ((state.strategies[0].positions[i].price *
                                 state.strategies[0].positions[i].qty) +

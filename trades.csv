@@ -1,0 +1,4 @@
+symbol, broker_code, trans_type, qty, rate, brokerage, service_tax, date
+akh, dhan, MB, 1000, 50, 0.5, 0.5, 03/06/2026
+abh, dhan, MB, 500, 50, 0.5, 0.5, 03/06/2026
+akh, dhan, MS, 500, 60, 0.5, 0.5, 03/06/2026

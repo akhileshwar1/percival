@@ -74,7 +74,7 @@ typedef struct
 typedef struct
 {
     char symbol[100];
-    real64 amount;
+    real64 cash;
     real64 nav;
     Investor investors[MAX_INVESTORS];
     Position positions[MAX_POSITIONS];
@@ -158,7 +158,7 @@ LoadStrategy(Strategy *strat, char *line)
         }
         else if (i ==  4)
         {
-            strat->amount = (real64)atof(token);
+            strat->cash = (real64)atof(token);
         }
         else if (i ==  6)
         {
@@ -395,6 +395,8 @@ main()
                     case MB:
                     case LB:
                         {
+                            // you debit the thing, but the resulting net value is less.
+                            state.strategies[0].cash -= trade.qty * trade.price;
                             double netValue = 
                                 trade.qty * trade.price *
                                 (1.0 - (trade.brokerage + trade.serviceTax) / 100.0);
@@ -417,6 +419,8 @@ main()
                                 trade.price *
                                 (1.0 - (trade.brokerage + trade.serviceTax) / 100.0);
 
+                            // you always get less after selling.
+                            state.strategies[0].cash += trade.qty * priceAfterFee;
                             state.strategies[0].positions[i].price =
                                 ((state.strategies[0].positions[i].price *
                                 state.strategies[0].positions[i].qty) +
@@ -445,6 +449,7 @@ main()
                 case MB:
                 case LB:
                     {
+                        state.strategies[0].cash -= trade.qty * trade.price;
                         int qtyAfterFee =
                             (trade.qty * trade.price *
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
@@ -459,6 +464,8 @@ main()
                             (trade.qty * trade.price *
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty;
+                        // you always get less after selling.
+                        state.strategies[0].cash += trade.qty * priceAfterFee;
                         pos.price = priceAfterFee;
                         pos.qty = trade.qty;
                         break;
@@ -466,6 +473,7 @@ main()
             }
             state.strategies[0].positions[++state.strategies[0].currPosIndex] = pos;
         }
+        printf("cash is %f\n", state.strategies[0].cash);
         printf("pos is %s, %d, %f\n",
                state.strategies[0].positions[0].symbol,
                state.strategies[0].positions[0].qty,

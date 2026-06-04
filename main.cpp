@@ -25,22 +25,22 @@ typedef enum
 typedef struct
 {
     Currency_code curr;
-    char *date;
+    char date[100];
     real64 rate;
     Currency_code base;
 } Exchange_rate;
 
 typedef struct
 {
-    char *symbol;
-    char *date;
-    char *name;
+    char symbol[100];
+    char date[100];
+    char name[100];
 } Security;
 
 typedef struct
 {
     int id;
-    char *name;
+    char name[100];
     int units;
 } Investor;
 
@@ -54,9 +54,9 @@ typedef enum
 
 typedef struct
 {
-    char *symbol;
-    char *brokerCode;
-    char *date;
+    char symbol[100];
+    char brokerCode[100];
+    char date[100];
     int qty;
     real64 price;
     real64 brokerage;
@@ -66,28 +66,28 @@ typedef struct
 
 typedef struct
 {
-    char *symbol;
-    real64 amount;
-    real64 nav;
-    Investor investors[MAX_INVESTORS];
-    int currInvestorIndex;
-} Strategy;
-
-typedef struct
-{
-    char *symbol;
+    char symbol[100];
     int qty;
     real64 price;
 } Position;
 
 typedef struct
 {
+    char symbol[100];
+    real64 amount;
+    real64 nav;
+    Investor investors[MAX_INVESTORS];
+    Position positions[MAX_POSITIONS];
+    int currPosIndex;
+    int currInvestorIndex;
+} Strategy;
+
+typedef struct
+{
     Exchange_rate exRates[MAX_EX_RATES];
     Security secs[MAX_SECURITIES];
     Strategy strategies[MAX_STRATEGIES];
-    Position positions[MAX_POSITIONS];
     int currStratIndex;
-    int currPosIndex;
 } State;
 
 void
@@ -104,7 +104,7 @@ LoadExchangeRate(Exchange_rate *exRate, char *line)
         }
         else if (i ==  1)
         {
-            exRate->date= token;
+            strcpy(exRate->date, token);
         }
         else if (i ==  2)
         {
@@ -129,15 +129,15 @@ LoadSecurity(Security *sec, char *line)
     {
         if (i == 0)
         {
-            sec->symbol = token;
+            strcpy(sec->symbol, token);
         }
         else if (i ==  1)
         {
-            sec->date= token;
+            strcpy(sec->date, token);
         }
         else if (i ==  2)
         {
-            sec->name = token;
+            strcpy(sec->name, token);
         }
         token = strtok(NULL, ",");
         i++;
@@ -154,7 +154,7 @@ LoadStrategy(Strategy *strat, char *line)
     {
         if (i == 0)
         {
-            strat->symbol = token;
+            strcpy(strat->symbol, token);
         }
         else if (i ==  4)
         {
@@ -184,7 +184,7 @@ LoadInvestor(Investor *inv, char *line)
         }
         else if (i ==  2)
         {
-            inv->name = token;
+            strcpy(inv->name, token);
         }
         else if (i ==  7)
         {
@@ -205,11 +205,11 @@ LoadTrade(Trade *trade, char *line)
     {
         if (i == 0)
         {
-            trade->symbol = token;
+            strcpy(trade->symbol, token);
         }
         else if (i ==  1)
         {
-            trade->brokerCode = token;
+            strcpy(trade->brokerCode, token);
         }
         else if (i ==  2)
         {
@@ -244,7 +244,7 @@ LoadTrade(Trade *trade, char *line)
         }
         else if (i == 7)
         {
-            trade->date = token;
+            strcpy(trade->date, token);
         }
         token = strtok(NULL, ",");
         i++;
@@ -264,7 +264,6 @@ main()
 
     State state = {};
     state.currStratIndex = -1;
-    state.currPosIndex = -1;
     char line[1024];
     int i = 0;
     while (fgets(line, sizeof(line), exchangeRateFile))
@@ -325,6 +324,9 @@ main()
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
         Strategy strat = {};
+        /* NOTE(Akhil): strategies[0] implies we are working on
+                    one strategy only */
+        strat.currPosIndex = -1;
         Investor inv = {};
         // NOTE(akhil) : Same line being traversed twice.
         char copyLine[1024]; 
@@ -335,9 +337,9 @@ main()
         // add strategy to the state if not present.
         int found = 0;
         int foundIndex = -1;
-        for (int i = 0; i < MAX_STRATEGIES; i++)
+        for (int i = 0; i < state.currStratIndex + 1; i++)
         {
-            if (state.strategies[i].symbol == strat.symbol)
+            if (strcmp(state.strategies[i].symbol, strat.symbol) == 0)
             {
                 found = 1;
                 foundIndex = i;
@@ -384,37 +386,47 @@ main()
         LoadTrade(&trade, line);
         // apply trade to the positions state.
         int found = 0;
-        for (int i = 0; i < state.currPosIndex + 1; i++)
+        for (int i = 0; i < state.strategies[0].currPosIndex + 1; i++)
         {
-            if (strcmp(state.positions[i].symbol, trade.symbol) == 0)
+            if (strcmp(state.strategies[0].positions[i].symbol, trade.symbol) == 0)
             {
-                if (trade.transType == MB ||
-                    trade.transType == LB)
+                switch (trade.transType)
                 {
-                    int qtyAfterFee =
-                        (trade.qty * trade.price *
-                        (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                        / trade.price;
-                    state.positions[i].price = 
-                        ((state.positions[i].price *
-                        state.positions[i].qty) +
-                        (trade.price * qtyAfterFee)) /
-                        state.positions[i].qty + qtyAfterFee;
-                    state.positions[i].qty += qtyAfterFee;
-                }
-                else
-                {
-                    double priceAfterFee =
-                        (trade.qty * trade.price *
-                        (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                        / trade.qty;
-                    state.positions[i].price = 
-                        ((state.positions[i].price *
-                        state.positions[i].qty) +
-                        (trade.qty * priceAfterFee)) /
-                        state.positions[i].qty + trade.qty;
-                    state.positions[i].qty += trade.qty;
-                }
+                    case MB:
+                    case LB:
+                        {
+                            double netValue = 
+                                trade.qty * trade.price *
+                                (1.0 - (trade.brokerage + trade.serviceTax) / 100.0);
+                            int qtyAfterFee = (int)(netValue / trade.price); 
+
+                            // NOTE(Akhil): this will break if denom is 0!
+                            state.strategies[0].positions[i].price =
+                                ((state.strategies[0].positions[i].price *
+                                state.strategies[0].positions[i].qty)
+                                + (trade.price * qtyAfterFee)) 
+                                / (state.strategies[0].positions[i].qty + qtyAfterFee);
+
+                            state.strategies[0].positions[i].qty += qtyAfterFee;
+                            break;
+                        }
+
+                    default:
+                        {
+                            double priceAfterFee =
+                                trade.price *
+                                (1.0 - (trade.brokerage + trade.serviceTax) / 100.0);
+
+                            state.strategies[0].positions[i].price =
+                                ((state.strategies[0].positions[i].price *
+                                state.strategies[0].positions[i].qty) +
+                                (trade.qty * priceAfterFee)) 
+                                / (state.strategies[0].positions[i].qty + trade.qty);
+
+                            state.strategies[0].positions[i].qty += trade.qty;
+                            break;
+                        }
+                } 
 
                 found = 1;
                 break;
@@ -425,29 +437,38 @@ main()
         if (found != 1)
         {
             // add the position
+            printf("adding new position: %s\n", trade.symbol);
             Position pos = {};
-            pos.symbol = trade.symbol;
-            if (trade.transType == MB ||
-                trade.transType == LB)
+            strcpy(pos.symbol, trade.symbol);
+            switch(trade.transType)
             {
-                int qtyAfterFee =
-                    (trade.qty * trade.price *
-                    (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                    / trade.price;
-                pos.price = trade.price;
-                pos.qty = qtyAfterFee;
+                case MB:
+                case LB:
+                    {
+                        int qtyAfterFee =
+                            (trade.qty * trade.price *
+                            (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
+                            / trade.price;
+                        pos.price = trade.price;
+                        pos.qty = qtyAfterFee;
+                        break;
+                    }
+                default:
+                    {
+                        double priceAfterFee =
+                            (trade.qty * trade.price *
+                            (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
+                            / trade.qty;
+                        pos.price = priceAfterFee;
+                        pos.qty = trade.qty;
+                        break;
+                    }
             }
-            else
-            {
-                double priceAfterFee =
-                    (trade.qty * trade.price *
-                    (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                    / trade.qty;
-                pos.price = priceAfterFee;
-                pos.qty = trade.qty;
-            }
-            state.positions[++state.currPosIndex] = pos;
+            state.strategies[0].positions[++state.strategies[0].currPosIndex] = pos;
         }
-        printf("pos qty is %d\n", state.positions[0].qty);
+        printf("pos is %s, %d, %f\n",
+               state.strategies[0].positions[0].symbol,
+               state.strategies[0].positions[0].qty,
+               state.strategies[0].positions[0].price);
     }
 }

@@ -396,9 +396,10 @@ main()
                     case LB:
                         {
                             // you pay more while buying.
-                            double priceAfterFee =
-                                trade.price *
-                                (1.0 + (trade.brokerage + trade.serviceTax) / 100.0);
+                           real64 priceAfterFee =
+                            (trade.qty * trade.price *
+                            (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
+                            / trade.qty; 
 
 
                             state.strategies[0].cash -= trade.qty * priceAfterFee;
@@ -415,9 +416,11 @@ main()
 
                     default:
                         {
-                            double priceAfterFee =
-                                trade.price *
-                                (1.0 - (trade.brokerage + trade.serviceTax) / 100.0);
+                           printf("trade qty is %f\n", (real64)trade.qty);
+                           real64 priceAfterFee =
+                            (trade.qty * trade.price *
+                            (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
+                            / trade.qty; 
 
                             // you always get less after selling.
                             state.strategies[0].cash -= trade.qty * priceAfterFee;
@@ -449,7 +452,7 @@ main()
                 case MB:
                 case LB:
                     {
-                        double priceAfterFee =
+                        real64 priceAfterFee =
                             (trade.qty * trade.price *
                             (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty;
@@ -461,7 +464,7 @@ main()
                     }
                 default:
                     {
-                        double priceAfterFee =
+                        real64 priceAfterFee =
                             (trade.qty * trade.price *
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty;

@@ -33,6 +33,12 @@ typedef struct
 typedef struct
 {
     char symbol[100];
+    real64 ltp;
+} Bhav;
+
+typedef struct
+{
+    char symbol[100];
     char date[100];
     char name[100];
 } Security;
@@ -69,6 +75,7 @@ typedef struct
     char symbol[100];
     int qty;
     real64 price;
+    real64 ltp;
 } Position;
 
 typedef struct
@@ -89,6 +96,27 @@ typedef struct
     Strategy strategies[MAX_STRATEGIES];
     int currStratIndex;
 } State;
+
+void
+LoadBhav(Bhav *bhav, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 0)
+        {
+            strcpy(bhav->symbol, token);
+        }
+        else if (i ==  5)
+        {
+            bhav->ltp = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
 
 void
 LoadExchangeRate(Exchange_rate *exRate, char *line)
@@ -484,12 +512,37 @@ main()
                state.strategies[0].positions[0].price);
     }
 
+    //upload the bhavcopy.
+    FILE *BhavFile = fopen("bhavcopy.csv", "r");
+    if (BhavFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    i = 0;
+    while (fgets(line, sizeof(line), securityFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        Bhav bhav = {};
+        LoadBhav(&bhav, line);
+        for (int i = 0; i < state.strategies[0].currPosIndex + 1; i++)
+        {
+            state.strategies[0].positions[i].ltp = bhav.ltp;
+        }
+    }
+
     // get total value of the positions held for the strategy.
     real64 totalValue = 0.0;
     for (int i = 0; i < state.strategies[0].currPosIndex + 1; i++)
     {
         Position pos = state.strategies[0].positions[i];
-        totalValue  += pos.qty * pos.price;
+        totalValue  += pos.qty * pos.ltp;
     }
 
     // get the total units from all the investors for a strategy.

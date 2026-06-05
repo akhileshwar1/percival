@@ -41,7 +41,7 @@ typedef struct
 {
     int id;
     char name[100];
-    int units;
+    uint64 units;
 } Investor;
 
 typedef enum 
@@ -188,7 +188,7 @@ LoadInvestor(Investor *inv, char *line)
         }
         else if (i ==  7)
         {
-            inv->units = (real64)atof(token);
+            inv->units = (uint64)atoi(token);
         }
         token = strtok(NULL, ",");
         i++;
@@ -360,7 +360,7 @@ main()
         }
 
         printf("strategy is %s\n", state.strategies[0].symbol);
-        printf("investor is %d\n", state.strategies[0].investors[0].units);
+        printf("investor is %ld\n", state.strategies[0].investors[0].units);
     }
 
     /* read the trades pertaining to a particular strategy
@@ -479,4 +479,25 @@ main()
                state.strategies[0].positions[0].qty,
                state.strategies[0].positions[0].price);
     }
+
+    // get total value of the positions held for the strategy.
+    real64 totalValue = 0.0;
+    for (int i = 0; i < state.strategies[0].currPosIndex + 1; i++)
+    {
+        Position pos = state.strategies[0].positions[i];
+        totalValue  += pos.qty * pos.price;
+    }
+
+    // get the total units from all the investors for a strategy.
+    uint64 totalUnits = 0;
+    for (int i = 0; i < state.strategies[0].currInvestorIndex + 1; i++)
+    {
+        Investor inv = state.strategies[0].investors[i];
+        totalUnits += inv.units;
+    }
+
+    // calculate the nav = (totalValue + cash) / totalUnits.
+    real64 cash = state.strategies[0].cash;
+    real64 nav = (totalValue + cash) / totalUnits;
+    printf("nav is %f\n", nav);
 }

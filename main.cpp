@@ -509,7 +509,12 @@ main()
         printf("pos is %s, %d, %f\n",
                state.strategies[0].positions[0].symbol,
                state.strategies[0].positions[0].qty,
-               state.strategies[0].positions[0].price);
+               state.strategies[0].positions[0].ltp);
+        printf("pos is %s, %d, %f\n",
+               state.strategies[0].positions[1].symbol,
+               state.strategies[0].positions[1].qty,
+               state.strategies[0].positions[1].ltp);
+
     }
 
     //upload the bhavcopy.
@@ -520,7 +525,7 @@ main()
         return -1;
     }
     i = 0;
-    while (fgets(line, sizeof(line), securityFile))
+    while (fgets(line, sizeof(line), BhavFile))
     {
         if (i == 0)
         {
@@ -533,8 +538,20 @@ main()
         LoadBhav(&bhav, line);
         for (int i = 0; i < state.strategies[0].currPosIndex + 1; i++)
         {
-            state.strategies[0].positions[i].ltp = bhav.ltp;
+            if (strcmp(bhav.symbol, state.strategies[0].positions[i].symbol) == 0)
+            {
+                state.strategies[0].positions[i].ltp = bhav.ltp;
+            }
         }
+        printf("cash after bhav is %f\n", state.strategies[0].cash);
+        printf("pos after bhav is %s, %d, %f\n",
+               state.strategies[0].positions[0].symbol,
+               state.strategies[0].positions[0].qty,
+               state.strategies[0].positions[0].ltp);
+        printf("pos after bhav is %s, %d, %f\n",
+               state.strategies[0].positions[1].symbol,
+               state.strategies[0].positions[1].qty,
+               state.strategies[0].positions[1].ltp);
     }
 
     // get total value of the positions held for the strategy.

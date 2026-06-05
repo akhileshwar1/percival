@@ -395,21 +395,21 @@ main()
                     case MB:
                     case LB:
                         {
-                            // you debit the thing, but the resulting net value is less.
-                            state.strategies[0].cash -= trade.qty * trade.price;
-                            double netValue = 
-                                trade.qty * trade.price *
-                                (1.0 - (trade.brokerage + trade.serviceTax) / 100.0);
-                            int qtyAfterFee = (int)(netValue / trade.price); 
+                            // you pay more while buying.
+                            double priceAfterFee =
+                                trade.price *
+                                (1.0 + (trade.brokerage + trade.serviceTax) / 100.0);
 
+
+                            state.strategies[0].cash -= trade.qty * priceAfterFee;
                             // NOTE(Akhil): this will break if denom is 0!
                             state.strategies[0].positions[i].price =
                                 ((state.strategies[0].positions[i].price *
                                 state.strategies[0].positions[i].qty)
-                                + (trade.price * qtyAfterFee)) 
-                                / (state.strategies[0].positions[i].qty + qtyAfterFee);
+                                + (trade.qty * priceAfterFee)) 
+                                / (state.strategies[0].positions[i].qty + trade.qty);
 
-                            state.strategies[0].positions[i].qty += qtyAfterFee;
+                            state.strategies[0].positions[i].qty += trade.qty;
                             break;
                         }
 
@@ -449,13 +449,14 @@ main()
                 case MB:
                 case LB:
                     {
-                        state.strategies[0].cash -= trade.qty * trade.price;
-                        int qtyAfterFee =
+                        double priceAfterFee =
                             (trade.qty * trade.price *
-                            (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                            / trade.price;
-                        pos.price = trade.price;
-                        pos.qty = qtyAfterFee;
+                            (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
+                            / trade.qty;
+                        // you always pay more while buying.
+                        state.strategies[0].cash -= trade.qty * priceAfterFee;
+                        pos.price = priceAfterFee;
+                        pos.qty = trade.qty;
                         break;
                     }
                 default:

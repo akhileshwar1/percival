@@ -47,6 +47,7 @@ typedef struct
 {
     int id;
     char name[100];
+    char inceptionDate[100];
     uint64 units;
 } Investor;
 
@@ -89,12 +90,33 @@ typedef struct
     int currInvestorIndex;
 } Strategy;
 
+typedef enum
+{
+    ASSET,
+    EXPENSE,
+    LIABILITY,
+    EQUITY,
+    REVENUE
+} LedgerEntryType;
+
+typedef struct
+{
+    int id;
+    LedgerEntryType type;
+    char accountName[100];
+    real64 debit;
+    real64 credit;
+    char memo[100];
+} LedgerEntry;
+
 typedef struct
 {
     Exchange_rate exRates[MAX_EX_RATES];
     Security secs[MAX_SECURITIES];
     Strategy strategies[MAX_STRATEGIES];
+    LedgerEntry ledger[1000];
     int currStratIndex;
+    int currEntryId;
 } State;
 
 void
@@ -199,6 +221,69 @@ LoadStrategy(Strategy *strat, char *line)
 }
 
 void
+AccountFromSubs(LedgerEntry *entry, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i ==  1)
+        {
+            strcpy(entry->accountName, token); 
+        }
+        else if (i == 7)
+        {
+            switch (entry->type)
+            {
+                case ASSET:
+                case EXPENSE:
+                    {
+                        entry->debit = abs((real64)atof(token));
+                        strcat(entry->accountName, "_cash_advisory"); 
+                        break;
+                    }
+                case LIABILITY:
+                case EQUITY:
+                case REVENUE:
+                    {
+                        entry->credit = abs((real64)atof(token));
+                        strcat(entry->accountName, "_inv_capital"); 
+                        break;
+                    }
+            }
+        }
+        else if (i ==  18)
+        {
+            strcpy(entry->memo, token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
+LoadInvestorFromClient(Investor *inv, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i ==  5)
+        {
+            strcpy(inv->name, token);
+        }
+        else if (i ==  23)
+        {
+            strcpy(inv->inceptionDate, token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
 LoadInvestor(Investor *inv, char *line)
 {
     char *token;
@@ -292,6 +377,7 @@ main()
 
     State state = {};
     state.currStratIndex = -1;
+    state.currEntryId = -1;
     char line[1024];
     int i = 0;
     while (fgets(line, sizeof(line), exchangeRateFile))
@@ -334,12 +420,63 @@ main()
     }
 
     // onboard investor and strategy if new.
+    // step 1: the client_master.csv file.
+    Investor inv = {};
+    FILE *clientFile = fopen("client_master.csv", "r");
+    if (clientFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), clientFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        LoadInvestorFromClient(&inv, line);
+    }
+
+    // step 2: the subscription file with accounting.
+    FILE *subsFile = fopen("subscription_upa.csv", "r");
+    if (subsFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), subsFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        LedgerEntry entry = {};
+        entry.id = ++state.currEntryId;
+        if (i == 1) entry.type = ASSET;
+        else if (i == 2) entry.type = EQUITY;
+        AccountFromSubs(&entry, line);
+        state.ledger[state.currEntryId] = entry;
+        printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
+        i++;
+    }
+
     FILE *onboardFile = fopen("onboard_investor.csv", "r");
     if (onboardFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
         return -1;
     }
+
 
     i = 0;
     while (fgets(line, sizeof(line), onboardFile))

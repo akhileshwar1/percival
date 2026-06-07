@@ -240,6 +240,38 @@ getDollarValue(char *line)
 }
 
 void
+AccountFromExpense(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
+                char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    char accountName[100] = "";
+    while (token != NULL)
+    {
+        if (i ==  1)
+        {
+            strcat(accountName, token); 
+        }
+        else if (i ==  2)
+        {
+            strcat(accountName, token); 
+            strcpy(liabEntry->accountName, accountName);
+            liabEntry->type = LIABILITY;
+        }
+        else if (i == 7)
+        {
+            strcpy(assetEntry->accountName, "Fund_expenses");
+            assetEntry->type = EXPENSE;
+            assetEntry->debit = (real64)atof(token);
+            liabEntry->credit = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
 AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
                 real64 dollarValue, char *line)
 {
@@ -581,6 +613,36 @@ main()
             return -1;
         }
         AccountFromBank(&assetEntry, &liabEntry, dollarValue, line);
+        state.ledger[++state.currEntryId] = assetEntry;
+        state.ledger[++state.currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        i++;
+    }
+
+    // step 4: fund expense investor file.
+    FILE *expenseFile = fopen("fund_expense.csv", "r");
+    if (expenseFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    i = 0;
+    while (fgets(line, sizeof(line), expenseFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        ++state.currJournalId;
+        LedgerEntry assetEntry = {};
+        LedgerEntry liabEntry = {};
+        assetEntry.id = state.currJournalId;
+        liabEntry.id = state.currJournalId;
+        AccountFromExpense(&assetEntry, &liabEntry, line);
         state.ledger[++state.currEntryId] = assetEntry;
         state.ledger[++state.currEntryId] = liabEntry;
         printf("entry name is %s and value is %f\n", assetEntry.accountName,

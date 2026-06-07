@@ -549,6 +549,8 @@ main()
         {
             char copyLine[1024];
             strcpy(copyLine, line);
+            /* Need this because the later rows are not dollarised,
+               since they transfer the money to indian inr accounts. */
             dollarValue = getDollarValue(copyLine);
         }
         char *tmp = strchr(line, '\n');

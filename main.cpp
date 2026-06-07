@@ -240,6 +240,34 @@ getDollarValue(char *line)
 }
 
 void
+AccountFromReverse(LedgerEntry *liabEntry, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    char accountName[100] = "";
+    while (token != NULL)
+    {
+        if (i ==  1)
+        {
+            strcat(accountName, token); 
+        }
+        else if (i ==  2)
+        {
+            strcat(accountName, token); 
+            strcpy(liabEntry->accountName, accountName);
+            liabEntry->type = LIABILITY;
+        }
+        else if (i == 7)
+        {
+            liabEntry->credit = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
 AccountFromExpense(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
                 char *line)
 {
@@ -650,6 +678,32 @@ main()
         i++;
     }
 
+    // step 5: reverse the upa debit account entry.
+    FILE *reverseFile = fopen("reverse_upa.csv", "r");
+    if (reverseFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    i = 0;
+    while (fgets(line, sizeof(line), reverseFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        ++state.currJournalId;
+        LedgerEntry liabEntry = {};
+        liabEntry.id = state.currJournalId;
+        AccountFromReverse(&liabEntry, line);
+        state.ledger[++state.currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", liabEntry.accountName,
+               liabEntry.credit);
+        i++;
+    }
     printFundLedger(&state);
 
     FILE *onboardFile = fopen("onboard_investor.csv", "r");

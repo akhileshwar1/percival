@@ -246,7 +246,7 @@ AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
     char *token;
     token = strtok(line, ",");
     int i = 0;
-    char accountName[100];
+    char accountName[100] = "";
     while (token != NULL)
     {
         if (i ==  3)
@@ -259,11 +259,11 @@ AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
             assetEntry->type = ASSET;
             assetEntry->debit = dollarValue;
             strcpy(assetEntry->accountName, accountName);
-            memset(accountName, 0, sizeof(accountName)); 
+            strcpy(accountName, "");
         }
         else if (i == 7)
         {
-            strcat(accountName, token); 
+            strcpy(accountName, token); 
         }
         else if (i ==  8)
         {
@@ -421,6 +421,21 @@ LoadTrade(Trade *trade, char *line)
     }
 }
 
+void
+printFundLedger(State *state)
+{
+    // print the ledger.
+    for (int i = 0; i < state->currEntryId + 1; i++)
+    {
+        LedgerEntry entry = state->ledger[i];
+        printf("name: %s, type: %d, debit: %f, credit: %f\n",
+               entry.accountName,
+               entry.type,
+               entry.debit,
+               entry.credit);
+    }
+}
+
 int
 main()
 {
@@ -572,6 +587,8 @@ main()
                assetEntry.debit);
         i++;
     }
+
+    printFundLedger(&state);
 
     FILE *onboardFile = fopen("onboard_investor.csv", "r");
     if (onboardFile == NULL)

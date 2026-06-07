@@ -117,6 +117,7 @@ typedef struct
     LedgerEntry ledger[1000];
     int currStratIndex;
     int currEntryId;
+    int currJournalId;
 } State;
 
 void
@@ -218,6 +219,62 @@ LoadStrategy(Strategy *strat, char *line)
         i++;
     }
     strat->currInvestorIndex = -1;
+}
+
+real64
+getDollarValue(char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 5)
+        {
+            return (real64)atof(token); 
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+    return -1;
+}
+
+void
+AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
+                real64 dollarValue, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    char accountName[100];
+    while (token != NULL)
+    {
+        if (i ==  3)
+        {
+            strcat(accountName, token); 
+        }
+        else if (i ==  4)
+        {
+            strcat(accountName, token); 
+            assetEntry->type = ASSET;
+            assetEntry->debit = dollarValue;
+            strcpy(assetEntry->accountName, accountName);
+            memset(accountName, 0, sizeof(accountName)); 
+        }
+        else if (i == 7)
+        {
+            strcat(accountName, token); 
+        }
+        else if (i ==  8)
+        {
+            strcat(accountName, token); 
+            strcpy(liabEntry->accountName, accountName);
+            liabEntry->type = LIABILITY;
+            liabEntry->credit = dollarValue;
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
 }
 
 void
@@ -451,6 +508,7 @@ main()
     }
 
     i = 0;
+    ++state.currJournalId; // same id for the couple.
     while (fgets(line, sizeof(line), subsFile))
     {
         if (i == 0)
@@ -461,12 +519,55 @@ main()
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
         LedgerEntry entry = {};
-        entry.id = ++state.currEntryId;
+        entry.id = state.currJournalId;
         if (i == 1) entry.type = ASSET;
         else if (i == 2) entry.type = EQUITY;
         AccountFromSubs(&entry, line);
-        state.ledger[state.currEntryId] = entry;
+        state.ledger[++state.currEntryId] = entry;
         printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
+        i++;
+    }
+
+    // step 3: process the bank transfer.
+    FILE *bankFile = fopen("bank_transfer.csv", "r");
+    if (bankFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    real64 dollarValue;
+    while (fgets(line, sizeof(line), bankFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        else if (i == 1)
+        {
+            char copyLine[1024];
+            strcpy(copyLine, line);
+            dollarValue = getDollarValue(copyLine);
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        ++state.currJournalId;
+        LedgerEntry assetEntry = {};
+        LedgerEntry liabEntry = {};
+        assetEntry.id = state.currJournalId;
+        liabEntry.id = state.currJournalId;
+        if (dollarValue == -1)
+        {
+            printf("bank transfer failed!, abort!\n");
+            return -1;
+        }
+        AccountFromBank(&assetEntry, &liabEntry, dollarValue, line);
+        state.ledger[++state.currEntryId] = assetEntry;
+        state.ledger[++state.currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
         i++;
     }
 

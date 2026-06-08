@@ -221,6 +221,27 @@ LoadStrategy(Strategy *strat, char *line)
     strat->currInvestorIndex = -1;
 }
 
+void
+LoadStrategyFromFile(Strategy *strat, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 3)
+        {
+            strcpy(strat->symbol, token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+    strat->currInvestorIndex = -1;
+    strat->nav = 100;
+    strat->currPosIndex = -1;
+    strat->currInvestorIndex = -1;
+}
+
 real64
 getDollarValue(char *line)
 {
@@ -552,6 +573,29 @@ main()
     }
 
     // onboard investor and strategy if new.
+
+    // step 0: create new strategy.
+    FILE *stratFile = fopen("strategy_master.csv", "r");
+    if (stratFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    Strategy strategy = {};
+    while (fgets(line, sizeof(line), stratFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        LoadStrategyFromFile(&strategy, line);
+        state.strategies[++state.currStratIndex] = strategy;
+    }
+
     // step 1: the client_master.csv file.
     Investor inv = {};
     FILE *clientFile = fopen("client_master.csv", "r");

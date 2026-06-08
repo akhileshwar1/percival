@@ -262,6 +262,35 @@ getDollarValue(char *line)
 }
 
 void
+AccountFromCashFlow(LedgerEntry *liabEntry, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    char accountName[100] = "";
+    while (token != NULL)
+    {
+        if (i == 3)
+        {
+            liabEntry->credit = (real64)atof(token);
+        }
+        if (i ==  6)
+        {
+            strcat(accountName, token); 
+            strcat(accountName, "_"); 
+        }
+        else if (i ==  7)
+        {
+            strcat(accountName, token); 
+            strcpy(liabEntry->accountName, accountName);
+            liabEntry->type = LIABILITY;
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
 AccountFromReverse(LedgerEntry *liabEntry, char *line)
 {
     char *token;
@@ -756,8 +785,37 @@ main()
                liabEntry.credit);
         i++;
     }
-    printFundLedger(&state);
+    
+    // step 6: fund cashflow file.
+    FILE *cashflowFile = fopen("fund_cashflow.csv", "r");
+    if (cashflowFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    i = 0;
+    while (fgets(line, sizeof(line), cashflowFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        /* NOTE(Akhil): here we are working on the latest strategy.
+                        usually first column discloses the strategy name. */
+        ++state.strategies[state.currStratIndex].currJournalId;
+        LedgerEntry liabEntry = {};
+        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        AccountFromCashFlow(&liabEntry, line);
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", liabEntry.accountName,
+               liabEntry.credit);
+        i++;
+    }
 
+    printFundLedger(&state);
     FILE *onboardFile = fopen("onboard_investor.csv", "r");
     if (onboardFile == NULL)
     {

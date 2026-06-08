@@ -79,18 +79,6 @@ typedef struct
     real64 ltp;
 } Position;
 
-typedef struct
-{
-    char symbol[100];
-    real64 cash;
-    real64 nav;
-    Investor investors[MAX_INVESTORS];
-    Position positions[MAX_POSITIONS];
-    int id;
-    int currPosIndex;
-    int currInvestorIndex;
-} Strategy;
-
 typedef enum
 {
     ASSET,
@@ -112,13 +100,25 @@ typedef struct
 
 typedef struct
 {
+    char symbol[100];
+    real64 cash;
+    real64 nav;
+    Investor investors[MAX_INVESTORS];
+    Position positions[MAX_POSITIONS];
+    int id;
+    int currPosIndex;
+    int currInvestorIndex;
+    LedgerEntry ledger[100];
+    int currEntryId;
+    int currJournalId;
+} Strategy;
+
+typedef struct
+{
     Exchange_rate exRates[MAX_EX_RATES];
     Security secs[MAX_SECURITIES];
     Strategy strategies[MAX_STRATEGIES];
-    LedgerEntry ledger[1000];
     int currStratIndex;
-    int currEntryId;
-    int currJournalId;
 } State;
 
 void
@@ -507,9 +507,9 @@ void
 printFundLedger(State *state)
 {
     // print the ledger.
-    for (int i = 0; i < state->currEntryId + 1; i++)
+    for (int i = 0; i < state->strategies[state->currStratIndex].currEntryId + 1; i++)
     {
-        LedgerEntry entry = state->ledger[i];
+        LedgerEntry entry = state->strategies[state->currStratIndex].ledger[i];
         printf("name: %s, type: %d, debit: %f, credit: %f\n",
                entry.accountName,
                entry.type,
@@ -521,6 +521,7 @@ printFundLedger(State *state)
 int
 main()
 {
+    printf("hey\n");
     printf("hey there\n");
     FILE *exchangeRateFile = fopen("exchange_rate.csv", "r");
     if (exchangeRateFile == NULL)
@@ -531,7 +532,6 @@ main()
 
     State state = {};
     state.currStratIndex = -1;
-    state.currEntryId = -1;
     char line[1024];
     int i = 0;
     while (fgets(line, sizeof(line), exchangeRateFile))
@@ -597,7 +597,8 @@ main()
         if (tmp) *tmp = '\0';
         LoadStrategyFromFile(&strategy, line);
         strategy.id = ++state.currStratIndex;
-        state.strategies[++state.currStratIndex] = strategy;
+        state.strategies[state.currStratIndex].currEntryId = -1;
+        state.strategies[state.currStratIndex] = strategy;
         printf("strategy id is %d\n", state.strategies[state.currStratIndex].id);
         printf("strategy name is %s\n", state.strategies[state.currStratIndex].symbol);
         i++;
@@ -634,7 +635,7 @@ main()
     }
 
     i = 0;
-    ++state.currJournalId; // same id for the couple.
+    ++state.strategies[state.currStratIndex].currJournalId; // same id for the couple.
     while (fgets(line, sizeof(line), subsFile))
     {
         if (i == 0)
@@ -645,11 +646,11 @@ main()
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
         LedgerEntry entry = {};
-        entry.id = state.currJournalId;
+        entry.id = state.strategies[state.currStratIndex].currJournalId;
         if (i == 1) entry.type = ASSET;
         else if (i == 2) entry.type = EQUITY;
         AccountFromSubs(&entry, line);
-        state.ledger[++state.currEntryId] = entry;
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = entry;
         printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
         i++;
     }
@@ -681,19 +682,19 @@ main()
         }
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
-        ++state.currJournalId;
+        ++state.strategies[state.currStratIndex].currJournalId;
         LedgerEntry assetEntry = {};
         LedgerEntry liabEntry = {};
-        assetEntry.id = state.currJournalId;
-        liabEntry.id = state.currJournalId;
+        assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
         if (dollarValue == -1)
         {
             printf("bank transfer failed!, abort!\n");
             return -1;
         }
         AccountFromBank(&assetEntry, &liabEntry, dollarValue, line);
-        state.ledger[++state.currEntryId] = assetEntry;
-        state.ledger[++state.currEntryId] = liabEntry;
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
         printf("entry name is %s and value is %f\n", assetEntry.accountName,
                assetEntry.debit);
         i++;
@@ -716,14 +717,14 @@ main()
         }
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
-        ++state.currJournalId;
+        ++state.strategies[state.currStratIndex].currJournalId;
         LedgerEntry assetEntry = {};
         LedgerEntry liabEntry = {};
-        assetEntry.id = state.currJournalId;
-        liabEntry.id = state.currJournalId;
+        assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
         AccountFromExpense(&assetEntry, &liabEntry, line);
-        state.ledger[++state.currEntryId] = assetEntry;
-        state.ledger[++state.currEntryId] = liabEntry;
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
         printf("entry name is %s and value is %f\n", assetEntry.accountName,
                assetEntry.debit);
         i++;
@@ -746,11 +747,11 @@ main()
         }
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
-        ++state.currJournalId;
+        ++state.strategies[state.currStratIndex].currJournalId;
         LedgerEntry liabEntry = {};
-        liabEntry.id = state.currJournalId;
+        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
         AccountFromReverse(&liabEntry, line);
-        state.ledger[++state.currEntryId] = liabEntry;
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
         printf("entry name is %s and value is %f\n", liabEntry.accountName,
                liabEntry.credit);
         i++;
@@ -891,7 +892,7 @@ main()
                 break;
             }
         }
-        
+
         // not found, add the position.
         if (found != 1)
         {

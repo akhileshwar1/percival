@@ -86,6 +86,7 @@ typedef struct
     real64 nav;
     Investor investors[MAX_INVESTORS];
     Position positions[MAX_POSITIONS];
+    int id;
     int currPosIndex;
     int currInvestorIndex;
 } Strategy;
@@ -583,6 +584,7 @@ main()
     }
 
     Strategy strategy = {};
+    i = 0;
     while (fgets(line, sizeof(line), stratFile))
     {
         if (i == 0)
@@ -590,10 +592,15 @@ main()
             i++;
             continue; // ignore the top heading row.
         }
+        // NOTE(Akhil): here, the headinng is too big, lines split!
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
         LoadStrategyFromFile(&strategy, line);
+        strategy.id = ++state.currStratIndex;
         state.strategies[++state.currStratIndex] = strategy;
+        printf("strategy id is %d\n", state.strategies[state.currStratIndex].id);
+        printf("strategy name is %s\n", state.strategies[state.currStratIndex].symbol);
+        i++;
     }
 
     // step 1: the client_master.csv file.

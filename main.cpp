@@ -96,6 +96,7 @@ typedef struct
     real64 debit;
     real64 credit;
     char memo[100];
+    Currency_code currency;
 } LedgerEntry;
 
 typedef struct
@@ -321,6 +322,7 @@ AccountFromCashFlow(LedgerEntry *liabEntry, char *line)
         if (i == 3)
         {
             liabEntry->credit = (real64)atof(token);
+            liabEntry->currency = USD;
         }
         else if (i ==  6)
         {
@@ -360,6 +362,7 @@ AccountFromReverse(LedgerEntry *liabEntry, char *line)
         else if (i == 7)
         {
             liabEntry->credit = (real64)atof(token);
+            liabEntry->currency = USD;
         }
         token = strtok(NULL, ",");
         i++;
@@ -391,7 +394,9 @@ AccountFromExpense(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
             strcpy(assetEntry->accountName, "Fund_expenses");
             assetEntry->type = EXPENSE;
             assetEntry->debit = (real64)atof(token);
+            assetEntry->currency = USD;
             liabEntry->credit = (real64)atof(token);
+            liabEntry->currency = USD;
         }
         token = strtok(NULL, ",");
         i++;
@@ -400,25 +405,48 @@ AccountFromExpense(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
 
 void
 AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
-                real64 dollarValue, char *line)
+                char *line)
 {
     char *token;
     token = strtok(line, ",");
     int i = 0;
     char accountName[100] = "";
+    real64 prevValue;
+    Currency_code prevDenom = USD;
     while (token != NULL)
     {
         if (i ==  3)
         {
             strcat(accountName, token); 
+            strcat(accountName, "_"); 
         }
         else if (i ==  4)
         {
             strcat(accountName, token); 
             assetEntry->type = ASSET;
-            assetEntry->debit = dollarValue;
             strcpy(assetEntry->accountName, accountName);
-            strcpy(accountName, "");
+        }
+        else if (i ==  5)
+        {
+            assetEntry->debit = (real64)atof(token);
+            assetEntry->currency = prevDenom;
+            strcpy(assetEntry->accountName, accountName);
+            prevValue = assetEntry->debit;
+        }
+        else if (i ==  6)
+        {
+            liabEntry->credit = (real64)atof(token);
+            if (prevValue != liabEntry->credit)
+            {
+                liabEntry->currency = INR;
+                prevDenom = INR;
+            }
+            else
+            {
+                liabEntry->currency = USD;
+                prevDenom = USD;
+            }
+            strcpy(assetEntry->accountName, accountName);
         }
         else if (i == 7)
         {
@@ -426,10 +454,10 @@ AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
         }
         else if (i ==  8)
         {
+            strcat(accountName, "_"); 
             strcat(accountName, token); 
             strcpy(liabEntry->accountName, accountName);
             liabEntry->type = LIABILITY;
-            liabEntry->credit = dollarValue;
         }
         token = strtok(NULL, ",");
         i++;
@@ -466,7 +494,8 @@ AccountFromSubs(LedgerEntry *entry, State *state, Investor inv, char *line)
                 case EXPENSE:
                     {
                         entry->debit = abs((real64)atof(token));
-                        strcat(entry->accountName, "_cash_advisory"); 
+                        entry->currency = USD;
+                        strcat(entry->accountName, "_CASH_USD"); 
                         break;
                     }
                 case LIABILITY:
@@ -474,7 +503,8 @@ AccountFromSubs(LedgerEntry *entry, State *state, Investor inv, char *line)
                 case REVENUE:
                     {
                         entry->credit = abs((real64)atof(token));
-                        strcat(entry->accountName, "_inv_capital"); 
+                        entry->currency = USD;
+                        strcat(entry->accountName, "_UPA"); 
                         break;
                     }
             }
@@ -597,11 +627,12 @@ printFundLedger(State *state)
     for (int i = 0; i < state->strategies[state->currStratIndex].currEntryId + 1; i++)
     {
         LedgerEntry entry = state->strategies[state->currStratIndex].ledger[i];
-        printf("name: %s, type: %d, debit: %f, credit: %f\n",
+        printf("name: %s, type: %d, debit: %f, credit: %f, curr: %d\n",
                entry.accountName,
                entry.type,
                entry.debit,
-               entry.credit);
+               entry.credit,
+               entry.currency);
     }
 }
 
@@ -751,21 +782,12 @@ main()
     }
 
     i = 0;
-    real64 dollarValue;
     while (fgets(line, sizeof(line), bankFile))
     {
         if (i == 0)
         {
             i++;
             continue; // ignore the top heading row.
-        }
-        else if (i == 1)
-        {
-            char copyLine[1024];
-            strcpy(copyLine, line);
-            /* Need this because the later rows are not dollarised,
-               since they transfer the money to indian inr accounts. */
-            dollarValue = getDollarValue(copyLine);
         }
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
@@ -774,12 +796,7 @@ main()
         LedgerEntry liabEntry = {};
         assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
         liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
-        if (dollarValue == -1)
-        {
-            printf("bank transfer failed!, abort!\n");
-            return -1;
-        }
-        AccountFromBank(&assetEntry, &liabEntry, dollarValue, line);
+        AccountFromBank(&assetEntry, &liabEntry, line);
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
         printf("entry name is %s and value is %f\n", assetEntry.accountName,

@@ -897,64 +897,6 @@ main()
         i++;
     }
 
-    FILE *onboardFile = fopen("onboard_investor.csv", "r");
-    if (onboardFile == NULL)
-    {
-        printf("sorry, couldn't upload file!\n");
-        return -1;
-    }
-
-
-    i = 0;
-    while (fgets(line, sizeof(line), onboardFile))
-    {
-        if (i == 0)
-        {
-            i++;
-            continue; // ignore the top heading row.
-        }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
-        Strategy strat = {};
-        /* NOTE(Akhil): strategies[0] implies we are working on
-                    one strategy only */
-        strat.currPosIndex = -1;
-        Investor inv = {};
-        // NOTE(akhil) : Same line being traversed twice.
-        char copyLine[1024]; 
-        strcpy(copyLine, line);
-        LoadStrategy(&strat, line);
-        LoadInvestor(&inv, copyLine);
-
-        // add strategy to the state if not present.
-        int found = 0;
-        int foundIndex = -1;
-        for (int i = 0; i < state.currStratIndex + 1; i++)
-        {
-            if (strcmp(state.strategies[i].symbol, strat.symbol) == 0)
-            {
-                found = 1;
-                foundIndex = i;
-                break;
-            }
-        }
-
-        if (found != 1)
-        {
-            // add investor the strategy.
-            strat.investors[++strat.currInvestorIndex] = inv;
-            state.strategies[++state.currStratIndex] = strat;
-        }
-        else
-        {
-            strat = state.strategies[foundIndex];
-            strat.investors[++strat.currInvestorIndex] = inv;
-        }
-
-        printf("strategy is %s\n", state.strategies[0].symbol);
-        printf("investor is %ld\n", state.strategies[0].investors[0].units);
-    }
-
     /* read the trades pertaining to a particular strategy
            and apply them to the position state. */
     FILE *TradesFile = fopen("trades.csv", "r");

@@ -262,6 +262,54 @@ getDollarValue(char *line)
 }
 
 void
+allotUnits(State *state, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    char stratName[100] = "";
+    char invName[100] = "";
+    while (token != NULL)
+    {
+        if (i == 1)
+        {
+            strcpy(invName, token); 
+            printf("inv name is %s\n", invName);
+        }
+        else if (i == 2)
+        {
+            strcpy(stratName, token); 
+            printf("strat name is %s %s\n", stratName, state->strategies[1].symbol);
+        }
+        else if (i ==  7)
+        {
+            uint64 units = (uint64)atof(token); 
+            for (int j = 0; j < state->currStratIndex + 1; j++)
+            {
+                if (strcmp(stratName, state->strategies[j].symbol) == 0)
+                {
+                    // find the investor and allot units.
+                    for (int k = 0;
+                         k < state->strategies[j].currInvestorIndex + 1;
+                         k++)
+                    {
+                        if (strcmp(invName, state->strategies[j].investors[k].name)
+                            == 0)
+                        {
+                            state->strategies[j].investors[k].units = units;
+                            printf("units are %ld\n",
+                                   state->strategies[j].investors[k].units);
+                        }
+                    }
+                }
+            }
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
 AccountFromCashFlow(LedgerEntry *liabEntry, char *line)
 {
     char *token;
@@ -274,7 +322,7 @@ AccountFromCashFlow(LedgerEntry *liabEntry, char *line)
         {
             liabEntry->credit = (real64)atof(token);
         }
-        if (i ==  6)
+        else if (i ==  6)
         {
             strcat(accountName, token); 
             strcat(accountName, "_"); 
@@ -389,7 +437,7 @@ AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
 }
 
 void
-AccountFromSubs(LedgerEntry *entry, char *line)
+AccountFromSubs(LedgerEntry *entry, State *state, Investor inv, char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -399,6 +447,16 @@ AccountFromSubs(LedgerEntry *entry, char *line)
         if (i ==  1)
         {
             strcpy(entry->accountName, token); 
+            for (int j = 0; j < state->currStratIndex + 1; j++)
+            {
+                // will only trigger for the second line in the csv, the upa line.
+                if (strcmp(token, state->strategies[j].symbol) == 0)
+                {
+                    printf("found strategy\n");
+                    state->strategies[j]
+                        .investors[++state->strategies[j].currInvestorIndex] = inv;
+                }
+            }
         }
         else if (i == 7)
         {
@@ -438,7 +496,7 @@ LoadInvestorFromClient(Investor *inv, char *line)
     int i = 0;
     while (token != NULL)
     {
-        if (i ==  5)
+        if (i ==  3)
         {
             strcpy(inv->name, token);
         }
@@ -678,7 +736,7 @@ main()
         entry.id = state.strategies[state.currStratIndex].currJournalId;
         if (i == 1) entry.type = ASSET;
         else if (i == 2) entry.type = EQUITY;
-        AccountFromSubs(&entry, line);
+        AccountFromSubs(&entry, &state, inv, line);
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = entry;
         printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
         i++;
@@ -816,6 +874,29 @@ main()
     }
 
     printFundLedger(&state);
+
+    // step 7 : unit allotment.
+    FILE *unitFile = fopen("unit_allotment.csv", "r");
+    if (unitFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), unitFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        allotUnits(&state, line);
+        i++;
+    }
+
     FILE *onboardFile = fopen("onboard_investor.csv", "r");
     if (onboardFile == NULL)
     {

@@ -311,7 +311,7 @@ allotUnits(State *state, char *line)
 }
 
 void
-AccountFromCashFlow(LedgerEntry *liabEntry, char *line)
+AccountFromCashFlow(LedgerEntry *assetEntry, char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -319,21 +319,17 @@ AccountFromCashFlow(LedgerEntry *liabEntry, char *line)
     char accountName[100] = "";
     while (token != NULL)
     {
-        if (i == 3)
-        {
-            liabEntry->credit = (real64)atof(token);
-            liabEntry->currency = USD;
-        }
-        else if (i ==  6)
+        if (i ==  0)
         {
             strcat(accountName, token); 
-            strcat(accountName, "_"); 
+            strcat(accountName, "_CASH_USD"); 
+            strcpy(assetEntry->accountName, accountName);
         }
-        else if (i ==  7)
+        else if (i == 3)
         {
-            strcat(accountName, token); 
-            strcpy(liabEntry->accountName, accountName);
-            liabEntry->type = LIABILITY;
+            assetEntry->debit = (real64)atof(token);
+            assetEntry->currency = USD;
+            assetEntry->type = ASSET;
         }
         token = strtok(NULL, ",");
         i++;
@@ -495,7 +491,7 @@ AccountFromSubs(LedgerEntry *entry, State *state, Investor inv, char *line)
                     {
                         entry->debit = abs((real64)atof(token));
                         entry->currency = USD;
-                        strcat(entry->accountName, "_CASH_USD"); 
+                        strcat(entry->accountName, "_UPA"); 
                         break;
                     }
                 case LIABILITY:
@@ -504,7 +500,7 @@ AccountFromSubs(LedgerEntry *entry, State *state, Investor inv, char *line)
                     {
                         entry->credit = abs((real64)atof(token));
                         entry->currency = USD;
-                        strcat(entry->accountName, "_UPA"); 
+                        strcat(entry->accountName, "_CASH_USD"); 
                         break;
                     }
             }
@@ -765,8 +761,8 @@ main()
         if (tmp) *tmp = '\0';
         LedgerEntry entry = {};
         entry.id = state.strategies[state.currStratIndex].currJournalId;
-        if (i == 1) entry.type = ASSET;
-        else if (i == 2) entry.type = EQUITY;
+        if (i == 1) entry.type = EQUITY;
+        else if (i == 2) entry.type = ASSET;
         AccountFromSubs(&entry, &state, inv, line);
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = entry;
         printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
@@ -881,12 +877,12 @@ main()
         /* NOTE(Akhil): here we are working on the latest strategy.
                         usually first column discloses the strategy name. */
         ++state.strategies[state.currStratIndex].currJournalId;
-        LedgerEntry liabEntry = {};
-        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
-        AccountFromCashFlow(&liabEntry, line);
-        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
-        printf("entry name is %s and value is %f\n", liabEntry.accountName,
-               liabEntry.credit);
+        LedgerEntry assetEntry = {};
+        assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        AccountFromCashFlow(&assetEntry, line);
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
         i++;
     }
 

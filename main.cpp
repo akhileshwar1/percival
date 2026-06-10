@@ -378,6 +378,7 @@ AccountFromExpense(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
         if (i ==  1)
         {
             strcat(accountName, token); 
+            strcat(accountName, "_"); 
         }
         else if (i ==  2)
         {
@@ -800,7 +801,86 @@ main()
         i++;
     }
 
-    // step 4: fund expense investor file.
+
+    // step 4: reverse the upa debit account entry.
+    FILE *reverseFile = fopen("reverse_upa.csv", "r");
+    if (reverseFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    i = 0;
+    while (fgets(line, sizeof(line), reverseFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        ++state.strategies[state.currStratIndex].currJournalId;
+        LedgerEntry liabEntry = {};
+        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        AccountFromReverse(&liabEntry, line);
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", liabEntry.accountName,
+               liabEntry.credit);
+        i++;
+    }
+    
+    // step 5: fund cashflow file.
+    FILE *cashflowFile = fopen("fund_cashflow.csv", "r");
+    if (cashflowFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    i = 0;
+    while (fgets(line, sizeof(line), cashflowFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        /* NOTE(Akhil): here we are working on the latest strategy.
+                        usually first column discloses the strategy name. */
+        ++state.strategies[state.currStratIndex].currJournalId;
+        LedgerEntry assetEntry = {};
+        assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        AccountFromCashFlow(&assetEntry, line);
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        i++;
+    }
+
+    // step 6 : unit allotment.
+    FILE *unitFile = fopen("unit_allotment.csv", "r");
+    if (unitFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), unitFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        allotUnits(&state, line);
+        i++;
+    }
+
+    // step 7: fund expense investor file.
     FILE *expenseFile = fopen("fund_expense.csv", "r");
     if (expenseFile == NULL)
     {
@@ -830,86 +910,7 @@ main()
         i++;
     }
 
-    // step 5: reverse the upa debit account entry.
-    FILE *reverseFile = fopen("reverse_upa.csv", "r");
-    if (reverseFile == NULL)
-    {
-        printf("sorry, couldn't upload file!\n");
-        return -1;
-    }
-    i = 0;
-    while (fgets(line, sizeof(line), reverseFile))
-    {
-        if (i == 0)
-        {
-            i++;
-            continue; // ignore the top heading row.
-        }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
-        ++state.strategies[state.currStratIndex].currJournalId;
-        LedgerEntry liabEntry = {};
-        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
-        AccountFromReverse(&liabEntry, line);
-        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
-        printf("entry name is %s and value is %f\n", liabEntry.accountName,
-               liabEntry.credit);
-        i++;
-    }
-    
-    // step 6: fund cashflow file.
-    FILE *cashflowFile = fopen("fund_cashflow.csv", "r");
-    if (cashflowFile == NULL)
-    {
-        printf("sorry, couldn't upload file!\n");
-        return -1;
-    }
-    i = 0;
-    while (fgets(line, sizeof(line), cashflowFile))
-    {
-        if (i == 0)
-        {
-            i++;
-            continue; // ignore the top heading row.
-        }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
-        /* NOTE(Akhil): here we are working on the latest strategy.
-                        usually first column discloses the strategy name. */
-        ++state.strategies[state.currStratIndex].currJournalId;
-        LedgerEntry assetEntry = {};
-        assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
-        AccountFromCashFlow(&assetEntry, line);
-        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
-        printf("entry name is %s and value is %f\n", assetEntry.accountName,
-               assetEntry.debit);
-        i++;
-    }
-
     printFundLedger(&state);
-
-    // step 7 : unit allotment.
-    FILE *unitFile = fopen("unit_allotment.csv", "r");
-    if (unitFile == NULL)
-    {
-        printf("sorry, couldn't upload file!\n");
-        return -1;
-    }
-
-    i = 0;
-    while (fgets(line, sizeof(line), unitFile))
-    {
-        if (i == 0)
-        {
-            i++;
-            continue; // ignore the top heading row.
-        }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
-        allotUnits(&state, line);
-        i++;
-    }
-
     /* read the trades pertaining to a particular strategy
            and apply them to the position state. */
     FILE *TradesFile = fopen("trades.csv", "r");

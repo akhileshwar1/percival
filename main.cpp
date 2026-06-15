@@ -60,9 +60,41 @@ typedef enum
     LS  // limit sell
 } Trans_type;
 
+typedef enum 
+{
+    PE,
+    CE
+} Opt_type;
+
+typedef enum
+{
+    OPTIDX,
+    OPTSTK,
+    FUTIDX,
+    FUTSTK
+} Instrument_type;
+
 typedef struct
 {
     char symbol[100];
+    char brokerCode[100];
+    char date[100];
+    char strategySymbol[100];
+    char expiry[100];
+    Opt_type optType;
+    Instrument_type instType;
+    int qty;
+    real64 price;
+    real64 brokerage;
+    real64 serviceTax;
+    real64 strike;
+    Trans_type transType;
+    Currency_code currency;
+} FNO_trade;
+
+typedef struct
+{
+    char symbol[100]; // is the isin in our trade file.
     char brokerCode[100];
     char date[100];
     char strategySymbol[100];
@@ -571,6 +603,103 @@ LoadInvestor(Investor *inv, char *line)
 }
 
 void
+LoadFNOTrade(FNO_trade *trade, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i ==  0)
+        {
+            strcpy(trade->brokerCode, token);
+        }
+        else if (i ==  1)
+        {
+            strcpy(trade->strategySymbol, token);
+        }
+        else if (i == 2)
+        {
+            strcpy(trade->symbol, token);
+        }
+        else if (i ==  4)
+        {
+            if (strcmp(token, "MBY") == 0) {
+                trade->transType = MB;
+            }
+            else if (strcmp(token, "MSL") == 0) {
+                trade->transType = MS;
+            }
+            else if (strcmp(token, "LB") == 0) {
+                trade->transType = LB;
+            }
+            else if (strcmp(token, "LS") == 0) {
+                trade->transType = LS;
+            }
+        }
+        else if (i == 5)
+        {
+            strcpy(trade->date, token);
+        }
+        else if (i == 7)
+        {
+            trade->qty = (uint64)atoi(token);
+        }
+        else if (i == 8)
+        {
+            trade->price = (real64)atof(token);
+        }
+        else if (i == 9)
+        {
+            trade->brokerage = (real64)atof(token);
+        }
+        else if (i == 10)
+        {
+            trade->serviceTax = (real64)atof(token);
+        }
+        else if (i == 13)
+        {
+            trade->currency = (strcmp(token, "CASH_INR") == 0) ?
+                              INR : USD;
+        }
+        else if (i == 17)
+        {
+            strcpy(trade->expiry, token);
+        }
+        else if (i == 18)
+        {
+            trade->strike = (real64)atof(token);
+        }
+        else if (i == 19)
+        {
+            trade->optType= (strcmp(token, "PE") == 0) ?
+                              PE : CE;
+        }
+        else if (i == 20)
+        {
+            if (strcmp(token, "OPTIDX") == 0)
+            {
+                trade->instType = OPTIDX;
+            }
+            else if (strcmp(token, "OPTSTK") == 0)
+            {
+                trade->instType = OPTSTK;
+            }
+            else if (strcmp(token, "FUTIDX") == 0)
+            {
+                trade->instType = FUTIDX;
+            }
+            else if (strcmp (token, "FUTSTK") == 0)
+            {
+                trade->instType = FUTSTK;
+            }
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
 LoadTrade(Trade *trade, char *line)
 {
     char *token;
@@ -928,6 +1057,42 @@ main()
                assetEntry.debit);
         i++;
     }
+    /* read the fno trades and make the positions */
+    FILE *FTradesFile = fopen("trades_fno.csv", "r");
+    if (FTradesFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    int stratIndex = -1;
+    i = 0;
+    while (fgets(line, sizeof(line), FTradesFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        FNO_trade trade = {};
+        LoadFNOTrade(&trade, line);
+        // find the strategy index first.
+        for (int i = 0; i < state.currStratIndex + 1; i++)
+        {
+            if (strcmp(trade.strategySymbol, state.strategies[i].symbol) == 0)
+            {
+                stratIndex = i;
+                break;
+            }
+        }
+
+        if (stratIndex == -1)
+        {
+            printf("Couldn't find strategy, aborting!\n");
+            return -2;
+        }
+    }
 
     /* read the trades pertaining to a particular strategy
            and apply them to the position state. */
@@ -938,7 +1103,7 @@ main()
         return -1;
     }
 
-    int stratIndex = -1;
+    stratIndex = -1;
     i = 0;
     while (fgets(line, sizeof(line), TradesFile))
     {

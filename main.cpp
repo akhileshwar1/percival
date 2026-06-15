@@ -38,6 +38,7 @@ typedef struct
 
 typedef struct
 {
+    char isin[100];
     char symbol[100];
     char date[100];
     char name[100];
@@ -175,7 +176,7 @@ LoadExchangeRate(Exchange_rate *exRate, char *line)
 }
 
 void
-LoadSecurity(Security *sec, char *line)
+LoadEquitySecurity(Security *sec, char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -184,13 +185,17 @@ LoadSecurity(Security *sec, char *line)
     {
         if (i == 0)
         {
+            strcpy(sec->isin , token);
+        }
+        else if (i == 1)
+        {
             strcpy(sec->symbol, token);
         }
-        else if (i ==  1)
+        else if (i ==  2)
         {
             strcpy(sec->date, token);
         }
-        else if (i ==  2)
+        else if (i ==  3)
         {
             strcpy(sec->name, token);
         }
@@ -694,7 +699,7 @@ main()
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
         Security sec = {};
-        LoadSecurity(&sec, line);
+        LoadEquitySecurity(&sec, line);
         state.secs[i - 1] = sec;
         printf("security is %s\n", state.secs[i - 1].name);
     }

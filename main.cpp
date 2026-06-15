@@ -76,11 +76,12 @@ typedef struct
 
 typedef struct
 {
+    char isin[100];
     char symbol[100];
     int qty;
     real64 price;
     real64 ltp;
-} Position;
+} PositionEquity;
 
 typedef enum
 {
@@ -108,7 +109,7 @@ typedef struct
     real64 cash;
     real64 nav;
     Investor investors[MAX_INVESTORS];
-    Position positions[MAX_POSITIONS];
+    PositionEquity positions[MAX_POSITIONS];
     int id;
     int currPosIndex;
     int currInvestorIndex;
@@ -123,6 +124,7 @@ typedef struct
     Security secs[MAX_SECURITIES];
     Strategy strategies[MAX_STRATEGIES];
     int currStratIndex;
+    int currSecIndex;
 } State;
 
 void
@@ -133,11 +135,11 @@ LoadBhav(Bhav *bhav, char *line)
     int i = 0;
     while (token != NULL)
     {
-        if (i == 0)
+        if (i == 3)
         {
             strcpy(bhav->symbol, token);
         }
-        else if (i ==  5)
+        else if (i ==  9)
         {
             bhav->ltp = (real64)atof(token);
         }
@@ -663,6 +665,7 @@ main()
 
     State state = {};
     state.currStratIndex = -1;
+    state.currSecIndex = -1;
     char line[1024];
     int i = 0;
     while (fgets(line, sizeof(line), exchangeRateFile))
@@ -700,7 +703,7 @@ main()
         if (tmp) *tmp = '\0';
         Security sec = {};
         LoadEquitySecurity(&sec, line);
-        state.secs[i - 1] = sec;
+        state.secs[++state.currSecIndex] = sec;
         printf("security is %s\n", state.secs[i - 1].name);
     }
 
@@ -970,7 +973,7 @@ main()
         int found = 0;
         for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
         {
-            if (strcmp(state.strategies[stratIndex].positions[i].symbol, trade.symbol) == 0)
+            if (strcmp(state.strategies[stratIndex].positions[i].isin, trade.symbol) == 0)
             {
                 switch (trade.transType)
                 {
@@ -1075,8 +1078,19 @@ main()
         {
             // add the position
             printf("adding new position: %s\n", trade.symbol);
-            Position pos = {};
+            PositionEquity pos = {};
             strcpy(pos.symbol, trade.symbol);
+            /* NOTE(akhil): Assumes you have uploaded the securities in the
+                            trade file */
+            for (int i = 0; i < state.currSecIndex + 1; i++)
+            {
+                if (strcmp(trade.symbol, state.strategies[stratIndex].
+                                               positions[i].isin) == 0)
+                {
+                    strcpy(pos.isin, state.strategies[stratIndex].positions[i].isin);
+                }
+            }
+
             switch(trade.transType)
             {
                 case MB:
@@ -1209,7 +1223,7 @@ main()
     real64 totalValue = 0.0;
     for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
     {
-        Position pos = state.strategies[stratIndex].positions[i];
+        PositionEquity pos = state.strategies[stratIndex].positions[i];
         totalValue  += pos.qty * pos.ltp;
     }
 

@@ -61,13 +61,18 @@ typedef enum
     MOB,
     MCB,
     MOS,
-    MCS
+    MCS,
+    FSO,
+    FSC,
+    FBO,
+    FBC
 } Trans_type;
 
 typedef enum 
 {
     PE,
-    CE
+    CE,
+    NA
 } Opt_type;
 
 typedef enum
@@ -229,19 +234,19 @@ LoadFNOBhav(FNO_bhav *bhav, char *line)
     {
         if (i == 0)
         {
-            if (strcmp(token, "OPTIDX"))
+            if (strcmp(token, "OPTIDX") == 0)
             {
                 bhav->instType = OPTIDX;
             }
-            else if (strcmp(token, "OPTSTK"))
+            else if (strcmp(token, "OPTSTK") == 0)
             {
                 bhav->instType = OPTSTK;
             }
-            else if (strcmp(token, "FUTIDX"))
+            else if (strcmp(token, "FUTIDX") == 0)
             {
                 bhav->instType = FUTIDX;
             }
-            else if (strcmp(token, "OPTSTK"))
+            else if (strcmp(token, "FUTSTK") == 0)
             {
                 bhav->instType = FUTSTK;
             }
@@ -266,7 +271,18 @@ LoadFNOBhav(FNO_bhav *bhav, char *line)
         }
         else if (i == 4)
         {
-            bhav->optType = strcmp(token, "PE") == 0 ? PE : CE;
+            if (strcmp(token, "PE") == 0)
+            {
+                bhav->optType = PE;
+            }
+            else if (strcmp(token, "CE") == 0)
+            {
+                bhav->optType = CE;
+            }
+            else
+            {
+                bhav->optType = NA;
+            }
         }
         else if (i ==  8)
         {
@@ -755,6 +771,18 @@ LoadFNOTrade(FNO_trade *trade, char *line)
             else if (strcmp(token, "MCS") == 0) {
                 trade->transType = MCS;
             }
+            else if (strcmp(token, "FBO") == 0) {
+                trade->transType = FBO;
+            }
+            else if (strcmp(token, "FBC") == 0) {
+                trade->transType = FBC;
+            }
+            else if (strcmp(token, "FSO") == 0) {
+                trade->transType = FSO;
+            }
+            else if (strcmp(token, "FSC") == 0) {
+                trade->transType = FSC;
+            }
         }
         else if (i == 5)
         {
@@ -791,8 +819,18 @@ LoadFNOTrade(FNO_trade *trade, char *line)
         }
         else if (i == 19)
         {
-            trade->optType= (strcmp(token, "PE") == 0) ?
-                              PE : CE;
+            if (strcmp(token, "PE") == 0)
+            {
+                trade->optType = PE;
+            }
+            else if (strcmp(token, "CE") == 0)
+            {
+                trade->optType = CE;
+            }
+            else
+            {
+                trade->optType = NA;
+            }
         }
         else if (i == 20)
         {
@@ -916,6 +954,7 @@ main()
     state.currSecIndex = -1;
     char line[1024];
     int i = 0;
+    Exchange_rate exRate = {};
     while (fgets(line, sizeof(line), exchangeRateFile))
     {
         if (i == 0)
@@ -925,7 +964,6 @@ main()
         }
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
-        Exchange_rate exRate = {};
         LoadExchangeRate(&exRate, line);
         state.exRates[i - 1] = exRate; // it's a copy here.
         printf("ex rate is %f\n", state.exRates[i - 1].rate);
@@ -978,6 +1016,9 @@ main()
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
         LoadStrategyFromFile(&strategy, line);
+        /* NOTE(Akhil): for manual testing,
+                        shouldn't this happen during cashflow? */
+        strategy.cash = 15314483.54; // inr
         strategy.id = ++state.currStratIndex;
         state.strategies[state.currStratIndex].currEntryId = -1;
         state.strategies[state.currStratIndex] = strategy;
@@ -1176,6 +1217,50 @@ main()
                assetEntry.debit);
         i++;
     }
+
+    /* store the previous day's i.e 10th june's open positions first */
+    int stratIndexx = -1;
+    for (int i = 0; i < state.currStratIndex + 1; i++)
+    {
+        if (strcmp("SSFSAMST", state.strategies[i].symbol) == 0)
+        {
+            stratIndexx = i;
+            break;
+        }
+    }
+    printf("strat index is %d\n", stratIndexx);
+
+    FNO_position posA = {};
+    strcpy(posA.symbol, "FINNIFTY");
+    strcpy(posA.expiry, "30/06/2026");
+    posA.strike = 25000;
+    posA.optType = CE;
+    posA.instType = OPTIDX;
+    posA.qty = 120;
+    state.strategies[stratIndexx].fpositions
+        [++state.strategies[stratIndexx].currFPosIndex] = posA;
+
+    FNO_position posB = {};
+    strcpy(posB.symbol, "NIFTY");
+    strcpy(posB.expiry, "30/06/2026");
+    posB.strike = 23200;
+    posB.optType = PE;
+    posB.instType = OPTIDX;
+    posB.qty = 1040;
+    state.strategies[stratIndexx].fpositions
+        [++state.strategies[stratIndexx].currFPosIndex] = posB;
+
+    FNO_position posC = {};
+    strcpy(posC.symbol, "NATURALGAS");
+    strcpy(posC.expiry, "25/06/2026");
+    posC.strike = 0;
+    posC.instType = FUTSTK;
+    posC.optType = NA;
+    posC.qty = 1250;
+    state.strategies[stratIndexx].fpositions
+        [++state.strategies[stratIndexx].currFPosIndex] = posC;
+
+
     /* read the fno trades and make the positions */
     FILE *FTradesFile = fopen("trades_fno.csv", "r");
     if (FTradesFile == NULL)
@@ -1183,8 +1268,8 @@ main()
         printf("sorry, couldn't upload file!\n");
         return -1;
     }
-    int stratIndex = -1;
     i = 0;
+    int stratIndex = -1;
     while (fgets(line, sizeof(line), FTradesFile))
     {
         if (i == 0)
@@ -1218,6 +1303,10 @@ main()
         int found = 0;
         for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
         {
+            if (strcmp(trade.symbol, "NATURALGAS") == 0)
+            {
+                printf("here\n");
+            }
             if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
                        trade.symbol) == 0 &&
                 strcmp(state.strategies[stratIndex].fpositions[i].expiry,
@@ -1233,6 +1322,8 @@ main()
                 {
                     case MOB:
                     case MCB:
+                    case FBO:
+                    case FBC:
                         {
                             // you pay more while buying.
                             real64 priceAfterFee =
@@ -1243,12 +1334,20 @@ main()
 
                             state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
                             // NOTE(Akhil): this will break if denom is 0!
-                            state.strategies[stratIndex].fpositions[i].price =
-                                ((state.strategies[stratIndex].fpositions[i].price *
-                                state.strategies[stratIndex].fpositions[i].qty)
-                                + (trade.qty * priceAfterFee)) 
-                                / (state.strategies[stratIndex].fpositions[i].qty + trade.qty);
-
+                            if (state.strategies[stratIndex].fpositions[i].qty + 
+                                trade.qty == 0)
+                            {
+                                state.strategies[stratIndex].fpositions[i].price = 0.0;
+                            }
+                            else
+                            {
+                                state.strategies[stratIndex].fpositions[i].price =
+                                    ((state.strategies[stratIndex].fpositions[i].price *
+                                    state.strategies[stratIndex].fpositions[i].qty)
+                                    + (trade.qty * priceAfterFee)) 
+                                    / (state.strategies[stratIndex].fpositions[i].qty +
+                                       trade.qty);
+                            }
                             state.strategies[stratIndex].fpositions[i].qty += trade.qty;
 
                             // add the entries to the ledger.
@@ -1281,19 +1380,27 @@ main()
                     default:
                         {
                             printf("trade qty is %f\n", (real64)trade.qty);
+                            trade.qty = -trade.qty;
                             real64 priceAfterFee =
-                                (trade.qty * trade.price *
+                                (abs(trade.qty) * trade.price *
                                 (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                                / trade.qty; 
+                                / abs(trade.qty); 
 
                             // you always get less after selling.
                             state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
-                            state.strategies[stratIndex].fpositions[i].price =
-                                ((state.strategies[stratIndex].fpositions[i].price *
-                                state.strategies[stratIndex].fpositions[i].qty) +
-                                (trade.qty * priceAfterFee)) 
-                                / (state.strategies[stratIndex].fpositions[i].qty + trade.qty);
-
+                            if (state.strategies[stratIndex].fpositions[i].qty + 
+                                trade.qty == 0)
+                            {
+                                state.strategies[stratIndex].fpositions[i].price = 0.0;
+                            }
+                            else
+                            {
+                                state.strategies[stratIndex].fpositions[i].price =
+                                    ((state.strategies[stratIndex].fpositions[i].price *
+                                    state.strategies[stratIndex].fpositions[i].qty) +
+                                    (trade.qty * priceAfterFee)) 
+                                    / (state.strategies[stratIndex].fpositions[i].qty + trade.qty);
+                            }
                             state.strategies[stratIndex].fpositions[i].qty += trade.qty;
                             ++state.strategies[state.currStratIndex].currJournalId;
                             LedgerEntry assetEntry = {};
@@ -1342,6 +1449,8 @@ main()
             {
                 case MOB:
                 case MCB:
+                case FBO:
+                case FBC:
                     {
                         real64 priceAfterFee =
                             (trade.qty * trade.price *
@@ -1378,10 +1487,12 @@ main()
                     }
                 default:
                     {
+                        trade.qty = -trade.qty;
                         real64 priceAfterFee =
-                            (trade.qty * trade.price *
+                            (abs(trade.qty) * trade.price *
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                            / trade.qty;
+                            / abs(trade.qty);
+
                         // you always get less after selling.
                         state.strategies[stratIndex].cash += trade.qty * priceAfterFee;
                         pos.price = priceAfterFee;
@@ -1448,6 +1559,7 @@ main()
                         need to update the posns in all of them. */
         for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
         {
+            
             if (strcmp(bhav.symbol,
                        state.strategies[stratIndex].fpositions[i].symbol) == 0 &&
                 strcmp(bhav.expiry,
@@ -1456,328 +1568,350 @@ main()
                 bhav.optType == state.strategies[stratIndex].fpositions[i].optType &&
                 bhav.instType == state.strategies[stratIndex].fpositions[i].instType)
             {
-                state.strategies[stratIndex].positions[i].ltp = bhav.ltp;
+                state.strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
+                printf("pos after bhav is %s, %d, %f\n",
+                       state.strategies[stratIndex].fpositions[i].symbol,
+                       state.strategies[stratIndex].fpositions[i].qty,
+                       state.strategies[stratIndex].fpositions[i].ltp);
+                printf("pos after bhav is %s, %d, %f\n",
+                       state.strategies[stratIndex].fpositions[i].symbol,
+                       state.strategies[stratIndex].fpositions[i].qty,
+                       state.strategies[stratIndex].fpositions[i].ltp);
             }
         }
         printf("cash after bhav is %f\n", state.strategies[stratIndex].cash);
-        printf("pos after bhav is %s, %d, %f\n",
-               state.strategies[stratIndex].positions[1].symbol,
-               state.strategies[stratIndex].positions[1].qty,
-               state.strategies[stratIndex].positions[1].ltp);
-        printf("pos after bhav is %s, %d, %f\n",
-               state.strategies[stratIndex].positions[1].symbol,
-               state.strategies[stratIndex].positions[1].qty,
-               state.strategies[stratIndex].positions[1].ltp);
     }
 
     /* read the trades pertaining to a particular strategy
            and apply them to the position state. */
-    FILE *TradesFile = fopen("trades.csv", "r");
-    if (TradesFile == NULL)
-    {
-        printf("sorry, couldn't upload file!\n");
-        return -1;
-    }
-
-    stratIndex = -1;
-    i = 0;
-    while (fgets(line, sizeof(line), TradesFile))
-    {
-        if (i == 0)
-        {
-            i++;
-            continue; // ignore the top heading row.
-        }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
-        Trade trade = {};
-        LoadTrade(&trade, line);
-        // find the strategy index first.
-        for (int i = 0; i < state.currStratIndex + 1; i++)
-        {
-            if (strcmp(trade.strategySymbol, state.strategies[i].symbol) == 0)
-            {
-                stratIndex = i;
-                break;
-            }
-        }
-
-        if (stratIndex == -1)
-        {
-            printf("Couldn't find strategy, aborting!\n");
-            return -2;
-        }
-
-        // apply trade to the positions state.
-        char stratSymbol[100];
-        strcpy(stratSymbol, state.strategies[stratIndex].symbol);
-        int found = 0;
-        for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
-        {
-            if (strcmp(state.strategies[stratIndex].positions[i].isin, trade.symbol) == 0)
-            {
-                switch (trade.transType)
-                {
-                    case MB:
-                    case LB:
-                        {
-                            // you pay more while buying.
-                           real64 priceAfterFee =
-                            (trade.qty * trade.price *
-                            (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
-                            / trade.qty; 
-
-
-                            state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
-                            // NOTE(Akhil): this will break if denom is 0!
-                            state.strategies[stratIndex].positions[i].price =
-                                ((state.strategies[stratIndex].positions[i].price *
-                                state.strategies[stratIndex].positions[i].qty)
-                                + (trade.qty * priceAfterFee)) 
-                                / (state.strategies[stratIndex].positions[i].qty + trade.qty);
-
-                            state.strategies[stratIndex].positions[i].qty += trade.qty;
-
-                            // add the entries to the ledger.
-                            ++state.strategies[state.currStratIndex].currJournalId;
-                            LedgerEntry assetEntry = {};
-                            strcat(assetEntry.accountName, stratSymbol);
-                            strcat(assetEntry.accountName, "_POSN");
-                            assetEntry.type = ASSET;
-                            assetEntry.currency = trade.currency;
-                            assetEntry.debit = abs(trade.qty * priceAfterFee);
-                            assetEntry.id = state.strategies[state.currStratIndex].
-                                            currJournalId;
-                            LedgerEntry liabEntry = {};
-                            strcpy(liabEntry.accountName, stratSymbol);
-                            strcpy(liabEntry.accountName, "_CASH_USD");
-                            liabEntry.credit = abs(trade.qty * priceAfterFee);
-                            liabEntry.type = REVENUE;
-                            liabEntry.id = state.strategies[state.currStratIndex].
-                                           currJournalId;
-                            liabEntry.currency = trade.currency;
-                            state.strategies[state.currStratIndex].
-                                ledger[++state.strategies[state.currStratIndex].
-                                currEntryId] = assetEntry;
-                            state.strategies[state.currStratIndex].
-                                ledger[++state.strategies[state.currStratIndex].
-                                currEntryId] = liabEntry;
-                            break;
-                        }
-
-                    default:
-                        {
-                           printf("trade qty is %f\n", (real64)trade.qty);
-                           real64 priceAfterFee =
-                            (trade.qty * trade.price *
-                            (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                            / trade.qty; 
-
-                            // you always get less after selling.
-                            state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
-                            state.strategies[stratIndex].positions[i].price =
-                                ((state.strategies[stratIndex].positions[i].price *
-                                state.strategies[stratIndex].positions[i].qty) +
-                                (trade.qty * priceAfterFee)) 
-                                / (state.strategies[stratIndex].positions[i].qty + trade.qty);
-
-                            state.strategies[stratIndex].positions[i].qty += trade.qty;
-                            ++state.strategies[state.currStratIndex].currJournalId;
-                            LedgerEntry assetEntry = {};
-                            strcat(assetEntry.accountName, stratSymbol);
-                            strcat(assetEntry.accountName, "_CASH_USD");
-                            assetEntry.type = ASSET;
-                            assetEntry.currency = trade.currency;
-                            assetEntry.debit = abs(trade.qty * priceAfterFee);
-                            assetEntry.id = state.strategies[state.currStratIndex].
-                                            currJournalId;
-                            LedgerEntry liabEntry = {};
-                            strcpy(liabEntry.accountName, stratSymbol);
-                            strcpy(liabEntry.accountName, "_POSN");
-                            liabEntry.credit = abs(trade.qty * priceAfterFee);
-                            liabEntry.type = EQUITY;
-                            liabEntry.id = state.strategies[state.currStratIndex].
-                                currJournalId;
-                            liabEntry.currency = trade.currency;
-                            state.strategies[state.currStratIndex].
-                                ledger[++state.strategies[state.currStratIndex].
-                                currEntryId] = assetEntry;
-                            state.strategies[state.currStratIndex].
-                                ledger[++state.strategies[state.currStratIndex].
-                                currEntryId] = liabEntry;
-                            break;
-                        }
-                } 
-
-                found = 1;
-                break;
-            }
-        }
-
-        // not found, add the position.
-        if (found != 1)
-        {
-            // add the position
-            printf("adding new position: %s\n", trade.symbol);
-            PositionEquity pos = {};
-            strcpy(pos.symbol, trade.symbol);
-            /* NOTE(akhil): Assumes you have uploaded the securities in the
-                            trade file */
-            for (int i = 0; i < state.currSecIndex + 1; i++)
-            {
-                if (strcmp(trade.symbol, state.strategies[stratIndex].
-                                               positions[i].isin) == 0)
-                {
-                    strcpy(pos.isin, state.strategies[stratIndex].positions[i].isin);
-                }
-            }
-
-            switch(trade.transType)
-            {
-                case MB:
-                case LB:
-                    {
-                        real64 priceAfterFee =
-                            (trade.qty * trade.price *
-                            (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
-                            / trade.qty;
-                        // you always pay more while buying.
-                        state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
-                        pos.price = priceAfterFee;
-                        pos.qty = trade.qty;
-                        ++state.strategies[state.currStratIndex].currJournalId;
-                        LedgerEntry assetEntry = {};
-                        strcat(assetEntry.accountName, stratSymbol);
-                        strcat(assetEntry.accountName, "_POSN");
-                        assetEntry.type = ASSET;
-                        assetEntry.currency = trade.currency;
-                        assetEntry.debit = abs(trade.qty * priceAfterFee);
-                        assetEntry.id = state.strategies[state.currStratIndex].
-                            currJournalId;
-                        LedgerEntry liabEntry = {};
-                        strcat(liabEntry.accountName, stratSymbol);
-                        strcat(liabEntry.accountName, "_CASH_USD");
-                        liabEntry.credit = abs(trade.qty * priceAfterFee);
-                        liabEntry.type = REVENUE;
-                        liabEntry.id = state.strategies[state.currStratIndex].
-                            currJournalId;
-                        liabEntry.currency = trade.currency;
-                        state.strategies[state.currStratIndex].
-                            ledger[++state.strategies[state.currStratIndex].
-                            currEntryId] = assetEntry;
-                        state.strategies[state.currStratIndex].
-                            ledger[++state.strategies[state.currStratIndex].
-                            currEntryId] = liabEntry;
-                        break;
-                    }
-                default:
-                    {
-                        real64 priceAfterFee =
-                            (trade.qty * trade.price *
-                            (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                            / trade.qty;
-                        // you always get less after selling.
-                        state.strategies[stratIndex].cash += trade.qty * priceAfterFee;
-                        pos.price = priceAfterFee;
-                        pos.qty = trade.qty;
-                        ++state.strategies[state.currStratIndex].currJournalId;
-                        LedgerEntry assetEntry = {};
-                        strcat(assetEntry.accountName, stratSymbol);
-                        strcat(assetEntry.accountName, "_CASH_USD");
-                        assetEntry.type = ASSET;
-                        assetEntry.currency = trade.currency;
-                        assetEntry.debit = abs(trade.qty * priceAfterFee);
-                        assetEntry.id = state.strategies[state.currStratIndex].
-                            currJournalId;
-                        LedgerEntry liabEntry = {};
-                        strcat(liabEntry.accountName, stratSymbol);
-                        strcat(liabEntry.accountName, "_POSN");
-                        liabEntry.credit = abs(trade.qty * priceAfterFee);
-                        liabEntry.type = EQUITY;
-                        liabEntry.id = state.strategies[state.currStratIndex].
-                            currJournalId;
-                        liabEntry.currency = trade.currency;
-                        state.strategies[state.currStratIndex].
-                            ledger[++state.strategies[state.currStratIndex].
-                            currEntryId] = assetEntry;
-                        state.strategies[state.currStratIndex].
-                            ledger[++state.strategies[state.currStratIndex].
-                            currEntryId] = liabEntry;
-                        break;
-                    }
-            }
-            state.strategies[stratIndex].positions[++state.strategies[stratIndex].currPosIndex] = pos;
-        }
-        printf("cash is %f\n", state.strategies[stratIndex].cash);
-        printf("pos is %s, %d, %f\n",
-               state.strategies[stratIndex].positions[stratIndex].symbol,
-               state.strategies[stratIndex].positions[stratIndex].qty,
-               state.strategies[stratIndex].positions[stratIndex].ltp);
-        printf("pos is %s, %d, %f\n",
-               state.strategies[stratIndex].positions[1].symbol,
-               state.strategies[stratIndex].positions[1].qty,
-               state.strategies[stratIndex].positions[1].ltp);
-
-    }
+    // FILE *TradesFile = fopen("trades.csv", "r");
+    // if (TradesFile == NULL)
+    // {
+    //     printf("sorry, couldn't upload file!\n");
+    //     return -1;
+    // }
+    //
+    // stratIndex = -1;
+    // i = 0;
+    // while (fgets(line, sizeof(line), TradesFile))
+    // {
+    //     if (i == 0)
+    //     {
+    //         i++;
+    //         continue; // ignore the top heading row.
+    //     }
+    //     char *tmp = strchr(line, '\n');
+    //     if (tmp) *tmp = '\0';
+    //     Trade trade = {};
+    //     LoadTrade(&trade, line);
+    //     // find the strategy index first.
+    //     for (int i = 0; i < state.currStratIndex + 1; i++)
+    //     {
+    //         if (strcmp(trade.strategySymbol, state.strategies[i].symbol) == 0)
+    //         {
+    //             stratIndex = i;
+    //             break;
+    //         }
+    //     }
+    //
+    //     if (stratIndex == -1)
+    //     {
+    //         printf("Couldn't find strategy, aborting!\n");
+    //         return -2;
+    //     }
+    //
+    //     // apply trade to the positions state.
+    //     char stratSymbol[100];
+    //     strcpy(stratSymbol, state.strategies[stratIndex].symbol);
+    //     int found = 0;
+    //     for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
+    //     {
+    //         if (strcmp(state.strategies[stratIndex].positions[i].isin, trade.symbol) == 0)
+    //         {
+    //             switch (trade.transType)
+    //             {
+    //                 case MB:
+    //                 case LB:
+    //                     {
+    //                         // you pay more while buying.
+    //                        real64 priceAfterFee =
+    //                         (trade.qty * trade.price *
+    //                         (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
+    //                         / trade.qty; 
+    //
+    //
+    //                         state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+    //                         // NOTE(Akhil): this will break if denom is 0!
+    //                         state.strategies[stratIndex].positions[i].price =
+    //                             ((state.strategies[stratIndex].positions[i].price *
+    //                             state.strategies[stratIndex].positions[i].qty)
+    //                             + (trade.qty * priceAfterFee)) 
+    //                             / (state.strategies[stratIndex].positions[i].qty + trade.qty);
+    //
+    //                         state.strategies[stratIndex].positions[i].qty += trade.qty;
+    //
+    //                         // add the entries to the ledger.
+    //                         ++state.strategies[state.currStratIndex].currJournalId;
+    //                         LedgerEntry assetEntry = {};
+    //                         strcat(assetEntry.accountName, stratSymbol);
+    //                         strcat(assetEntry.accountName, "_POSN");
+    //                         assetEntry.type = ASSET;
+    //                         assetEntry.currency = trade.currency;
+    //                         assetEntry.debit = abs(trade.qty * priceAfterFee);
+    //                         assetEntry.id = state.strategies[state.currStratIndex].
+    //                                         currJournalId;
+    //                         LedgerEntry liabEntry = {};
+    //                         strcpy(liabEntry.accountName, stratSymbol);
+    //                         strcpy(liabEntry.accountName, "_CASH_USD");
+    //                         liabEntry.credit = abs(trade.qty * priceAfterFee);
+    //                         liabEntry.type = REVENUE;
+    //                         liabEntry.id = state.strategies[state.currStratIndex].
+    //                                        currJournalId;
+    //                         liabEntry.currency = trade.currency;
+    //                         state.strategies[state.currStratIndex].
+    //                             ledger[++state.strategies[state.currStratIndex].
+    //                             currEntryId] = assetEntry;
+    //                         state.strategies[state.currStratIndex].
+    //                             ledger[++state.strategies[state.currStratIndex].
+    //                             currEntryId] = liabEntry;
+    //                         break;
+    //                     }
+    //
+    //                 default:
+    //                     {
+    //                        printf("trade qty is %f\n", (real64)trade.qty);
+    //                        real64 priceAfterFee =
+    //                         (trade.qty * trade.price *
+    //                         (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
+    //                         / trade.qty; 
+    //
+    //                         // you always get less after selling.
+    //                         state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+    //                         state.strategies[stratIndex].positions[i].price =
+    //                             ((state.strategies[stratIndex].positions[i].price *
+    //                             state.strategies[stratIndex].positions[i].qty) +
+    //                             (trade.qty * priceAfterFee)) 
+    //                             / (state.strategies[stratIndex].positions[i].qty + trade.qty);
+    //
+    //                         state.strategies[stratIndex].positions[i].qty += trade.qty;
+    //                         ++state.strategies[state.currStratIndex].currJournalId;
+    //                         LedgerEntry assetEntry = {};
+    //                         strcat(assetEntry.accountName, stratSymbol);
+    //                         strcat(assetEntry.accountName, "_CASH_USD");
+    //                         assetEntry.type = ASSET;
+    //                         assetEntry.currency = trade.currency;
+    //                         assetEntry.debit = abs(trade.qty * priceAfterFee);
+    //                         assetEntry.id = state.strategies[state.currStratIndex].
+    //                                         currJournalId;
+    //                         LedgerEntry liabEntry = {};
+    //                         strcpy(liabEntry.accountName, stratSymbol);
+    //                         strcpy(liabEntry.accountName, "_POSN");
+    //                         liabEntry.credit = abs(trade.qty * priceAfterFee);
+    //                         liabEntry.type = EQUITY;
+    //                         liabEntry.id = state.strategies[state.currStratIndex].
+    //                             currJournalId;
+    //                         liabEntry.currency = trade.currency;
+    //                         state.strategies[state.currStratIndex].
+    //                             ledger[++state.strategies[state.currStratIndex].
+    //                             currEntryId] = assetEntry;
+    //                         state.strategies[state.currStratIndex].
+    //                             ledger[++state.strategies[state.currStratIndex].
+    //                             currEntryId] = liabEntry;
+    //                         break;
+    //                     }
+    //             } 
+    //
+    //             found = 1;
+    //             break;
+    //         }
+    //     }
+    //
+    //     // not found, add the position.
+    //     if (found != 1)
+    //     {
+    //         // add the position
+    //         printf("adding new position: %s\n", trade.symbol);
+    //         PositionEquity pos = {};
+    //         strcpy(pos.symbol, trade.symbol);
+    //         /* NOTE(akhil): Assumes you have uploaded the securities in the
+    //                         trade file */
+    //         for (int i = 0; i < state.currSecIndex + 1; i++)
+    //         {
+    //             if (strcmp(trade.symbol, state.strategies[stratIndex].
+    //                                            positions[i].isin) == 0)
+    //             {
+    //                 strcpy(pos.isin, state.strategies[stratIndex].positions[i].isin);
+    //             }
+    //         }
+    //
+    //         switch(trade.transType)
+    //         {
+    //             case MB:
+    //             case LB:
+    //                 {
+    //                     real64 priceAfterFee =
+    //                         (trade.qty * trade.price *
+    //                         (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
+    //                         / trade.qty;
+    //                     // you always pay more while buying.
+    //                     state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+    //                     pos.price = priceAfterFee;
+    //                     pos.qty = trade.qty;
+    //                     ++state.strategies[state.currStratIndex].currJournalId;
+    //                     LedgerEntry assetEntry = {};
+    //                     strcat(assetEntry.accountName, stratSymbol);
+    //                     strcat(assetEntry.accountName, "_POSN");
+    //                     assetEntry.type = ASSET;
+    //                     assetEntry.currency = trade.currency;
+    //                     assetEntry.debit = abs(trade.qty * priceAfterFee);
+    //                     assetEntry.id = state.strategies[state.currStratIndex].
+    //                         currJournalId;
+    //                     LedgerEntry liabEntry = {};
+    //                     strcat(liabEntry.accountName, stratSymbol);
+    //                     strcat(liabEntry.accountName, "_CASH_USD");
+    //                     liabEntry.credit = abs(trade.qty * priceAfterFee);
+    //                     liabEntry.type = REVENUE;
+    //                     liabEntry.id = state.strategies[state.currStratIndex].
+    //                         currJournalId;
+    //                     liabEntry.currency = trade.currency;
+    //                     state.strategies[state.currStratIndex].
+    //                         ledger[++state.strategies[state.currStratIndex].
+    //                         currEntryId] = assetEntry;
+    //                     state.strategies[state.currStratIndex].
+    //                         ledger[++state.strategies[state.currStratIndex].
+    //                         currEntryId] = liabEntry;
+    //                     break;
+    //                 }
+    //             default:
+    //                 {
+    //                     real64 priceAfterFee =
+    //                         (trade.qty * trade.price *
+    //                         (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
+    //                         / trade.qty;
+    //                     // you always get less after selling.
+    //                     state.strategies[stratIndex].cash += trade.qty * priceAfterFee;
+    //                     pos.price = priceAfterFee;
+    //                     pos.qty = trade.qty;
+    //                     ++state.strategies[state.currStratIndex].currJournalId;
+    //                     LedgerEntry assetEntry = {};
+    //                     strcat(assetEntry.accountName, stratSymbol);
+    //                     strcat(assetEntry.accountName, "_CASH_USD");
+    //                     assetEntry.type = ASSET;
+    //                     assetEntry.currency = trade.currency;
+    //                     assetEntry.debit = abs(trade.qty * priceAfterFee);
+    //                     assetEntry.id = state.strategies[state.currStratIndex].
+    //                         currJournalId;
+    //                     LedgerEntry liabEntry = {};
+    //                     strcat(liabEntry.accountName, stratSymbol);
+    //                     strcat(liabEntry.accountName, "_POSN");
+    //                     liabEntry.credit = abs(trade.qty * priceAfterFee);
+    //                     liabEntry.type = EQUITY;
+    //                     liabEntry.id = state.strategies[state.currStratIndex].
+    //                         currJournalId;
+    //                     liabEntry.currency = trade.currency;
+    //                     state.strategies[state.currStratIndex].
+    //                         ledger[++state.strategies[state.currStratIndex].
+    //                         currEntryId] = assetEntry;
+    //                     state.strategies[state.currStratIndex].
+    //                         ledger[++state.strategies[state.currStratIndex].
+    //                         currEntryId] = liabEntry;
+    //                     break;
+    //                 }
+    //         }
+    //         state.strategies[stratIndex].positions[++state.strategies[stratIndex].currPosIndex] = pos;
+    //     }
+    //     printf("cash is %f\n", state.strategies[stratIndex].cash);
+    //     printf("pos is %s, %d, %f\n",
+    //            state.strategies[stratIndex].positions[stratIndex].symbol,
+    //            state.strategies[stratIndex].positions[stratIndex].qty,
+    //            state.strategies[stratIndex].positions[stratIndex].ltp);
+    //     printf("pos is %s, %d, %f\n",
+    //            state.strategies[stratIndex].positions[1].symbol,
+    //            state.strategies[stratIndex].positions[1].qty,
+    //            state.strategies[stratIndex].positions[1].ltp);
+    //
+    // }
 
     printFundLedger(&state);
-    //upload the bhavcopy.
-    FILE *BhavFile = fopen("bhavcopy.csv", "r");
-    if (BhavFile == NULL)
-    {
-        printf("sorry, couldn't upload file!\n");
-        return -1;
-    }
-    i = 0;
-    while (fgets(line, sizeof(line), BhavFile))
-    {
-        if (i == 0)
-        {
-            i++;
-            continue; // ignore the top heading row.
-        }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
-        Bhav bhav = {};
-        LoadBhav(&bhav, line);
-        /* NOTE(Akhil): The symbol may be present in multiple strats,
-                        need to update the posns in all of them. */
-        for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
-        {
-            if (strcmp(bhav.symbol, state.strategies[stratIndex].positions[i].symbol) == 0)
-            {
-                state.strategies[stratIndex].positions[i].ltp = bhav.ltp;
-            }
-        }
-        printf("cash after bhav is %f\n", state.strategies[stratIndex].cash);
-        printf("pos after bhav is %s, %d, %f\n",
-               state.strategies[stratIndex].positions[1].symbol,
-               state.strategies[stratIndex].positions[1].qty,
-               state.strategies[stratIndex].positions[1].ltp);
-        printf("pos after bhav is %s, %d, %f\n",
-               state.strategies[stratIndex].positions[1].symbol,
-               state.strategies[stratIndex].positions[1].qty,
-               state.strategies[stratIndex].positions[1].ltp);
-    }
+    // //upload the bhavcopy.
+    // FILE *BhavFile = fopen("bhavcopy.csv", "r");
+    // if (BhavFile == NULL)
+    // {
+    //     printf("sorry, couldn't upload file!\n");
+    //     return -1;
+    // }
+    // i = 0;
+    // while (fgets(line, sizeof(line), BhavFile))
+    // {
+    //     if (i == 0)
+    //     {
+    //         i++;
+    //         continue; // ignore the top heading row.
+    //     }
+    //     char *tmp = strchr(line, '\n');
+    //     if (tmp) *tmp = '\0';
+    //     Bhav bhav = {};
+    //     LoadBhav(&bhav, line);
+    //     /* NOTE(Akhil): The symbol may be present in multiple strats,
+    //                     need to update the posns in all of them. */
+    //     for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
+    //     {
+    //         if (strcmp(bhav.symbol, state.strategies[stratIndex].positions[i].symbol) == 0)
+    //         {
+    //             state.strategies[stratIndex].positions[i].ltp = bhav.ltp;
+    //         }
+    //     }
+    //     printf("cash after bhav is %f\n", state.strategies[stratIndex].cash);
+    //     printf("pos after bhav is %s, %d, %f\n",
+    //            state.strategies[stratIndex].positions[1].symbol,
+    //            state.strategies[stratIndex].positions[1].qty,
+    //            state.strategies[stratIndex].positions[1].ltp);
+    //     printf("pos after bhav is %s, %d, %f\n",
+    //            state.strategies[stratIndex].positions[1].symbol,
+    //            state.strategies[stratIndex].positions[1].qty,
+    //            state.strategies[stratIndex].positions[1].ltp);
+    // }
 
     // get total value of the positions held for the strategy.
+    // real64 totalValue = 0.0;
+    // for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
+    // {
+    //     PositionEquity pos = state.strategies[stratIndex].positions[i];
+    //     totalValue  += pos.qty * pos.ltp;
+    // }
+
+    /* NOTE(Akhil): Update the bhav's of unknown symbols manually here
+        usually the guy has a special file 21 price_update_us where
+        he gives the ltp against the system generated symbol
+        Also remember the uidff format of bse, that we need to be able
+        to parse for fno */
+    state.strategies[1].fpositions[2].ltp = 294.40; // natural gas.
+    state.strategies[1].fpositions[6].ltp = 700.45; // sensex.
+    state.strategies[1].fpositions[7].ltp = 8344.00; // crude oil.
+
+    // total value of fno positions.
     real64 totalValue = 0.0;
-    for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
+    for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
     {
-        PositionEquity pos = state.strategies[stratIndex].positions[i];
-        totalValue  += pos.qty * pos.ltp;
+        FNO_position pos = state.strategies[stratIndex].fpositions[i];
+        if (pos.qty > 0)
+        {
+            totalValue  += pos.qty * pos.ltp;
+        }
     }
 
     // get the total units from all the investors for a strategy.
-    real64 totalUnits = 0;
-    for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
-    {
-        Investor inv = state.strategies[stratIndex].investors[i];
-        totalUnits += inv.units;
-    }
+    real64 totalUnits = 1007.729;
+    // for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
+    // {
+    //     Investor inv = state.strategies[stratIndex].investors[i];
+    //     totalUnits += inv.units;
+    // }
 
     // calculate the nav = (totalValue + cash) / totalUnits.
     real64 cash = state.strategies[stratIndex].cash;
-    real64 nav = (totalValue + cash) / totalUnits;
+    real64 cashUSD = cash / exRate.rate;
+    real64 totalValueUSD = totalValue / exRate.rate;
+    real64 nav = (totalValueUSD + cashUSD) / totalUnits;
     printf("nav is %f\n", nav);
 }

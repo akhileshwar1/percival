@@ -49,7 +49,7 @@ typedef struct
     int id;
     char name[100];
     char inceptionDate[100];
-    uint64 units;
+    real64 units;
 } Investor;
 
 typedef enum 
@@ -444,7 +444,7 @@ allotUnits(State *state, char *line)
         }
         else if (i ==  7)
         {
-            uint64 units = (uint64)atof(token); 
+            real64 units = (real64)atof(token); 
             for (int j = 0; j < state->currStratIndex + 1; j++)
             {
                 if (strcmp(stratName, state->strategies[j].symbol) == 0)
@@ -458,7 +458,7 @@ allotUnits(State *state, char *line)
                             == 0)
                         {
                             state->strategies[j].investors[k].units = units;
-                            printf("units are %ld\n",
+                            printf("units are %f\n",
                                    state->strategies[j].investors[k].units);
                         }
                     }
@@ -714,7 +714,7 @@ LoadInvestor(Investor *inv, char *line)
         }
         else if (i ==  7)
         {
-            inv->units = (uint64)atoi(token);
+            inv->units = (real64)atof(token);
         }
         token = strtok(NULL, ",");
         i++;
@@ -1769,7 +1769,7 @@ main()
     }
 
     // get the total units from all the investors for a strategy.
-    uint64 totalUnits = 0;
+    real64 totalUnits = 0;
     for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
     {
         Investor inv = state.strategies[stratIndex].investors[i];

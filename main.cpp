@@ -1503,7 +1503,7 @@ main()
                         // you always get less after selling.
                         if (pos.instType != FUTSTK)
                         {
-                            state.strategies[stratIndex].cash += trade.qty * priceAfterFee;
+                            state.strategies[stratIndex].cash -= trade.qty * priceAfterFee;
                             ++state.strategies[state.currStratIndex].currJournalId;
                             LedgerEntry assetEntry = {};
                             strcat(assetEntry.accountName, stratSymbol);
@@ -1954,8 +1954,9 @@ main()
     // }
 
     // calculate the nav = (totalValue + cash) / totalUnits.
-    real64 cash = state.strategies[stratIndex].cash + 2588560.68;
-    real64 cashUSD = cash / exRate.rate;
+    real64 cash = state.strategies[stratIndex].cash;
+    printf("closing inr cash balance is %f\n", cash);
+    real64 cashUSD = (cash / exRate.rate) + 27065.67 /* from the cash usd acc */;
     real64 totalValueUSD = totalValue / exRate.rate;
     printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
     real64 nav = (totalValueUSD + cashUSD) / totalUnits;

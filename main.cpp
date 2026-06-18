@@ -1018,7 +1018,8 @@ main()
         LoadStrategyFromFile(&strategy, line);
         /* NOTE(Akhil): for manual testing,
                         shouldn't this happen during cashflow? */
-        strategy.cash = 15314483.54; // inr
+        // strategy.cash = 15314483.54; // inr
+        strategy.cash = 14451145.95; // inr
         strategy.id = ++state.currStratIndex;
         state.strategies[state.currStratIndex].currEntryId = -1;
         state.strategies[state.currStratIndex] = strategy;
@@ -1929,6 +1930,7 @@ main()
 
     // total value of fno positions.
     real64 totalValue = 0.0;
+    printf("positions=======\n");
     for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
     {
         FNO_position pos = state.strategies[stratIndex].fpositions[i];
@@ -1936,10 +1938,15 @@ main()
         {
             totalValue  += pos.qty * pos.ltp;
         }
+        printf("name: %s, qty : %d, value : %f\n",
+               pos.symbol,
+               pos.qty,
+               pos.qty * pos.ltp);
     }
 
     // get the total units from all the investors for a strategy.
-    real64 totalUnits = 1007.729;
+    real64 totalUnits = 1007.729 + 175.444;
+    // real64 totalUnits = 1183.249;
     // for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
     // {
     //     Investor inv = state.strategies[stratIndex].investors[i];
@@ -1947,9 +1954,10 @@ main()
     // }
 
     // calculate the nav = (totalValue + cash) / totalUnits.
-    real64 cash = state.strategies[stratIndex].cash;
+    real64 cash = state.strategies[stratIndex].cash + 2588560.68;
     real64 cashUSD = cash / exRate.rate;
     real64 totalValueUSD = totalValue / exRate.rate;
+    printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
     real64 nav = (totalValueUSD + cashUSD) / totalUnits;
     printf("nav is %f\n", nav);
 }

@@ -1916,6 +1916,7 @@ main()
 
     /* run the mtm process, i.e process variation settlements for
        open futures positions: net_qty * (ltp - prev_price) */
+    real64 totalVariation = 0.0;
     for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
     {
         FNO_position pos = state.strategies[stratIndex].fpositions[i];
@@ -1924,10 +1925,12 @@ main()
             real64 variation = pos.qty * (pos.ltp - pos.price); 
             printf("variation of %f against %s\n", variation, pos.symbol);
             state.strategies[stratIndex].cash += variation;
+            totalVariation += variation;
             // make the ledger entries.
         }
     }
 
+    printf("total variation is %f\n", totalVariation);
     // total value of fno positions.
     real64 totalValue = 0.0;
     printf("positions=======\n");
@@ -1945,8 +1948,8 @@ main()
     }
 
     // get the total units from all the investors for a strategy.
-    real64 totalUnits = 1007.729 + 175.444;
-    // real64 totalUnits = 1183.249;
+    // real64 totalUnits = 1007.729 + 175.444;
+    real64 totalUnits = 1183.249;
     // for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
     // {
     //     Investor inv = state.strategies[stratIndex].investors[i];
@@ -1954,10 +1957,12 @@ main()
     // }
 
     // calculate the nav = (totalValue + cash) / totalUnits.
-    real64 cash = state.strategies[stratIndex].cash;
+    real64 cash = state.strategies[stratIndex].cash + 2588560.68;
     printf("closing inr cash balance is %f\n", cash);
-    real64 cashUSD = (cash / exRate.rate) + 27065.67 /* from the cash usd acc */;
+    real64 cashUSD = (cash / exRate.rate) - 301.54; // deduct the management fees.
+    printf("closing cash balance in usd is %f\n", cashUSD);
     real64 totalValueUSD = totalValue / exRate.rate;
+    printf("total position value in usd is %f\n", totalValueUSD);
     printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
     real64 nav = (totalValueUSD + cashUSD) / totalUnits;
     printf("nav is %f\n", nav);

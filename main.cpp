@@ -1264,6 +1264,26 @@ processTrades(FILE *tradeFile, State *state)
     return stratIndex;
 }
 
+void
+processExRate(FILE *file, State *state, Exchange_rate *exRate)
+{
+    char line[1024];
+    int i = 0;
+    while (fgets(line, sizeof(line), file))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        LoadExchangeRate(exRate, line);
+        state->exRates[i - 1] = *exRate; // it's a copy here.
+        printf("ex rate is %f\n", state->exRates[i - 1].rate);
+    }
+}
+
 int
 main()
 {
@@ -2253,6 +2273,10 @@ main()
             printf("variation of %f against %s\n", variation, pos.symbol);
             state.strategies[stratIndex].cash += variation;
             totalVariation += variation;
+            // move the ltp now to the price column,
+            // so that the next time variation is correct.
+            pos.price = pos.ltp;
+            state.strategies[stratIndex].fpositions[i] = pos;
             // make the ledger entries.
         }
     }
@@ -2268,7 +2292,7 @@ main()
         {
             totalValue  += pos.qty * pos.ltp;
         }
-        printf("name: %s, qty : %d, price: %f, value : %f\n",
+        printf("name: %s, qty : %d, price: %f, ltp : %f\n",
                pos.symbol,
                pos.qty,
                pos.price,
@@ -2285,7 +2309,8 @@ main()
     // }
 
     // calculate the nav = (totalValue + cash) / totalUnits.
-    real64 cash = state.strategies[stratIndex].cash + 2588560.68;
+    state.strategies[stratIndex].cash += 2588560.68;
+    real64 cash = state.strategies[stratIndex].cash;
     printf("closing inr cash balance is %f\n", cash);
     real64 cashUSD = (cash / exRate.rate) - 301.54; // deduct the management fees.
     printf("closing cash balance in usd is %f\n", cashUSD);
@@ -2296,6 +2321,7 @@ main()
     printf("nav is %f\n", nav);
 
 
+    /* 2ND DAY------------------------------------------ */
     /* collapse multiple independent lots of the same symbol into one.
        for futures only.
        Also move only the nonzero qty symbols to the newer array.*/
@@ -2340,12 +2366,22 @@ main()
     for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
     {
         FNO_position pos = state.strategies[stratIndex].fpositions[i];
-        printf("name: %s, qty : %d, price: %f, value : %f\n",
+        printf("name: %s, qty : %d, price: %f, ltp: %f\n",
                pos.symbol,
                pos.qty,
                pos.price,
                pos.ltp);
     }
+
+    FILE *EFile = fopen("exchange_rate_12.csv", "r");
+    if (EFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    // update the ex rate for the second day.
+    processExRate(EFile, &state, &exRate);
 
     FILE *FTradessFile = fopen("trades_fno_12.csv", "r");
     if (FTradessFile == NULL)
@@ -2379,12 +2415,9 @@ main()
         {
             state.strategies[stratIndex].fpositions[i].ltp = 8073.00; // natural gas.
         }
-        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-                        "SENSEX") == 0)
-        {
-            state.strategies[stratIndex].fpositions[i].ltp = 226.2; // natural gas.
-        }
     }
+    state.strategies[stratIndex].fpositions[2].ltp = 226.2; // sensex 73500 pe.
+    state.strategies[stratIndex].fpositions[6].ltp = 1223.55; // sensex 75000 ce.
 
     totalVariation = 0.0;
     for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
@@ -2411,16 +2444,20 @@ main()
         {
             totalValue  += pos.qty * pos.ltp;
         }
-        printf("name: %s, qty : %d, price: %f, value : %f\n",
+        printf("name: %s, qty : %d, price: %f, ltp : %f, strike  : %f, expiry : %s \
+                value : %f\n",
                pos.symbol,
                pos.qty,
                pos.price,
-               pos.ltp);
+               pos.ltp,
+               pos.strike,
+               pos.expiry,
+               pos.qty * pos.ltp);
     }
 
     cash = state.strategies[stratIndex].cash;
     printf("closing inr cash balance is %f\n", cash);
-    cashUSD = (cash / exRate.rate);
+    cashUSD = (cash / exRate.rate) - 306.63;
     printf("closing cash balance in usd is %f\n", cashUSD);
     totalValueUSD = totalValue / exRate.rate;
     printf("total position value in usd is %f\n", totalValueUSD);

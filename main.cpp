@@ -1059,7 +1059,7 @@ processTrades(FILE *tradeFile, State *state)
                                 state->strategies[stratIndex].fpositions[i].price = 0.0;
                             }
                             else
-                        {
+                            {
                                 state->strategies[stratIndex].fpositions[i].price =
                                     ((state->strategies[stratIndex].fpositions[i].price *
                                     state->strategies[stratIndex].fpositions[i].qty)
@@ -1362,6 +1362,30 @@ makeVariationSettlements(State *state, int stratIndex)
             pos.price = pos.ltp;
             state->strategies[stratIndex].fpositions[i] = pos;
             // make the ledger entries.
+            char stratSymbol[100];
+            strcpy(stratSymbol, state->strategies[stratIndex].symbol);
+            LedgerEntry assetEntry = {};
+            strcat(assetEntry.accountName, stratSymbol);
+            strcat(assetEntry.accountName, "_CASH_USD");
+            assetEntry.type = ASSET;
+            assetEntry.currency = INR;
+            assetEntry.debit = variation;
+            assetEntry.id = state->strategies[state->currStratIndex].
+                currJournalId;
+            LedgerEntry liabEntry = {};
+            strcat(liabEntry.accountName, stratSymbol);
+            strcat(liabEntry.accountName, "_VARIATION");
+            liabEntry.credit = variation;
+            liabEntry.type = EQUITY;
+            liabEntry.id = state->strategies[state->currStratIndex].
+                currJournalId;
+            liabEntry.currency = INR;
+            state->strategies[state->currStratIndex].
+                ledger[++state->strategies[state->currStratIndex].
+                currEntryId] = assetEntry;
+            state->strategies[state->currStratIndex].
+                ledger[++state->strategies[state->currStratIndex].
+                currEntryId] = liabEntry;
         }
     }
     printf("total variation is %f\n", totalVariation);
@@ -1997,7 +2021,6 @@ main()
     //
     // }
 
-    printFundLedger(&state);
     // //upload the bhavcopy.
     // FILE *BhavFile = fopen("bhavcopy.csv", "r");
     // if (BhavFile == NULL)
@@ -2137,6 +2160,7 @@ main()
     state.strategies[stratIndex].fpositions[6].ltp = 1223.55; // sensex 75000 ce.
 
     makeVariationSettlements(&state, stratIndex);
+    printFundLedger(&state);
     managementFees = 306.63;
     printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
 }

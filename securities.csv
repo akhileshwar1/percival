@@ -1,3 +1,16 @@
-isin,symbol, date, name
-hha, akh, 3/06/2026, akhil
-haa, abh, 3/06/2026, abhi
+isin,symbol,date,name
+INE931S01010,ADANIENSOL,2026-06-18,Adani Energy Solutions Ltd.
+INE423A01024,ADANIENT,2026-06-18,Adani Enterprises Ltd.
+INE437A01024,APOLLOHOSP,2026-06-18,Apollo Hospitals Enterprise Ltd.
+INE067A01029,CGPOWER,2026-06-18,CG Power and Industrial Solutions Ltd.
+INE298A01020,CUMMINSIND,2026-06-18,Cummins India Ltd.
+INE047A01021,GRASIM,2026-06-18,Grasim Industries Ltd.
+INE343H01029,SOLARINDS,2026-06-18,Solar Industries India Ltd.
+INE1CDF01017,,2026-06-18,Vedanta Aluminium Metal Limited
+INE205A01025,VEDL,2026-06-18,Vedanta Ltd.
+INE694L01019,VEDANTA,2026-06-18,Vedanta Power Limited
+INE1CLE01013,VEDANTAIRON,2026-06-18,Vedanta Iron And Steel Limited
+INE704J01044,VEDANTAOIL,2026-06-18,Vedanta Oil and Gas Limited
+INE010B01027,ZYDUSLIFE,2026-06-18,Zydus Lifesciences Ltd.
+FUT,MOTHERSON,2026-06-18,Samvardhana Motherson International Ltd.
+FUT,POWER,2026-06-18,CG POWER.

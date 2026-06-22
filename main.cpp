@@ -42,6 +42,7 @@ typedef struct
     char symbol[100];
     char date[100];
     char name[100];
+    char id[100];
 } Security;
 
 typedef struct
@@ -132,6 +133,7 @@ typedef struct
     int qty;
     real64 price;
     real64 ltp;
+    char id[100];
 } PositionEquity;
 
 typedef struct
@@ -144,6 +146,7 @@ typedef struct
     real64 strike;
     Opt_type optType;
     Instrument_type instType;
+    char id[100];
 } FNO_position;
 
 typedef enum
@@ -190,6 +193,7 @@ typedef struct
     Strategy strategies[MAX_STRATEGIES];
     int currStratIndex;
     int currSecIndex;
+    int idCount;
 } State;
 
 int get_month_number(const char *month_str) {
@@ -344,7 +348,7 @@ LoadExchangeRate(Exchange_rate *exRate, char *line)
 }
 
 void
-LoadEquitySecurity(Security *sec, char *line)
+LoadSecurity(Security *sec, State *state, char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -370,6 +374,17 @@ LoadEquitySecurity(Security *sec, char *line)
         token = strtok(NULL, ",");
         i++;
     }
+    if (strcmp(sec->isin, "FUT") == 0)
+    {
+        strcat(sec->id, "FUT_");
+    }
+    else
+    {
+        strcat(sec->id, "SEC_");
+    }
+    char str[12];
+    snprintf(str, sizeof(str), "%d", ++state->idCount);
+    strcat(sec->id, str);
 }
 
 void
@@ -1163,15 +1178,15 @@ processTradesEq(FILE *tradeFile, State *state)
             // add the position
             printf("adding new position: %s\n", trade.symbol);
             PositionEquity pos = {};
-            strcpy(pos.symbol, trade.symbol);
+            strcpy(pos.isin, trade.symbol);
             /* NOTE(akhil): Assumes you have uploaded the securities in the
                             trade file */
             for (int i = 0; i < state->currSecIndex + 1; i++)
             {
-                if (strcmp(trade.symbol, state->strategies[stratIndex].
-                                               positions[i].isin) == 0)
+                if (strcmp(trade.symbol, state->secs[i].isin) == 0)
                 {
-                    strcpy(pos.isin, state->strategies[stratIndex].positions[i].isin);
+                    strcpy(pos.symbol, state->secs[i].symbol);
+                    strcpy(pos.id , state->secs[i].id);
                 }
             }
 
@@ -1708,6 +1723,27 @@ printNav(State *state, Exchange_rate *exRate, real64 totalUnits,
     printf("nav is %f\n", nav);
 }
 
+void
+uploadSecurities(FILE *secFile, State *state)
+{
+    char line[1024];
+    int i = 0;
+    while (fgets(line, sizeof(line), secFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        Security sec = {};
+        LoadSecurity(&sec, state, line);
+        state->secs[++state->currSecIndex] = sec;
+        printf("security is %s\n", state->secs[i - 1].name);
+    }
+}
+
 int
 main()
 {
@@ -1723,6 +1759,7 @@ main()
     State state = {};
     state.currStratIndex = -1;
     state.currSecIndex = -1;
+    state.idCount = -1;
     char line[1024];
     int i = 0;
     Exchange_rate exRate = {};
@@ -1740,32 +1777,7 @@ main()
         printf("ex rate is %f\n", state.exRates[i - 1].rate);
     }
 
-    FILE *securityFile = fopen("securities.csv", "r");
-    if (securityFile == NULL)
-    {
-        printf("sorry, couldn't upload file!\n");
-        return -1;
-    }
-
-    // upload the securities.
-    i = 0;
-    while (fgets(line, sizeof(line), securityFile))
-    {
-        if (i == 0)
-        {
-            i++;
-            continue; // ignore the top heading row.
-        }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
-        Security sec = {};
-        LoadEquitySecurity(&sec, line);
-        state.secs[++state.currSecIndex] = sec;
-        printf("security is %s\n", state.secs[i - 1].name);
-    }
-
     // onboard investor and strategy if new.
-
     // step 0: create new strategy.
     FILE *stratFile = fopen("strategy_master.csv", "r");
     if (stratFile == NULL)
@@ -2188,7 +2200,7 @@ main()
         /* NOTE(Akhil): for manual testing,
                         shouldn't this happen during cashflow? */
         // strategy.cash = 15314483.54; // inr
-        strategy.cash = 14451145.95; // inr
+        strategy.cash = 53764.80; // inr
         strategy.id = ++state.currStratIndex;
         state.strategies[state.currStratIndex].currEntryId = -1;
         state.strategies[state.currStratIndex] = strat;
@@ -2196,6 +2208,15 @@ main()
         printf("strategy name is %s\n", state.strategies[state.currStratIndex].symbol);
         i++;
     }
+
+    FILE *securityFile = fopen("securities.csv", "r");
+    if (securityFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    uploadSecurities(securityFile, &state);
 
     FILE *TradesFile = fopen("trades_eq.csv", "r");
     if (TradesFile == NULL)

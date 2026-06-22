@@ -128,6 +128,13 @@ typedef struct
 
 typedef struct
 {
+    char symbol[100];
+    char date[100];
+    real64 price;
+} PriceUpdate;
+
+typedef struct
+{
     char isin[100];
     char symbol[100];
     int qty;
@@ -1744,6 +1751,56 @@ uploadSecurities(FILE *secFile, State *state)
     }
 }
 
+void
+LoadOldPosition(PositionEquity *pos, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 0)
+        {
+            strcpy(pos->isin , token);
+        }
+        else if (i == 1)
+        {
+            pos->ltp = (real64)atof(token);
+        }
+        else if (i ==  2)
+        {
+            pos->qty = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
+LoadPriceUpdate(PriceUpdate *update, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 0)
+        {
+            strcpy(update->symbol, token);
+        }
+        else if (i == 1)
+        {
+            strcpy(update->date, token);
+        }
+        else if (i ==  2)
+        {
+            update->price = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
 int
 main()
 {
@@ -2218,6 +2275,47 @@ main()
 
     uploadSecurities(securityFile, &state);
 
+    // load the previous day's open positions.
+    FILE *posFile = fopen("securities_price_qty.csv", "r");
+    if (posFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), posFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        PositionEquity pos = {};
+        LoadOldPosition(&pos, line);
+        state.strategies[stratIndex].positions
+            [++state.strategies[stratIndex].currPosIndex] = pos;
+    }
+
+    FNO_position posX = {};
+    strcpy(posA.symbol, "MOTHER");
+    strcpy(posA.expiry, "30/06/2026");
+    posA.instType = FUTIDX;
+    posA.qty = 6150;
+    state.strategies[stratIndexx].fpositions
+        [++state.strategies[stratIndexx].currFPosIndex] = posX;
+
+    FNO_position posY = {};
+    strcpy(posB.symbol, "POWER");
+    strcpy(posB.expiry, "30/06/2026");
+    posB.instType = FUTIDX;
+    posB.qty = 850;
+    state.strategies[stratIndexx].fpositions
+        [++state.strategies[stratIndexx].currFPosIndex] = posY;
+
+
     FILE *TradesFile = fopen("trades_eq.csv", "r");
     if (TradesFile == NULL)
     {
@@ -2235,4 +2333,34 @@ main()
     }
 
     processBhavEq(BhavFile, stratIndex, &state);
+
+    FILE *priceFile = fopen("price_update.csv", "r");
+    if (priceFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), priceFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        PriceUpdate update = {};
+        LoadPriceUpdate(&update, line);
+        for (int j = 0; j < state.strategies[stratIndex].currPosIndex + 1;
+            j++)
+        {
+            if (strcmp(state.strategies[stratIndex].positions[j].symbol,
+                       update.symbol) == 0)
+            {
+                state.strategies[stratIndex].positions[j].price = update.price;
+            }
+        }
+    }
 }

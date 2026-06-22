@@ -983,16 +983,16 @@ processBhavEq(FILE *bhavFile, int stratIndex, State *state)
             {
                 state->strategies[stratIndex].positions[i].ltp = bhav.ltp;
             }
-            printf("pos after bhav is %s, %d, %f\n",
-                   state->strategies[stratIndex].positions[1].symbol,
-                   state->strategies[stratIndex].positions[1].qty,
-                   state->strategies[stratIndex].positions[1].ltp);
-            printf("pos after bhav is %s, %d, %f\n",
-                   state->strategies[stratIndex].positions[1].symbol,
-                   state->strategies[stratIndex].positions[1].qty,
-                   state->strategies[stratIndex].positions[1].ltp);
+            // printf("pos after bhav is %s, %d, %f\n",
+            //        state->strategies[stratIndex].positions[1].symbol,
+            //        state->strategies[stratIndex].positions[1].qty,
+            //        state->strategies[stratIndex].positions[1].ltp);
+            // printf("pos after bhav is %s, %d, %f\n",
+            //        state->strategies[stratIndex].positions[1].symbol,
+            //        state->strategies[stratIndex].positions[1].qty,
+            //        state->strategies[stratIndex].positions[1].ltp);
         }
-        printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
+        // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
     }
 }
 
@@ -1081,6 +1081,8 @@ processTradesEq(FILE *tradeFile, State *state)
         {
             if (strcmp(state->strategies[stratIndex].positions[i].isin, trade.symbol) == 0)
             {
+                
+
                 switch (trade.transType)
                 {
                     case MB:
@@ -1188,6 +1190,7 @@ processTradesEq(FILE *tradeFile, State *state)
             strcpy(pos.isin, trade.symbol);
             /* NOTE(akhil): Assumes you have uploaded the securities in the
                             trade file */
+            // populate the rest of the details from the securities data.
             for (int i = 0; i < state->currSecIndex + 1; i++)
             {
                 if (strcmp(trade.symbol, state->secs[i].isin) == 0)
@@ -1593,6 +1596,22 @@ processExRate(FILE *file, State *state, Exchange_rate *exRate)
 void
 printPositions(State *state, int stratIndex)
 {
+    for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
+    {
+        PositionEquity pos = state->strategies[stratIndex].positions[i];
+        printf("name: %s, qty : %d, price: %f, ltp : %f, \
+value : %f\n",
+               pos.symbol,
+               pos.qty,
+               pos.price,
+               pos.ltp,
+               pos.qty * pos.ltp);
+    }
+}
+
+void
+printFPositions(State *state, int stratIndex)
+{
     for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
     {
         FNO_position pos = state->strategies[stratIndex].fpositions[i];
@@ -1747,7 +1766,7 @@ uploadSecurities(FILE *secFile, State *state)
         Security sec = {};
         LoadSecurity(&sec, state, line);
         state->secs[++state->currSecIndex] = sec;
-        printf("security is %s\n", state->secs[i - 1].name);
+        // printf("security is %s\n", state->secs[i - 1].name);
     }
 }
 
@@ -2178,7 +2197,7 @@ main()
     
     collapsePositions(&state, stratIndex);
 
-    printPositions(&state, stratIndex);
+    printFPositions(&state, stratIndex);
 
     FILE *EFile = fopen("exchange_rate_12.csv", "r");
     if (EFile == NULL)
@@ -2243,7 +2262,7 @@ main()
 
     Strategy strat = {};
     i = 0;
-    while (fgets(line, sizeof(line), stratFile))
+    while (fgets(line, sizeof(line), strattFile))
     {
         if (i == 0)
         {
@@ -2257,8 +2276,8 @@ main()
         /* NOTE(Akhil): for manual testing,
                         shouldn't this happen during cashflow? */
         // strategy.cash = 15314483.54; // inr
-        strategy.cash = 53764.80; // inr
-        strategy.id = ++state.currStratIndex;
+        strat.cash = 53764.80; // inr
+        strat.id = ++state.currStratIndex;
         state.strategies[state.currStratIndex].currEntryId = -1;
         state.strategies[state.currStratIndex] = strat;
         printf("strategy id is %d\n", state.strategies[state.currStratIndex].id);
@@ -2274,6 +2293,20 @@ main()
     }
 
     uploadSecurities(securityFile, &state);
+    for (int i = 0; i < state.currStratIndex + 1; i++)
+    {
+        if (strcmp("SSFSAMSTE", state.strategies[i].symbol) == 0)
+        {
+            stratIndex = i;
+            break;
+        }
+    }
+
+    if (stratIndex == -1)
+    {
+        printf("Couldn't find strategy, aborting!\n");
+        return -2;
+    }
 
     // load the previous day's open positions.
     FILE *posFile = fopen("securities_price_qty.csv", "r");
@@ -2295,26 +2328,41 @@ main()
         if (tmp) *tmp = '\0';
         PositionEquity pos = {};
         LoadOldPosition(&pos, line);
+        // populate the rest of the details from the securities data.
+        for (int i = 0; i < state.currSecIndex + 1; i++)
+        {
+            if (strcmp(pos.isin, state.secs[i].isin) == 0)
+            {
+                strcpy(pos.symbol,
+                       state.secs[i].symbol);
+                strcpy(pos.id,
+                       state.secs[i].id);
+            }
+        }
         state.strategies[stratIndex].positions
             [++state.strategies[stratIndex].currPosIndex] = pos;
     }
-
+    
+    state.strategies[stratIndex].currFPosIndex = -1;
     FNO_position posX = {};
     strcpy(posA.symbol, "MOTHER");
     strcpy(posA.expiry, "30/06/2026");
     posA.instType = FUTIDX;
     posA.qty = 6150;
-    state.strategies[stratIndexx].fpositions
-        [++state.strategies[stratIndexx].currFPosIndex] = posX;
+    state.strategies[stratIndex].fpositions
+        [++state.strategies[stratIndex].currFPosIndex] = posX;
 
     FNO_position posY = {};
     strcpy(posB.symbol, "POWER");
     strcpy(posB.expiry, "30/06/2026");
     posB.instType = FUTIDX;
     posB.qty = 850;
-    state.strategies[stratIndexx].fpositions
-        [++state.strategies[stratIndexx].currFPosIndex] = posY;
+    state.strategies[stratIndex].fpositions
+        [++state.strategies[stratIndex].currFPosIndex] = posY;
 
+    printf("here %d\n", stratIndex);
+    printPositions(&state, stratIndex);
+    printFPositions(&state, stratIndex);
 
     FILE *TradesFile = fopen("trades_eq.csv", "r");
     if (TradesFile == NULL)
@@ -2363,4 +2411,9 @@ main()
             }
         }
     }
+
+    makeVariationSettlements(&state, stratIndex);
+    printFundLedger(&state);
+    managementFees = 306.63;
+    printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
 }

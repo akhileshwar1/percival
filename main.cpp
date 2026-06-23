@@ -271,8 +271,8 @@ LoadFNOBhav(FNO_bhav *bhav, char *line)
             char output[11]; // "DD/MM/YYYY" requires 10 chars + 1 for null terminator
 
             if (convert_date_format(token, output) == 0) {
-                printf("Original: %s\n", token);
-                printf("Converted: %s\n", output);
+                // printf("Original: %s\n", token);
+                // printf("Converted: %s\n", output);
                 strcpy(bhav->expiry, output);
             }
         }
@@ -898,7 +898,7 @@ LoadTrade(Trade *trade, char *line)
         {
             strcpy(trade->symbol, token);
         }
-        else if (i ==  2)
+        else if (i ==  4)
         {
             if (strcmp(token, "MBY") == 0) {
                 trade->transType = MB;
@@ -1036,7 +1036,7 @@ processBhav(FILE *bhavFile, int stratIndex, State *state)
                        state->strategies[stratIndex].fpositions[i].ltp);
             }
         }
-        printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
+        // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
     }
 }
 
@@ -1079,10 +1079,9 @@ processTradesEq(FILE *tradeFile, State *state)
         int found = 0;
         for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
         {
-            if (strcmp(state->strategies[stratIndex].positions[i].isin, trade.symbol) == 0)
+            if (strcmp(state->strategies[stratIndex].positions[i].isin,
+                       trade.symbol) == 0)
             {
-                
-
                 switch (trade.transType)
                 {
                     case MB:
@@ -1096,12 +1095,20 @@ processTradesEq(FILE *tradeFile, State *state)
 
 
                             state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
-                            // NOTE(Akhil): this will break if denom is 0!
-                            state->strategies[stratIndex].positions[i].price =
-                                ((state->strategies[stratIndex].positions[i].price *
-                                state->strategies[stratIndex].positions[i].qty)
-                                + (trade.qty * priceAfterFee)) 
-                                / (state->strategies[stratIndex].positions[i].qty + trade.qty);
+                            if (state->strategies[stratIndex].positions[i].qty + 
+                                trade.qty == 0)
+                            {
+                                state->strategies[stratIndex].positions[i].price = 0.0;
+                            }
+                            else
+                            {
+                                state->strategies[stratIndex].positions[i].price =
+                                    ((state->strategies[stratIndex].positions[i].price *
+                                    state->strategies[stratIndex].positions[i].qty)
+                                    + (trade.qty * priceAfterFee)) 
+                                    / (state->strategies[stratIndex].positions[i].qty +
+                                    trade.qty);
+                            }
 
                             state->strategies[stratIndex].positions[i].qty += trade.qty;
 
@@ -1135,19 +1142,28 @@ processTradesEq(FILE *tradeFile, State *state)
                     default:
                         {
                            printf("trade qty is %f\n", (real64)trade.qty);
+                           trade.qty = -trade.qty;
                            real64 priceAfterFee =
-                            (trade.qty * trade.price *
+                            (abs(trade.qty) * trade.price *
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                            / trade.qty; 
+                            / abs(trade.qty); 
 
                             // you always get less after selling.
                             state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
-                            state->strategies[stratIndex].positions[i].price =
-                                ((state->strategies[stratIndex].positions[i].price *
-                                state->strategies[stratIndex].positions[i].qty) +
-                                (trade.qty * priceAfterFee)) 
-                                / (state->strategies[stratIndex].positions[i].qty + trade.qty);
-
+                            if (state->strategies[stratIndex].positions[i].qty + 
+                                trade.qty == 0)
+                            {
+                                state->strategies[stratIndex].positions[i].price = 0.0;
+                            }
+                            else
+                            {
+                                state->strategies[stratIndex].positions[i].price =
+                                    ((state->strategies[stratIndex].positions[i].price *
+                                    state->strategies[stratIndex].positions[i].qty) +
+                                    (trade.qty * priceAfterFee)) 
+                                    / (state->strategies[stratIndex].positions[i].qty +
+                                    trade.qty);
+                            }
                             state->strategies[stratIndex].positions[i].qty += trade.qty;
                             ++state->strategies[state->currStratIndex].currJournalId;
                             LedgerEntry assetEntry = {};
@@ -1240,12 +1256,13 @@ processTradesEq(FILE *tradeFile, State *state)
                     }
                 default:
                     {
+                        trade.qty = -trade.qty;
                         real64 priceAfterFee =
-                            (trade.qty * trade.price *
+                            (abs(trade.qty) * trade.price *
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
-                            / trade.qty;
+                            / abs(trade.qty);
                         // you always get less after selling.
-                        state->strategies[stratIndex].cash += trade.qty * priceAfterFee;
+                        state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
                         pos.price = priceAfterFee;
                         pos.qty = trade.qty;
                         ++state->strategies[state->currStratIndex].currJournalId;
@@ -1361,7 +1378,6 @@ processTrades(FILE *tradeFile, State *state)
 
 
                             state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
-                            // NOTE(Akhil): this will break if denom is 0!
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
                             {
@@ -1422,7 +1438,7 @@ processTrades(FILE *tradeFile, State *state)
                                 state->strategies[stratIndex].fpositions[i].price = 0.0;
                             }
                             else
-                        {
+                            {
                                 state->strategies[stratIndex].fpositions[i].price =
                                     ((state->strategies[stratIndex].fpositions[i].price *
                                     state->strategies[stratIndex].fpositions[i].qty) +
@@ -1784,6 +1800,7 @@ LoadOldPosition(PositionEquity *pos, char *line)
         }
         else if (i == 1)
         {
+            pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
             pos->ltp = (real64)atof(token);
         }
         else if (i ==  2)
@@ -2308,6 +2325,8 @@ main()
         return -2;
     }
 
+    state.strategies[stratIndex].cash = 53764.80;
+
     // load the previous day's open positions.
     FILE *posFile = fopen("securities_price_qty.csv", "r");
     if (posFile == NULL)
@@ -2345,18 +2364,24 @@ main()
     
     state.strategies[stratIndex].currFPosIndex = -1;
     FNO_position posX = {};
-    strcpy(posA.symbol, "MOTHER");
-    strcpy(posA.expiry, "30/06/2026");
-    posA.instType = FUTIDX;
-    posA.qty = 6150;
+    strcpy(posX.symbol, "MOTHERSON");
+    strcpy(posX.expiry, "30/06/2026");
+    posX.instType = FUTSTK;
+    posX.optType = NA;
+    posX.strike = 0;
+    posX.qty = 6150;
+    posX.price = 144.67;
     state.strategies[stratIndex].fpositions
         [++state.strategies[stratIndex].currFPosIndex] = posX;
 
     FNO_position posY = {};
-    strcpy(posB.symbol, "POWER");
-    strcpy(posB.expiry, "30/06/2026");
-    posB.instType = FUTIDX;
-    posB.qty = 850;
+    strcpy(posY.symbol, "CGPOWER");
+    strcpy(posY.expiry, "30/06/2026");
+    posY.instType = FUTSTK;
+    posY.optType = NA;
+    posY.strike = 0;
+    posY.qty = 850;
+    posY.price = 958.15;
     state.strategies[stratIndex].fpositions
         [++state.strategies[stratIndex].currFPosIndex] = posY;
 
@@ -2374,13 +2399,20 @@ main()
     processTradesEq(TradesFile, &state);
 
     FILE *BhavFile = fopen("bhavcopy_eq.csv", "r");
-    if (FBhavFile == NULL)
+    if (BhavFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
         return -1;
     }
 
     processBhavEq(BhavFile, stratIndex, &state);
+    FILE *BhavFFile = fopen("bhavcopy_eq_fno.csv", "r");
+    if (BhavFFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    processBhav(BhavFFile, stratIndex, &state);
 
     FILE *priceFile = fopen("price_update.csv", "r");
     if (priceFile == NULL)
@@ -2404,16 +2436,19 @@ main()
         for (int j = 0; j < state.strategies[stratIndex].currPosIndex + 1;
             j++)
         {
-            if (strcmp(state.strategies[stratIndex].positions[j].symbol,
+            if (strcmp(state.strategies[stratIndex].positions[j].isin,
                        update.symbol) == 0)
             {
-                state.strategies[stratIndex].positions[j].price = update.price;
+                state.strategies[stratIndex].positions[j].ltp = update.price;
             }
         }
     }
 
+    printPositions(&state, stratIndex);
+    printFPositions(&state, stratIndex);
     makeVariationSettlements(&state, stratIndex);
     printFundLedger(&state);
     managementFees = 306.63;
+    totalUnits = 927.387505;
     printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
 }

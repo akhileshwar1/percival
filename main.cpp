@@ -1736,6 +1736,11 @@ real64
 getTotalPositionValue(State *state, int stratIndex)
 {
     real64 totalValue = 0.0;
+    for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
+    {
+        PositionEquity pos = state->strategies[stratIndex].positions[i];
+        totalValue  += pos.qty * pos.ltp;
+    }
     for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
     {
         FNO_position pos = state->strategies[stratIndex].fpositions[i];

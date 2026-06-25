@@ -1905,42 +1905,58 @@ main()
         state.exRates[i - 1] = exRate; // it's a copy here.
         printf("ex rate is %f\n", state.exRates[i - 1].rate);
         PQclear(pgResult);
-        PQfinish(conn);
     }
 
     // onboard investor and strategy if new.
     // step 0: create new strategy.
-    // FILE *stratFile = fopen("strategy_master.csv", "r");
-    // if (stratFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // Strategy strategy = {};
-    // i = 0;
-    // while (fgets(line, sizeof(line), stratFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     // NOTE(Akhil): here, the headinng is too big, lines split!
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     LoadStrategyFromFile(&strategy, line);
-    //     /* NOTE(Akhil): for manual testing,
-    //                     shouldn't this happen during cashflow? */
-    //     // strategy.cash = 15314483.54; // inr
-    //     strategy.cash = 14451145.95; // inr
-    //     strategy.id = ++state.currStratIndex;
-    //     state.strategies[state.currStratIndex].currEntryId = -1;
-    //     state.strategies[state.currStratIndex] = strategy;
-    //     printf("strategy id is %d\n", state.strategies[state.currStratIndex].id);
-    //     printf("strategy name is %s\n", state.strategies[state.currStratIndex].symbol);
-    //     i++;
-    // }
+    FILE *stratFile = fopen("strategy_master.csv", "r");
+    if (stratFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    Strategy strategy = {};
+    i = 0;
+    while (fgets(line, sizeof(line), stratFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        // NOTE(Akhil): here, the headinng is too big, lines split!
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        LoadStrategyFromFile(&strategy, line);
+        /* NOTE(Akhil): for manual testing,
+                        shouldn't this happen during cashflow? */
+        // strategy.cash = 15314483.54; // inr
+        strategy.cash = 14451145.95; // inr
+        strategy.id = ++state.currStratIndex;
+        state.strategies[state.currStratIndex].currEntryId = -1;
+        state.strategies[state.currStratIndex] = strategy;
+        printf("strategy id is %d\n", state.strategies[state.currStratIndex].id);
+        printf("strategy name is %s\n", state.strategies[state.currStratIndex].symbol);
+        char query[512];
+        sprintf(query,
+                "INSERT INTO strategy"
+                "(symbol, cash) "
+                "VALUES ('%s', %f);",
+                strategy.symbol,
+                strategy.cash);
+
+        PGresult *pgResult = PQexec(conn, query);
+        char *errorMessage = PQresultErrorMessage(pgResult);
+        if (strcmp(errorMessage, "") != 0)
+        {
+            printf("%s", errorMessage);
+        }
+        PQclear(pgResult);
+        i++;
+    }
+
+    PQfinish(conn);
     //
     // // step 1: the client_master.csv file.
     // Investor inv = {};

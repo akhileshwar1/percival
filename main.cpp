@@ -1956,30 +1956,44 @@ main()
         i++;
     }
 
+
+    // step 1: the client_master.csv file.
+    Investor inv = {};
+    FILE *clientFile = fopen("client_master.csv", "r");
+    if (clientFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), clientFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        LoadInvestorFromClient(&inv, line);
+        char query[512];
+        sprintf(query,
+                "INSERT INTO investor"
+                "(name) "
+                "VALUES ('%s');",
+                inv.name);
+
+        PGresult *pgResult = PQexec(conn, query);
+        char *errorMessage = PQresultErrorMessage(pgResult);
+        if (strcmp(errorMessage, "") != 0)
+        {
+            printf("%s", errorMessage);
+        }
+        PQclear(pgResult);
+    }
+
     PQfinish(conn);
-    //
-    // // step 1: the client_master.csv file.
-    // Investor inv = {};
-    // FILE *clientFile = fopen("client_master.csv", "r");
-    // if (clientFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // i = 0;
-    // while (fgets(line, sizeof(line), clientFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     LoadInvestorFromClient(&inv, line);
-    // }
-    //
     // // step 2: the subscription file with accounting.
     // FILE *subsFile = fopen("subscription_upa.csv", "r");
     // if (subsFile == NULL)

@@ -23,3 +23,14 @@ CREATE TABLE strategy
     curr_entry_id INTEGER DEFAULT -1,
     curr_journal_id INTEGER DEFAULT -1 
 );
+
+DROP TABLE IF EXISTS investor CASCADE;
+CREATE TABLE investor (
+    id SERIAL PRIMARY KEY,
+    symbol VARCHAR(100) NULL,
+    cash DOUBLE PRECISION NULL,
+    name VARCHAR(100) NOT NULL,
+    units DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    inception_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

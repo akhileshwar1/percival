@@ -1,2 +1,2 @@
 #!/bin/sh
-gcc -o db db.cpp -lpq
+gcc -o db.out db.cpp -lpq

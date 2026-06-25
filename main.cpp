@@ -661,7 +661,8 @@ AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
 }
 
 void
-AccountFromSubs(LedgerEntry *entry, State *state, Investor inv, char *line)
+AccountFromSubs(LedgerEntry *entry, State *state, Investor inv,
+                char *symbol, char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -679,6 +680,7 @@ AccountFromSubs(LedgerEntry *entry, State *state, Investor inv, char *line)
                     printf("found strategy\n");
                     state->strategies[j]
                         .investors[++state->strategies[j].currInvestorIndex] = inv;
+                    strcpy(symbol, token);
                 }
             }
         }
@@ -1993,36 +1995,76 @@ main()
         PQclear(pgResult);
     }
 
+    // step 2: the subscription file with accounting.
+    FILE *subsFile = fopen("subscription_upa.csv", "r");
+    if (subsFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    ++state.strategies[state.currStratIndex].currJournalId; // same id for the couple.
+    while (fgets(line, sizeof(line), subsFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        LedgerEntry entry = {};
+        entry.id = state.strategies[state.currStratIndex].currJournalId;
+        if (i == 1) entry.type = EQUITY;
+        else if (i == 2) entry.type = ASSET;
+        char stratSymbol[100];
+        AccountFromSubs(&entry, &state, inv, stratSymbol, line);
+        printf("strat symbol is %s\n", stratSymbol);
+        if (i == 2)
+        {
+            // Link the investor to the strategy in the db as well.
+            char query[512];
+            sprintf(query,
+                    "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+                    stratSymbol);
+
+            PGresult *pgResult = PQexec(conn, query);
+            char *errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+
+            if (PQntuples(pgResult) == 0)
+            {
+                fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+                PQclear(res);
+                return -1;
+            }
+
+            char *id_str = PQgetvalue(pgResult, 0, 0);
+            int strategy_id = atoi(id_str);
+            PQclear(pgResult);
+
+            sprintf(query,
+                    "UPDATE investor SET strategy_id = %d where name = '%s'",
+                    strategy_id,
+                    inv.name);
+            pgResult = PQexec(conn, query);
+            errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
+        }
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = entry;
+        printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
+        i++;
+    }
+
     PQfinish(conn);
-    // // step 2: the subscription file with accounting.
-    // FILE *subsFile = fopen("subscription_upa.csv", "r");
-    // if (subsFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // i = 0;
-    // ++state.strategies[state.currStratIndex].currJournalId; // same id for the couple.
-    // while (fgets(line, sizeof(line), subsFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     LedgerEntry entry = {};
-    //     entry.id = state.strategies[state.currStratIndex].currJournalId;
-    //     if (i == 1) entry.type = EQUITY;
-    //     else if (i == 2) entry.type = ASSET;
-    //     AccountFromSubs(&entry, &state, inv, line);
-    //     state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = entry;
-    //     printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
-    //     i++;
-    // }
-    //
     // // step 3: process the bank transfer.
     // FILE *bankFile = fopen("bank_transfer.csv", "r");
     // if (bankFile == NULL)

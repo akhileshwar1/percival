@@ -54,6 +54,13 @@ typedef struct
     real64 units;
 } Investor;
 
+typedef struct
+{
+    char symbol[100];
+    real64 balance;
+    Currency_code currency;
+} Bank_account;
+
 typedef enum 
 {
     MB, // market buy
@@ -2119,7 +2126,31 @@ main()
         assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
         liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
         AccountFromBank(&assetEntry, &liabEntry, line);
-        /* NOTE(Akhil): maybe we could persist a bank table here with bal and curr.*/
+        /* NOTE(Akhil): this is a shortcut, need all bank accounts,
+                        not just final one.*/
+        if (i == 3)
+        {
+            Bank_account acc = {};
+            strcpy(acc.symbol, liabEntry.accountName);
+            acc.balance = liabEntry.credit;
+            acc.currency = liabEntry.currency;
+            char query[1024];
+            snprintf(query, sizeof(query),
+                     "INSERT INTO bank_account (strategy_id, symbol, balance, currency) "
+                     "VALUES (%d, '%s', %f, '%s');",
+                     strategy.id,
+                     acc.symbol,
+                     acc.balance,
+                     acc.currency == USD ? "USD" : "INR" 
+                     );
+            PGresult *pgResult = PQexec(conn, query);
+            char *errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
+        }
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
         printf("entry name is %s and value is %f\n", assetEntry.accountName,

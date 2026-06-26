@@ -144,3 +144,17 @@ CREATE TABLE fno_trade (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
+
+
+DROP TABLE IF EXISTS fno_bhav CASCADE;
+CREATE TABLE fno_bhav (
+    id SERIAL PRIMARY KEY,
+    symbol VARCHAR(100) NOT NULL,
+    ltp DOUBLE PRECISION NOT NULL,
+    expiry DATE NOT NULL,
+    strike DOUBLE PRECISION NOT NULL,
+    opt_type opt_type NOT NULL,
+    inst_type instrument_type NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
+);

@@ -1048,7 +1048,8 @@ processBhavEq(FILE *bhavFile, int stratIndex, State *state)
 }
 
 void
-processBhav(FILE *bhavFile, int stratIndex, State *state)
+processBhav(FILE *bhavFile, PGconn *conn, int dbStratId,
+            int stratIndex, State *state)
 {
     char line[1024];
     int i = 0;
@@ -1085,6 +1086,39 @@ processBhav(FILE *bhavFile, int stratIndex, State *state)
                        state->strategies[stratIndex].fpositions[i].symbol,
                        state->strategies[stratIndex].fpositions[i].qty,
                        state->strategies[stratIndex].fpositions[i].ltp);
+                // persist the matched bhav and update the position.
+                char query[512];
+                snprintf(query, sizeof(query),
+                         "INSERT INTO fno_bhav (strategy_id, symbol, ltp, expiry, strike, opt_type, inst_type) "
+                         "VALUES (%d, '%s', %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+                         dbStratId,
+                         bhav.symbol,
+                         bhav.ltp,
+                         bhav.expiry,
+                         bhav.strike,
+                         OptTypeStrings[bhav.optType],
+                         InstrumentTypeStrings[bhav.instType]
+                         );
+                PGresult *pgResult = PQexec(conn, query);
+                char *errorMessage = PQresultErrorMessage(pgResult);
+                if (strcmp(errorMessage, "") != 0)
+                {
+                    printf("%s", errorMessage);
+                }
+                PQclear(pgResult);
+
+                snprintf(query, sizeof(query),
+                         "UPDATE fno_position SET ltp = %f WHERE sys_id = '%s'",
+                         bhav.ltp,
+                         state->strategies[stratIndex].fpositions[i].sys_id
+                         );
+                pgResult = PQexec(conn, query);
+                errorMessage = PQresultErrorMessage(pgResult);
+                if (strcmp(errorMessage, "") != 0)
+                {
+                    printf("%s", errorMessage);
+                }
+                PQclear(pgResult);
             }
         }
         // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
@@ -2615,16 +2649,16 @@ main()
     }
     int stratIndex = processTrades(FTradesFile, conn, stratId, &state);
 
+    //upload the bhavcopy for FNO.
+    FILE *FBhavFile = fopen("bhavcopy_fno.csv", "r");
+    if (FBhavFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    processBhav(FBhavFile, conn, stratId, stratIndex, &state);
+
     PQfinish(conn);
-    // //upload the bhavcopy for FNO.
-    // FILE *FBhavFile = fopen("bhavcopy_fno.csv", "r");
-    // if (FBhavFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    // processBhav(FBhavFile, stratIndex, &state);
-    //
     // /* collapse all the open futures positions into the same position
     //    row by marking all the other independen't qtys as zero. */
     // /* read the trades pertaining to a particular strategy

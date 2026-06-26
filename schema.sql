@@ -103,3 +103,44 @@ CREATE TABLE fno_position (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
+
+
+DROP TABLE IF EXISTS fno_trade CASCADE;
+DROP TYPE IF EXISTS trans_type CASCADE;
+
+-- 1. Create the Transaction Type ENUM
+CREATE TYPE trans_type AS ENUM (
+    'MB',   -- Market Buy
+    'MS',   -- Market Sell
+    'LB',   -- Limit Buy
+    'LS',   -- Limit Sell
+    'MOB',  -- Market Order Buy
+    'MCB',  -- Market Cover Buy
+    'MOS',  -- Market Order Sell
+    'MCS',  -- Market Cover Sell
+    'FSO',  -- F&O Sell Open
+    'FSC',  -- F&O Sell Close
+    'FBO',  -- F&O Buy Open
+    'FBC'   -- F&O Buy Close
+);
+
+-- 2. Create the FNO Trade table
+CREATE TABLE fno_trade (
+    id SERIAL PRIMARY KEY,                                             
+    symbol VARCHAR(100) NOT NULL,
+    broker_code VARCHAR(100) NOT NULL,
+    trade_date DATE NOT NULL,                                          
+    strategy_symbol VARCHAR(100) NOT NULL,
+    expiry DATE NOT NULL,                                              
+    opt_type opt_type NOT NULL,                                   
+    inst_type instrument_type NOT NULL,                           
+    qty INTEGER NOT NULL,
+    price DOUBLE PRECISION NOT NULL,                                   
+    brokerage DOUBLE PRECISION DEFAULT 0.0,
+    service_tax DOUBLE PRECISION DEFAULT 0.0,
+    strike DOUBLE PRECISION NOT NULL,
+    trans_type trans_type NOT NULL,                               
+    currency VARCHAR(10) NOT NULL,                                     
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
+);

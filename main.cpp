@@ -17,6 +17,7 @@ typedef uint16_t uint16;
 #define MAX_POSITIONS 100
 #define MAX_EX_RATES 10
 
+int globalCounter = -1;
 typedef enum
 {
     USD,
@@ -161,7 +162,7 @@ typedef struct
     real64 strike;
     Opt_type optType;
     Instrument_type instType;
-    char id[100];
+    char sys_id[100];
 } FNO_position;
 
 typedef enum
@@ -230,6 +231,10 @@ const char* InstrumentTypeStrings[] = {
     "OPTSTK",
     "FUTIDX",
     "FUTSTK"
+};
+
+const char* TransTypeStrings[] = {
+    "MB", "MS", "LB", "LS", "MOB", "MCB", "MOS", "MCS", "FSO", "FSC", "FBO", "FBC"
 };
 
 int get_month_number(const char *month_str) {
@@ -1354,7 +1359,7 @@ processTradesEq(FILE *tradeFile, State *state)
 }
 
 int
-processTrades(FILE *tradeFile, State *state)
+processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
 {
     char line[1024];
     int i = 0;
@@ -1370,6 +1375,37 @@ processTrades(FILE *tradeFile, State *state)
         if (tmp) *tmp = '\0';
         FNO_trade trade = {};
         LoadFNOTrade(&trade, line);
+        // persist.
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO fno_trade (strategy_id, symbol, broker_code, trade_date, strategy_symbol, "
+                 "expiry, opt_type, inst_type, qty, price, brokerage, service_tax, strike, trans_type, currency) "
+                 "VALUES (%d, '%s', '%s', to_date('%s', 'DD/MM/YYYY'), '%s', to_date('%s', 'DD/MM/YYYY'), "
+                 "'%s', '%s', %d, %f, %f, %f, %f, '%s', '%s');",
+                 dbStratId, // Found dynamically by strategySymbol lookup
+                 trade.symbol,
+                 trade.brokerCode,
+                 trade.date,
+                 trade.strategySymbol,
+                 trade.expiry,
+                 OptTypeStrings[trade.optType],
+                 InstrumentTypeStrings[trade.instType],
+                 trade.qty,
+                 trade.price,
+                 trade.brokerage,
+                 trade.serviceTax,
+                 trade.strike,
+                 TransTypeStrings[trade.transType],
+                 trade.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = PQexec(conn, query);
+        char *errorMessage = PQresultErrorMessage(pgResult);
+        if (strcmp(errorMessage, "") != 0)
+        {
+            printf("%s", errorMessage);
+        }
+        PQclear(pgResult);
+
         // find the strategy index first.
         for (int i = 0; i < state->currStratIndex + 1; i++)
         {
@@ -1424,6 +1460,18 @@ processTrades(FILE *tradeFile, State *state)
 
 
                             state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            snprintf(query, sizeof(query),
+                                     "UPDATE strategy SET cash = %f WHERE id = %d",
+                                     state->strategies[stratIndex].cash,
+                                     dbStratId
+                                     );
+                            pgResult = PQexec(conn, query);
+                            errorMessage = PQresultErrorMessage(pgResult);
+                            if (strcmp(errorMessage, "") != 0)
+                            {
+                                printf("%s", errorMessage);
+                            }
+                            PQclear(pgResult);
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
                             {
@@ -1478,6 +1526,18 @@ processTrades(FILE *tradeFile, State *state)
 
                             // you always get less after selling.
                             state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            snprintf(query, sizeof(query),
+                                     "UPDATE strategy SET cash = %f WHERE id = %d",
+                                     state->strategies[stratIndex].cash,
+                                     dbStratId
+                                     );
+                            pgResult = PQexec(conn, query);
+                            errorMessage = PQresultErrorMessage(pgResult);
+                            if (strcmp(errorMessage, "") != 0)
+                            {
+                                printf("%s", errorMessage);
+                            }
+                            PQclear(pgResult);
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
                             {
@@ -1518,7 +1578,21 @@ processTrades(FILE *tradeFile, State *state)
                             break;
                         }
                 } 
-
+                // persist the updates to price and qty.
+                snprintf(query, sizeof(query),
+                         "UPDATE fno_position SET price = %f AND qty = %d "
+                         " WHERE sys_id = '%s'",
+                         state->strategies[stratIndex].fpositions[i].price,
+                         state->strategies[stratIndex].fpositions[i].qty,
+                         state->strategies[stratIndex].fpositions[i].sys_id
+                         );
+                pgResult = PQexec(conn, query);
+                errorMessage = PQresultErrorMessage(pgResult);
+                if (strcmp(errorMessage, "") != 0)
+                {
+                    printf("%s", errorMessage);
+                }
+                PQclear(pgResult);
                 found = 1;
                 break;
             }
@@ -1535,6 +1609,7 @@ processTrades(FILE *tradeFile, State *state)
             strcpy(pos.expiry,trade.expiry);
             pos.optType = trade.optType;
             pos.instType = trade.instType;
+            sprintf(pos.sys_id, "OPT%d", ++globalCounter);
             switch(trade.transType)
             {
                 case MOB:
@@ -1550,6 +1625,18 @@ processTrades(FILE *tradeFile, State *state)
                         if (pos.instType != FUTSTK)
                         {
                             state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            snprintf(query, sizeof(query),
+                                     "UPDATE strategy SET cash = %f WHERE id = %d",
+                                     state->strategies[stratIndex].cash,
+                                     dbStratId
+                                     );
+                            pgResult = PQexec(conn, query);
+                            errorMessage = PQresultErrorMessage(pgResult);
+                            if (strcmp(errorMessage, "") != 0)
+                            {
+                                printf("%s", errorMessage);
+                            }
+                            PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
                             LedgerEntry assetEntry = {};
                             strcat(assetEntry.accountName, stratSymbol);
@@ -1590,6 +1677,18 @@ processTrades(FILE *tradeFile, State *state)
                         if (pos.instType != FUTSTK)
                         {
                             state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            snprintf(query, sizeof(query),
+                                     "UPDATE strategy SET cash = %f WHERE id = %d",
+                                     state->strategies[stratIndex].cash,
+                                     dbStratId
+                                     );
+                            pgResult = PQexec(conn, query);
+                            errorMessage = PQresultErrorMessage(pgResult);
+                            if (strcmp(errorMessage, "") != 0)
+                            {
+                                printf("%s", errorMessage);
+                            }
+                            PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
                             LedgerEntry assetEntry = {};
                             strcat(assetEntry.accountName, stratSymbol);
@@ -1620,6 +1719,28 @@ processTrades(FILE *tradeFile, State *state)
                     }
             }
             state->strategies[stratIndex].fpositions[++state->strategies[stratIndex].currFPosIndex] = pos;
+            // persist the updates to price and qty.
+            snprintf(query, sizeof(query),
+                     "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
+                     "VALUES ('%s', %d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+                     pos.sys_id,
+                     dbStratId,
+                     pos.symbol,
+                     pos.qty,
+                     pos.price,
+                     pos.ltp,
+                     pos.expiry,
+                     pos.strike,
+                     OptTypeStrings[pos.optType],
+                     InstrumentTypeStrings[pos.instType]
+                     ); 
+            pgResult = PQexec(conn, query);
+            errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
         }
         printf("cash is %f\n", state->strategies[stratIndex].cash);
         printf("pos is %s, %d, %f\n",
@@ -2393,13 +2514,15 @@ main()
     posA.optType = CE;
     posA.instType = OPTIDX;
     posA.qty = 120;
+    sprintf(posA.sys_id, "OPT%d", ++globalCounter); 
     state.strategies[stratIndexx].fpositions
         [++state.strategies[stratIndexx].currFPosIndex] = posA;
 
-    char query[1024]; // Large buffer to prevent overflow spikes
+    char query[1024];
     snprintf(query, sizeof(query),
-             "INSERT INTO fno_position (strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
-             "VALUES (%d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
+             "VALUES ('%s', %d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             posA.sys_id,
              stratId,
              posA.symbol,
              posA.qty,
@@ -2425,11 +2548,13 @@ main()
     posB.optType = PE;
     posB.instType = OPTIDX;
     posB.qty = 1040;
+    sprintf(posB.sys_id, "OPT%d", ++globalCounter); 
     state.strategies[stratIndexx].fpositions
         [++state.strategies[stratIndexx].currFPosIndex] = posB;
     snprintf(query, sizeof(query),
-             "INSERT INTO fno_position (strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
-             "VALUES (%d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
+             "VALUES ('%s', %d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             posB.sys_id,
              stratId,
              posB.symbol,
              posB.qty,
@@ -2456,11 +2581,13 @@ main()
     posC.optType = NA;
     posC.price = 305.7;
     posC.qty = 1250;
+    sprintf(posC.sys_id, "OPT%d", ++globalCounter); 
     state.strategies[stratIndexx].fpositions
         [++state.strategies[stratIndexx].currFPosIndex] = posC;
     snprintf(query, sizeof(query),
-             "INSERT INTO fno_position (strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
-             "VALUES (%d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
+             "VALUES ('%s', %d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             posC.sys_id,
              stratId,
              posC.symbol,
              posC.qty,
@@ -2479,16 +2606,16 @@ main()
     }
     PQclear(pgResult);
 
+    /* read the fno trades and make the positions */
+    FILE *FTradesFile = fopen("trades_fno.csv", "r");
+    if (FTradesFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    int stratIndex = processTrades(FTradesFile, conn, stratId, &state);
+
     PQfinish(conn);
-    // /* read the fno trades and make the positions */
-    // FILE *FTradesFile = fopen("trades_fno.csv", "r");
-    // if (FTradesFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    // int stratIndex = processTrades(FTradesFile, &state);
-    //
     // //upload the bhavcopy for FNO.
     // FILE *FBhavFile = fopen("bhavcopy_fno.csv", "r");
     // if (FBhavFile == NULL)

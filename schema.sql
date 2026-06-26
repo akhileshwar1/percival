@@ -70,3 +70,36 @@ CREATE TABLE bank_account (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
+
+
+DROP TABLE IF EXISTS fno_position CASCADE;
+DROP TYPE IF EXISTS instrument_type CASCADE;
+DROP TYPE IF EXISTS opt_type CASCADE;
+
+CREATE TYPE opt_type AS ENUM (
+    'PE',
+    'CE',
+    'NA'
+);
+
+CREATE TYPE instrument_type AS ENUM (
+    'OPTIDX',
+    'OPTSTK',
+    'FUTIDX',
+    'FUTSTK'
+);
+
+CREATE TABLE fno_position (
+    id SERIAL PRIMARY KEY,                                      
+    sys_id VARCHAR(100), -- maps to char id[100]
+    symbol VARCHAR(100) NOT NULL,
+    qty INTEGER NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
+    ltp DOUBLE PRECISION NOT NULL,
+    expiry DATE NOT NULL,                                              
+    strike DOUBLE PRECISION NOT NULL,
+    opt_type opt_type NOT NULL,
+    inst_type instrument_type NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
+);

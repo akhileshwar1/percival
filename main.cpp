@@ -219,6 +219,19 @@ const char* LedgerEntryTypeStrings[] = {
     "REVENUE"
 };
 
+const char* OptTypeStrings[] = {
+    "PE",
+    "CE",
+    "NA"
+};
+
+const char* InstrumentTypeStrings[] = {
+    "OPTIDX",
+    "OPTSTK",
+    "FUTIDX",
+    "FUTSTK"
+};
+
 int get_month_number(const char *month_str) {
     const char *months[] = {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -2361,51 +2374,112 @@ main()
         i++;
     }
 
+    /* store the previous day's i.e 10th june's open positions first */
+    int stratIndexx = -1;
+    for (int i = 0; i < state.currStratIndex + 1; i++)
+    {
+        if (strcmp("SSFSAMST", state.strategies[i].symbol) == 0)
+        {
+            stratIndexx = i;
+            break;
+        }
+    }
+    printf("strat index is %d\n", stratIndexx);
+
+    FNO_position posA = {};
+    strcpy(posA.symbol, "FINNIFTY");
+    strcpy(posA.expiry, "30/06/2026");
+    posA.strike = 25000;
+    posA.optType = CE;
+    posA.instType = OPTIDX;
+    posA.qty = 120;
+    state.strategies[stratIndexx].fpositions
+        [++state.strategies[stratIndexx].currFPosIndex] = posA;
+
+    char query[1024]; // Large buffer to prevent overflow spikes
+    snprintf(query, sizeof(query),
+             "INSERT INTO fno_position (strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
+             "VALUES (%d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             stratId,
+             posA.symbol,
+             posA.qty,
+             posA.price,
+             posA.ltp,
+             posA.expiry,
+             posA.strike,
+             OptTypeStrings[posA.optType],
+             InstrumentTypeStrings[posA.instType]
+             );
+    PGresult *pgResult = PQexec(conn, query);
+    char *errorMessage = PQresultErrorMessage(pgResult);
+    if (strcmp(errorMessage, "") != 0)
+    {
+        printf("%s", errorMessage);
+    }
+    PQclear(pgResult);
+
+    FNO_position posB = {};
+    strcpy(posB.symbol, "NIFTY");
+    strcpy(posB.expiry, "30/06/2026");
+    posB.strike = 23200;
+    posB.optType = PE;
+    posB.instType = OPTIDX;
+    posB.qty = 1040;
+    state.strategies[stratIndexx].fpositions
+        [++state.strategies[stratIndexx].currFPosIndex] = posB;
+    snprintf(query, sizeof(query),
+             "INSERT INTO fno_position (strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
+             "VALUES (%d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             stratId,
+             posB.symbol,
+             posB.qty,
+             posB.price,
+             posB.ltp,
+             posB.expiry,
+             posB.strike,
+             OptTypeStrings[posB.optType],
+             InstrumentTypeStrings[posB.instType]
+             );
+    pgResult = PQexec(conn, query);
+    errorMessage = PQresultErrorMessage(pgResult);
+    if (strcmp(errorMessage, "") != 0)
+    {
+        printf("%s", errorMessage);
+    }
+    PQclear(pgResult);
+
+    FNO_position posC = {};
+    strcpy(posC.symbol, "NATURALGAS");
+    strcpy(posC.expiry, "25/06/2026");
+    posC.strike = 0;
+    posC.instType = FUTSTK;
+    posC.optType = NA;
+    posC.price = 305.7;
+    posC.qty = 1250;
+    state.strategies[stratIndexx].fpositions
+        [++state.strategies[stratIndexx].currFPosIndex] = posC;
+    snprintf(query, sizeof(query),
+             "INSERT INTO fno_position (strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
+             "VALUES (%d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+             stratId,
+             posC.symbol,
+             posC.qty,
+             posC.price,
+             posC.ltp,
+             posC.expiry,
+             posC.strike,
+             OptTypeStrings[posC.optType],
+             InstrumentTypeStrings[posC.instType]
+             );
+    pgResult = PQexec(conn, query);
+    errorMessage = PQresultErrorMessage(pgResult);
+    if (strcmp(errorMessage, "") != 0)
+    {
+        printf("%s", errorMessage);
+    }
+    PQclear(pgResult);
+
     PQfinish(conn);
-    // /* store the previous day's i.e 10th june's open positions first */
-    // int stratIndexx = -1;
-    // for (int i = 0; i < state.currStratIndex + 1; i++)
-    // {
-    //     if (strcmp("SSFSAMST", state.strategies[i].symbol) == 0)
-    //     {
-    //         stratIndexx = i;
-    //         break;
-    //     }
-    // }
-    // printf("strat index is %d\n", stratIndexx);
-    //
-    // FNO_position posA = {};
-    // strcpy(posA.symbol, "FINNIFTY");
-    // strcpy(posA.expiry, "30/06/2026");
-    // posA.strike = 25000;
-    // posA.optType = CE;
-    // posA.instType = OPTIDX;
-    // posA.qty = 120;
-    // state.strategies[stratIndexx].fpositions
-    //     [++state.strategies[stratIndexx].currFPosIndex] = posA;
-    //
-    // FNO_position posB = {};
-    // strcpy(posB.symbol, "NIFTY");
-    // strcpy(posB.expiry, "30/06/2026");
-    // posB.strike = 23200;
-    // posB.optType = PE;
-    // posB.instType = OPTIDX;
-    // posB.qty = 1040;
-    // state.strategies[stratIndexx].fpositions
-    //     [++state.strategies[stratIndexx].currFPosIndex] = posB;
-    //
-    // FNO_position posC = {};
-    // strcpy(posC.symbol, "NATURALGAS");
-    // strcpy(posC.expiry, "25/06/2026");
-    // posC.strike = 0;
-    // posC.instType = FUTSTK;
-    // posC.optType = NA;
-    // posC.price = 305.7;
-    // posC.qty = 1250;
-    // state.strategies[stratIndexx].fpositions
-    //     [++state.strategies[stratIndexx].currFPosIndex] = posC;
-    //
-    //
     // /* read the fno trades and make the positions */
     // FILE *FTradesFile = fopen("trades_fno.csv", "r");
     // if (FTradesFile == NULL)

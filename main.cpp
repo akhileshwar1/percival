@@ -562,6 +562,7 @@ AccountFromReverse(LedgerEntry *liabEntry, char *line)
         if (i ==  1)
         {
             strcat(accountName, token); 
+            strcat(accountName, "_"); 
         }
         else if (i ==  2)
         {
@@ -1934,6 +1935,7 @@ main()
     }
 
     Strategy strategy = {};
+    int stratId;
     i = 0;
     while (fgets(line, sizeof(line), stratFile))
     {
@@ -2059,12 +2061,12 @@ main()
             }
 
             char *id_str = PQgetvalue(pgResult, 0, 0);
-            int strategy_id = atoi(id_str);
+            stratId = atoi(id_str);
             PQclear(pgResult);
 
             sprintf(query,
                     "UPDATE investor SET strategy_id = %d where name = '%s'",
-                    strategy_id,
+                    stratId,
                     inv.name);
             pgResult = PQexec(conn, query);
             errorMessage = PQresultErrorMessage(pgResult);
@@ -2080,7 +2082,7 @@ main()
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
                  "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
-                 strategy.id,
+                 stratId,
                  LedgerEntryTypeStrings[entry.type], // Converts enum integer index to matching string literal
                  entry.accountName,
                  entry.debit,
@@ -2138,7 +2140,7 @@ main()
             snprintf(query, sizeof(query),
                      "INSERT INTO bank_account (strategy_id, symbol, balance, currency) "
                      "VALUES (%d, '%s', %f, '%s');",
-                     strategy.id,
+                     stratId,
                      acc.symbol,
                      acc.balance,
                      acc.currency == USD ? "USD" : "INR" 
@@ -2159,34 +2161,53 @@ main()
     }
 
 
+    // step 4: reverse the upa debit account entry.
+    FILE *reverseFile = fopen("reverse_upa.csv", "r");
+    if (reverseFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    i = 0;
+    while (fgets(line, sizeof(line), reverseFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        ++state.strategies[state.currStratIndex].currJournalId;
+        LedgerEntry liabEntry = {};
+        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        AccountFromReverse(&liabEntry, line);
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 stratId,
+                 LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                 liabEntry.accountName,
+                 liabEntry.debit,
+                 liabEntry.credit,
+                 liabEntry.memo,
+                 liabEntry.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = PQexec(conn, query);
+        char *errorMessage = PQresultErrorMessage(pgResult);
+        if (strcmp(errorMessage, "") != 0)
+        {
+            printf("%s", errorMessage);
+        }
+        PQclear(pgResult);
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", liabEntry.accountName,
+               liabEntry.credit);
+        i++;
+    }
+
     PQfinish(conn);
-    // // step 4: reverse the upa debit account entry.
-    // FILE *reverseFile = fopen("reverse_upa.csv", "r");
-    // if (reverseFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    // i = 0;
-    // while (fgets(line, sizeof(line), reverseFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     ++state.strategies[state.currStratIndex].currJournalId;
-    //     LedgerEntry liabEntry = {};
-    //     liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
-    //     AccountFromReverse(&liabEntry, line);
-    //     state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
-    //     printf("entry name is %s and value is %f\n", liabEntry.accountName,
-    //            liabEntry.credit);
-    //     i++;
-    // }
-    //
     // // step 5: fund cashflow file.
     // FILE *cashflowFile = fopen("fund_cashflow.csv", "r");
     // if (cashflowFile == NULL)

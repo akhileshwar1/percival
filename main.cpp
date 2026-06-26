@@ -2068,9 +2068,9 @@ printNav(State *state, Exchange_rate *exRate, real64 totalUnits,
          real64 managementFees, int stratIndex)
 {
     // total value of fno positions.
-    real64 totalValue = getTotalPositionValue(state, stratIndex) + 48000 + 1014.16; 
+    real64 totalValue = getTotalPositionValue(state, stratIndex); 
 
-    real64 cash = state->strategies[stratIndex].cash - 2934628;
+    real64 cash = state->strategies[stratIndex].cash;
     printf("closing inr cash balance is %f\n", cash);
     real64 cashUSD = (cash / exRate->rate) - managementFees;
     printf("closing cash balance in usd is %f\n", cashUSD);
@@ -2807,20 +2807,20 @@ main()
     makeVariationSettlements(&state, conn, stratId, stratIndex);
 
     PQfinish(conn);
-    // // get the total units from all the investors for a strategy.
-    // // real64 totalUnits = 1007.729 + 175.444;
-    // real64 totalUnits = 1183.249;
-    // // for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
-    // // {
-    // //     Investor inv = state.strategies[stratIndex].investors[i];
-    // //     totalUnits += inv.units;
-    // // }
-    //
-    // // calculate the nav = (totalValue + cash) / totalUnits.
-    // state.strategies[stratIndex].cash += 2588560.68;
-    // real64 managementFees = 301.54;
-    // printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
-    //
+    // get the total units from all the investors for a strategy.
+    // real64 totalUnits = 1007.729 + 175.444;
+    real64 totalUnits = 1183.249;
+    // for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
+    // {
+    //     Investor inv = state.strategies[stratIndex].investors[i];
+    //     totalUnits += inv.units;
+    // }
+
+    // calculate the nav = (totalValue + cash) / totalUnits.
+    state.strategies[stratIndex].cash += 2588560.68;
+    real64 managementFees = 301.54;
+    printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
+
     // /* 2ND DAY------------------------------------------ */
     //
     // collapsePositions(&state, stratIndex);

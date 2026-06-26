@@ -477,7 +477,7 @@ getDollarValue(char *line)
 }
 
 void
-allotUnits(State *state, char *line)
+allotUnits(State *state, PGconn *conn, char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -507,7 +507,7 @@ allotUnits(State *state, char *line)
                     for (int k = 0;
                          k < state->strategies[j].currInvestorIndex + 1;
                          k++)
-                    {
+                        {
                         if (strcmp(invName, state->strategies[j].investors[k].name)
                             == 0)
                         {
@@ -518,6 +518,20 @@ allotUnits(State *state, char *line)
                     }
                 }
             }
+            // persist the units too.
+            char query[1024];
+            snprintf(query, sizeof(query),
+                     "UPDATE investor SET units = %f WHERE name = '%s'",
+                     units,
+                     invName
+                     );
+            PGresult *pgResult = PQexec(conn, query);
+            char *errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
         }
         token = strtok(NULL, ",");
         i++;
@@ -2256,29 +2270,30 @@ main()
         i++;
     }
 
+
+    // step 6 : unit allotment.
+    FILE *unitFile = fopen("unit_allotment.csv", "r");
+    if (unitFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), unitFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        allotUnits(&state, conn, line);
+        i++;
+    }
+
     PQfinish(conn);
-    // // step 6 : unit allotment.
-    // FILE *unitFile = fopen("unit_allotment.csv", "r");
-    // if (unitFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // i = 0;
-    // while (fgets(line, sizeof(line), unitFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     allotUnits(&state, line);
-    //     i++;
-    // }
-    //
     // // step 7: fund expense investor file.
     // FILE *expenseFile = fopen("fund_expense.csv", "r");
     // if (expenseFile == NULL)

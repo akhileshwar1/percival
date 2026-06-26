@@ -1479,6 +1479,8 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                 state->strategies[stratIndex].fpositions[i].instType ==
                 trade.instType)
             {
+                LedgerEntry assetEntry = {};
+                LedgerEntry liabEntry = {};
                 switch (trade.transType)
                 {
                     case MOB:
@@ -1524,7 +1526,6 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
 
                             // add the entries to the ledger.
                             ++state->strategies[state->currStratIndex].currJournalId;
-                            LedgerEntry assetEntry = {};
                             strcat(assetEntry.accountName, stratSymbol);
                             strcat(assetEntry.accountName, "_POSN");
                             assetEntry.type = ASSET;
@@ -1532,7 +1533,6 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             assetEntry.debit = abs(trade.qty * priceAfterFee);
                             assetEntry.id = state->strategies[state->currStratIndex].
                                 currJournalId;
-                            LedgerEntry liabEntry = {};
                             strcpy(liabEntry.accountName, stratSymbol);
                             strcpy(liabEntry.accountName, "_CASH_USD");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
@@ -1587,7 +1587,6 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             }
                             state->strategies[stratIndex].fpositions[i].qty += trade.qty;
                             ++state->strategies[state->currStratIndex].currJournalId;
-                            LedgerEntry assetEntry = {};
                             strcat(assetEntry.accountName, stratSymbol);
                             strcat(assetEntry.accountName, "_CASH_USD");
                             assetEntry.type = ASSET;
@@ -1595,7 +1594,6 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             assetEntry.debit = abs(trade.qty * priceAfterFee);
                             assetEntry.id = state->strategies[state->currStratIndex].
                                 currJournalId;
-                            LedgerEntry liabEntry = {};
                             strcpy(liabEntry.accountName, stratSymbol);
                             strcpy(liabEntry.accountName, "_POSN");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
@@ -1627,6 +1625,44 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                     printf("%s", errorMessage);
                 }
                 PQclear(pgResult);
+                char query[1024];
+                snprintf(query, sizeof(query),
+                         "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                         "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                         dbStratId,
+                         LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                         assetEntry.accountName,
+                         assetEntry.debit,
+                         assetEntry.credit,
+                         assetEntry.memo,
+                         assetEntry.currency == USD ? "USD" : "INR" 
+                         );
+                PGresult *pgResult = PQexec(conn, query);
+                char *errorMessage = PQresultErrorMessage(pgResult);
+                if (strcmp(errorMessage, "") != 0)
+                {
+                    printf("%s", errorMessage);
+                }
+                PQclear(pgResult);
+
+                snprintf(query, sizeof(query),
+                         "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                         "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                         dbStratId,
+                         LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                         liabEntry.accountName,
+                         liabEntry.debit,
+                         liabEntry.credit,
+                         liabEntry.memo,
+                         liabEntry.currency == USD ? "USD" : "INR" 
+                         );
+                pgResult = PQexec(conn, query);
+                errorMessage = PQresultErrorMessage(pgResult);
+                if (strcmp(errorMessage, "") != 0)
+                {
+                    printf("%s", errorMessage);
+                }
+                PQclear(pgResult);
                 found = 1;
                 break;
             }
@@ -1644,6 +1680,8 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
             pos.optType = trade.optType;
             pos.instType = trade.instType;
             sprintf(pos.sys_id, "OPT%d", ++globalCounter);
+            LedgerEntry assetEntry = {};
+            LedgerEntry liabEntry = {};
             switch(trade.transType)
             {
                 case MOB:
@@ -1672,7 +1710,6 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             }
                             PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
-                            LedgerEntry assetEntry = {};
                             strcat(assetEntry.accountName, stratSymbol);
                             strcat(assetEntry.accountName, "_POSN");
                             assetEntry.type = ASSET;
@@ -1680,7 +1717,6 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             assetEntry.debit = abs(trade.qty * priceAfterFee);
                             assetEntry.id = state->strategies[state->currStratIndex].
                                 currJournalId;
-                            LedgerEntry liabEntry = {};
                             strcat(liabEntry.accountName, stratSymbol);
                             strcat(liabEntry.accountName, "_CASH_USD");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
@@ -1724,7 +1760,6 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             }
                             PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
-                            LedgerEntry assetEntry = {};
                             strcat(assetEntry.accountName, stratSymbol);
                             strcat(assetEntry.accountName, "_CASH_USD");
                             assetEntry.type = ASSET;
@@ -1732,7 +1767,6 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             assetEntry.debit = abs(trade.qty * priceAfterFee);
                             assetEntry.id = state->strategies[state->currStratIndex].
                                 currJournalId;
-                            LedgerEntry liabEntry = {};
                             strcat(liabEntry.accountName, stratSymbol);
                             strcat(liabEntry.accountName, "_POSN");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
@@ -1768,6 +1802,44 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                      OptTypeStrings[pos.optType],
                      InstrumentTypeStrings[pos.instType]
                      ); 
+            pgResult = PQexec(conn, query);
+            errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
+            char query[1024];
+            snprintf(query, sizeof(query),
+                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     dbStratId,
+                     LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                     assetEntry.accountName,
+                     assetEntry.debit,
+                     assetEntry.credit,
+                     assetEntry.memo,
+                     assetEntry.currency == USD ? "USD" : "INR" 
+                     );
+            PGresult *pgResult = PQexec(conn, query);
+            char *errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
+
+            snprintf(query, sizeof(query),
+                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     dbStratId,
+                     LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                     liabEntry.accountName,
+                     liabEntry.debit,
+                     liabEntry.credit,
+                     liabEntry.memo,
+                     liabEntry.currency == USD ? "USD" : "INR" 
+                     );
             pgResult = PQexec(conn, query);
             errorMessage = PQresultErrorMessage(pgResult);
             if (strcmp(errorMessage, "") != 0)
@@ -1887,7 +1959,7 @@ collapsePositions(State *state, int stratIndex)
 }
 
 void
-makeVariationSettlements(State *state, int stratIndex)
+makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratIndex)
 {
     real64 totalVariation = 0.0;
     for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
@@ -1928,6 +2000,44 @@ makeVariationSettlements(State *state, int stratIndex)
             state->strategies[state->currStratIndex].
                 ledger[++state->strategies[state->currStratIndex].
                 currEntryId] = liabEntry;
+            char query[1024];
+            snprintf(query, sizeof(query),
+                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     dbStratId,
+                     LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                     assetEntry.accountName,
+                     assetEntry.debit,
+                     assetEntry.credit,
+                     assetEntry.memo,
+                     assetEntry.currency == USD ? "USD" : "INR" 
+                     );
+            PGresult *pgResult = PQexec(conn, query);
+            char *errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
+
+            snprintf(query, sizeof(query),
+                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     dbStratId,
+                     LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                     liabEntry.accountName,
+                     liabEntry.debit,
+                     liabEntry.credit,
+                     liabEntry.memo,
+                     liabEntry.currency == USD ? "USD" : "INR" 
+                     );
+            pgResult = PQexec(conn, query);
+            errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
         }
     }
     printf("total variation is %f\n", totalVariation);
@@ -2658,45 +2768,45 @@ main()
     }
     processBhav(FBhavFile, conn, stratId, stratIndex, &state);
 
-    PQfinish(conn);
-    // /* collapse all the open futures positions into the same position
-    //    row by marking all the other independen't qtys as zero. */
-    // /* read the trades pertaining to a particular strategy
-    //        and apply them to the position state. */
-    //
-    // // get total value of the positions held for the strategy.
-    // // real64 totalValue = 0.0;
-    // // for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
-    // // {
-    // //     PositionEquity pos = state.strategies[stratIndex].positions[i];
-    // //     totalValue  += pos.qty * pos.ltp;
-    // // }
-    //
-    // /* NOTE(Akhil): Update the bhav's of unknown symbols manually here
-    //     usually the guy has a special file 21 price_update_us where
-    //     he gives the ltp against the system generated symbol
-    //     Also remember the uidff format of bse, that we need to be able
-    //     to parse for fno */
-    // for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
+    /* collapse all the open futures positions into the same position
+       row by marking all the other independen't qtys as zero. */
+    /* read the trades pertaining to a particular strategy
+           and apply them to the position state. */
+
+    // get total value of the positions held for the strategy.
+    // real64 totalValue = 0.0;
+    // for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
     // {
-    //
-    //     if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-    //                "NATURALGAS") == 0)
-    //     {
-    //         state.strategies[stratIndex].fpositions[i].ltp = 294.40; // natural gas.
-    //     }
-    //     else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-    //                "CRUDEOIL") == 0)
-    //     {
-    //         state.strategies[stratIndex].fpositions[i].ltp = 8344.00; // natural gas.
-    //     }
+    //     PositionEquity pos = state.strategies[stratIndex].positions[i];
+    //     totalValue  += pos.qty * pos.ltp;
     // }
-    // state.strategies[stratIndex].fpositions[6].ltp = 700.45; // sensex.
-    //
-    // /* run the mtm process, i.e process variation settlements for
-    //    open futures positions: net_qty * (ltp - prev_price) */
-    // makeVariationSettlements(&state, stratIndex);
-    //
+
+    /* NOTE(Akhil): Update the bhav's of unknown symbols manually here
+        usually the guy has a special file 21 price_update_us where
+        he gives the ltp against the system generated symbol
+        Also remember the uidff format of bse, that we need to be able
+        to parse for fno */
+    for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
+    {
+
+        if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
+                   "NATURALGAS") == 0)
+        {
+            state.strategies[stratIndex].fpositions[i].ltp = 294.40; // natural gas.
+        }
+        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
+                   "CRUDEOIL") == 0)
+        {
+            state.strategies[stratIndex].fpositions[i].ltp = 8344.00; // natural gas.
+        }
+    }
+    state.strategies[stratIndex].fpositions[6].ltp = 700.45; // sensex.
+
+    /* run the mtm process, i.e process variation settlements for
+       open futures positions: net_qty * (ltp - prev_price) */
+    makeVariationSettlements(&state, conn, stratId, stratIndex);
+
+    PQfinish(conn);
     // // get the total units from all the investors for a strategy.
     // // real64 totalUnits = 1007.729 + 175.444;
     // real64 totalUnits = 1183.249;

@@ -2207,36 +2207,56 @@ main()
         i++;
     }
 
+
+    // step 5: fund cashflow file.
+    FILE *cashflowFile = fopen("fund_cashflow.csv", "r");
+    if (cashflowFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+    i = 0;
+    while (fgets(line, sizeof(line), cashflowFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        /* NOTE(Akhil): here we are working on the latest strategy.
+                        usually first column discloses the strategy name. */
+        ++state.strategies[state.currStratIndex].currJournalId;
+        LedgerEntry assetEntry = {};
+        assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        AccountFromCashFlow(&assetEntry, line);
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 stratId,
+                 LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                 assetEntry.accountName,
+                 assetEntry.debit,
+                 assetEntry.credit,
+                 assetEntry.memo,
+                 assetEntry.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = PQexec(conn, query);
+        char *errorMessage = PQresultErrorMessage(pgResult);
+        if (strcmp(errorMessage, "") != 0)
+        {
+            printf("%s", errorMessage);
+        }
+        PQclear(pgResult);
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        i++;
+    }
+
     PQfinish(conn);
-    // // step 5: fund cashflow file.
-    // FILE *cashflowFile = fopen("fund_cashflow.csv", "r");
-    // if (cashflowFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    // i = 0;
-    // while (fgets(line, sizeof(line), cashflowFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     /* NOTE(Akhil): here we are working on the latest strategy.
-    //                     usually first column discloses the strategy name. */
-    //     ++state.strategies[state.currStratIndex].currJournalId;
-    //     LedgerEntry assetEntry = {};
-    //     assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
-    //     AccountFromCashFlow(&assetEntry, line);
-    //     state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
-    //     printf("entry name is %s and value is %f\n", assetEntry.accountName,
-    //            assetEntry.debit);
-    //     i++;
-    // }
-    //
     // // step 6 : unit allotment.
     // FILE *unitFile = fopen("unit_allotment.csv", "r");
     // if (unitFile == NULL)

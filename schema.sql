@@ -35,3 +35,27 @@ CREATE TABLE investor (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
+
+DROP TABLE IF EXISTS ledger_entry CASCADE;
+DROP TYPE IF EXISTS ledger_entry_type CASCADE;
+
+-- 1. Create the custom ENUM type exactly matching your C enum values
+CREATE TYPE ledger_entry_type AS ENUM (
+    'ASSET',
+    'EXPENSE',
+    'LIABILITY',
+    'EQUITY',
+    'REVENUE'
+);
+
+CREATE TABLE ledger_entry (
+    id SERIAL PRIMARY KEY,
+    type ledger_entry_type NOT NULL,
+    account_name VARCHAR(100) NOT NULL,
+    debit DOUBLE PRECISION DEFAULT 0.0,
+    credit DOUBLE PRECISION DEFAULT 0.0,
+    memo VARCHAR(100),
+    currency VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
+);

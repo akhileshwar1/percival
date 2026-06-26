@@ -204,6 +204,14 @@ typedef struct
     int idCount;
 } State;
 
+const char* LedgerEntryTypeStrings[] = {
+    "ASSET",
+    "EXPENSE",
+    "LIABILITY",
+    "EQUITY",
+    "REVENUE"
+};
+
 int get_month_number(const char *month_str) {
     const char *months[] = {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -2024,7 +2032,7 @@ main()
         if (i == 2)
         {
             // Link the investor to the strategy in the db as well.
-            char query[512];
+            char query[1024];
             sprintf(query,
                     "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
                     stratSymbol);
@@ -2058,46 +2066,69 @@ main()
                 printf("%s", errorMessage);
             }
             PQclear(pgResult);
+
         }
+        /* NOTE(Akhil): BUG here!!!, need to address the root split csv lines.*/
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 strategy.id,
+                 LedgerEntryTypeStrings[entry.type], // Converts enum integer index to matching string literal
+                 entry.accountName,
+                 entry.debit,
+                 entry.credit,
+                 entry.memo,
+                 entry.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = PQexec(conn, query);
+        char *errorMessage = PQresultErrorMessage(pgResult);
+        if (strcmp(errorMessage, "") != 0)
+        {
+            printf("%s", errorMessage);
+        }
+        PQclear(pgResult);
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = entry;
         printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
         i++;
     }
 
+
+    // step 3: process the bank transfer.
+    FILE *bankFile = fopen("bank_transfer.csv", "r");
+    if (bankFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), bankFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        ++state.strategies[state.currStratIndex].currJournalId;
+
+        LedgerEntry assetEntry = {};
+        LedgerEntry liabEntry = {};
+        assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
+        AccountFromBank(&assetEntry, &liabEntry, line);
+        /* NOTE(Akhil): maybe we could persist a bank table here with bal and curr.*/
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
+        state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        i++;
+    }
+
+
     PQfinish(conn);
-    // // step 3: process the bank transfer.
-    // FILE *bankFile = fopen("bank_transfer.csv", "r");
-    // if (bankFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // i = 0;
-    // while (fgets(line, sizeof(line), bankFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     ++state.strategies[state.currStratIndex].currJournalId;
-    //
-    //     LedgerEntry assetEntry = {};
-    //     LedgerEntry liabEntry = {};
-    //     assetEntry.id = state.strategies[state.currStratIndex].currJournalId;
-    //     liabEntry.id = state.strategies[state.currStratIndex].currJournalId;
-    //     AccountFromBank(&assetEntry, &liabEntry, line);
-    //     state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
-    //     state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
-    //     printf("entry name is %s and value is %f\n", assetEntry.accountName,
-    //            assetEntry.debit);
-    //     i++;
-    // }
-    //
-    //
     // // step 4: reverse the upa debit account entry.
     // FILE *reverseFile = fopen("reverse_upa.csv", "r");
     // if (reverseFile == NULL)

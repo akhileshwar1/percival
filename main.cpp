@@ -1919,6 +1919,10 @@ value : %f\n",
 /* collapse multiple independent lots of the same symbol into one.
        for futures only.
        Also move only the nonzero qty symbols to the newer array.*/
+/* NOTE(Akhil): Do I need to persist this combined position??
+                but then we will have to zero out the qtys of the 
+                independent ones
+                Do it at the beginning of each day??*/
 void
 collapsePositions(State *state, int stratIndex)
 {
@@ -1974,6 +1978,18 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
             // move the ltp now to the price column,
             // so that the next time variation is correct.
             pos.price = pos.ltp;
+            char query[1024];
+            sprintf(query,
+                    "UPDATE fno_position SET price = %f where sys_id = '%s'",
+                    pos.ltp,
+                    pos.sys_id);
+            PGresult *pgResult = PQexec(conn, query);
+            char *errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
             state->strategies[stratIndex].fpositions[i] = pos;
             // make the ledger entries.
             char stratSymbol[100];
@@ -2000,7 +2016,6 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
             state->strategies[state->currStratIndex].
                 ledger[++state->strategies[state->currStratIndex].
                 currEntryId] = liabEntry;
-            char query[1024];
             snprintf(query, sizeof(query),
                      "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
                      "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
@@ -2012,8 +2027,8 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                      assetEntry.memo,
                      assetEntry.currency == USD ? "USD" : "INR" 
                      );
-            PGresult *pgResult = PQexec(conn, query);
-            char *errorMessage = PQresultErrorMessage(pgResult);
+            pgResult = PQexec(conn, query);
+            errorMessage = PQresultErrorMessage(pgResult);
             if (strcmp(errorMessage, "") != 0)
             {
                 printf("%s", errorMessage);
@@ -2823,7 +2838,7 @@ main()
 
     // /* 2ND DAY------------------------------------------ */
     //
-    // collapsePositions(&state, stratIndex);
+    collapsePositions(&state, stratIndex);
     //
     // printFPositions(&state, stratIndex);
     //

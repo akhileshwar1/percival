@@ -1629,7 +1629,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                 } 
                 // persist the updates to price and qty.
                 snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET price = %f AND qty = %d "
+                         "UPDATE fno_position SET price = %f, qty = %d "
                          " WHERE sys_id = '%s'",
                          state->strategies[stratIndex].fpositions[i].price,
                          state->strategies[stratIndex].fpositions[i].qty,
@@ -1991,17 +1991,28 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
             real64 variation = pos.qty * (pos.ltp - pos.price); 
             printf("variation of %f against %s\n", variation, pos.symbol);
             state->strategies[stratIndex].cash += variation;
+            char query[1024];
+            sprintf(query,
+                    "UPDATE strategy SET cash = %f where id = %d",
+                    state->strategies[stratIndex].cash,
+                    dbStratId);
+            PGresult *pgResult = PQexec(conn, query);
+            char *errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
             totalVariation += variation;
             // move the ltp now to the price column,
             // so that the next time variation is correct.
             pos.price = pos.ltp;
-            char query[1024];
             sprintf(query,
                     "UPDATE fno_position SET price = %f where sys_id = '%s'",
                     pos.ltp,
                     pos.sys_id);
-            PGresult *pgResult = PQexec(conn, query);
-            char *errorMessage = PQresultErrorMessage(pgResult);
+            pgResult = PQexec(conn, query);
+            errorMessage = PQresultErrorMessage(pgResult);
             if (strcmp(errorMessage, "") != 0)
             {
                 printf("%s", errorMessage);
@@ -2825,14 +2836,50 @@ main()
                    "NATURALGAS") == 0)
         {
             state.strategies[stratIndex].fpositions[i].ltp = 294.40; // natural gas.
+            snprintf(query, sizeof(query),
+                     "UPDATE fno_position SET ltp = %f WHERE symbol = '%s'",
+                     294.40,
+                     "NATURALGAS"
+                     );
+            pgResult = PQexec(conn, query);
+            errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
         }
         else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
                    "CRUDEOIL") == 0)
         {
             state.strategies[stratIndex].fpositions[i].ltp = 8344.00; // natural gas.
+            snprintf(query, sizeof(query),
+                     "UPDATE fno_position SET ltp = %f WHERE symbol = '%s'",
+                     8344.00,
+                     "CRUDEOIL"
+                     );
+            pgResult = PQexec(conn, query);
+            errorMessage = PQresultErrorMessage(pgResult);
+            if (strcmp(errorMessage, "") != 0)
+            {
+                printf("%s", errorMessage);
+            }
+            PQclear(pgResult);
         }
     }
     state.strategies[stratIndex].fpositions[6].ltp = 700.45; // sensex.
+    snprintf(query, sizeof(query),
+             "UPDATE fno_position SET ltp = %f WHERE symbol = '%s'",
+             700.45,
+             "SENSEX"
+             );
+    pgResult = PQexec(conn, query);
+    errorMessage = PQresultErrorMessage(pgResult);
+    if (strcmp(errorMessage, "") != 0)
+    {
+        printf("%s", errorMessage);
+    }
+    PQclear(pgResult);
 
     /* run the mtm process, i.e process variation settlements for
        open futures positions: net_qty * (ltp - prev_price) */
@@ -2849,6 +2896,17 @@ main()
 
     // calculate the nav = (totalValue + cash) / totalUnits.
     state.strategies[stratIndex].cash += 2588560.68;
+    sprintf(query,
+            "UPDATE strategy SET cash = %f where id = %d",
+            state.strategies[stratIndex].cash,
+            stratId);
+    pgResult = PQexec(conn, query);
+    errorMessage = PQresultErrorMessage(pgResult);
+    if (strcmp(errorMessage, "") != 0)
+    {
+        printf("%s", errorMessage);
+    }
+    PQclear(pgResult);
     real64 managementFees = 301.54;
     printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
 
@@ -3046,68 +3104,67 @@ main()
     }
 
     PQclear(pgResult);
+
+
+
+    collapsePositions(&state, stratIndex);
+
+    printFPositions(&state, stratIndex);
+
+    FILE *EFile = fopen("exchange_rate_12.csv", "r");
+    if (EFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    // update the ex rate for the second day.
+    processExRate(EFile, &state, &exRate);
+
+    FILE *FTradessFile = fopen("trades_fno_12.csv", "r");
+    if (FTradessFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    // process trades for 12th june.
+    stratIndex = processTrades(FTradessFile, conn, stratId, &state);
+    FILE *FBhavvFile = fopen("bhavcopy_fno_12.csv", "r");
+    if (FBhavvFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    // process bhavcopy of 12th june.
+    processBhav(FBhavvFile, conn, stratId, stratIndex, &state);
+
+    for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
+    {
+
+        if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
+                   "NATURALGAS") == 0)
+        {
+            state.strategies[stratIndex].fpositions[i].ltp = 296.70; // natural gas.
+        }
+        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
+                        "CRUDEOIL") == 0)
+        {
+            state.strategies[stratIndex].fpositions[i].ltp = 8073.00; // natural gas.
+        }
+    }
+    state.strategies[stratIndex].fpositions[2].ltp = 226.2; // sensex 73500 pe.
+    state.strategies[stratIndex].fpositions[6].ltp = 1223.55; // sensex 75000 ce.
+
+    makeVariationSettlements(&state, conn, stratId, stratIndex);
+    printFundLedger(&state);
+    managementFees = 306.63;
+    printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
+
     PQfinish(conn);
 
 
-
-    //
-    // collapsePositions(&state, stratIndex);
-    //
-    // printFPositions(&state, stratIndex);
-    //
-    // FILE *EFile = fopen("exchange_rate_12.csv", "r");
-    // if (EFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // // update the ex rate for the second day.
-    // processExRate(EFile, &state, &exRate);
-    //
-    // FILE *FTradessFile = fopen("trades_fno_12.csv", "r");
-    // if (FTradessFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // // process trades for 12th june.
-    // stratIndex = processTrades(FTradessFile, &state);
-    // FILE *FBhavvFile = fopen("bhavcopy_fno_12.csv", "r");
-    // if (FBhavvFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // // process bhavcopy of 12th june.
-    // processBhav(FBhavvFile, stratIndex, &state);
-    //
-    // for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
-    // {
-    //
-    //     if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-    //                "NATURALGAS") == 0)
-    //     {
-    //         state.strategies[stratIndex].fpositions[i].ltp = 296.70; // natural gas.
-    //     }
-    //     else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-    //                     "CRUDEOIL") == 0)
-    //     {
-    //         state.strategies[stratIndex].fpositions[i].ltp = 8073.00; // natural gas.
-    //     }
-    // }
-    // state.strategies[stratIndex].fpositions[2].ltp = 226.2; // sensex 73500 pe.
-    // state.strategies[stratIndex].fpositions[6].ltp = 1223.55; // sensex 75000 ce.
-    //
-    // makeVariationSettlements(&state, stratIndex);
-    // printFundLedger(&state);
-    // managementFees = 306.63;
-    // printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
-    //
-    //
-    //
     // /*----------------- New strategy, equity series -----------------*/
     // FILE *strattFile = fopen("strategy_master_eq.csv", "r");
     // if (strattFile == NULL)

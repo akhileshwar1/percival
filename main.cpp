@@ -237,6 +237,23 @@ const char* TransTypeStrings[] = {
     "MB", "MS", "LB", "LS", "MOB", "MCB", "MOS", "MCS", "FSO", "FSC", "FBO", "FBC"
 };
 
+void ConvertDbDateToCFormat(const char *db_date, char *output, size_t output_size)
+{
+    int year = 0, month = 0, day = 0;
+
+    // 1. Extract year, month, and day from 'YYYY-MM-DD'
+    if (sscanf(db_date, "%d-%d-%d", &year, &month, &day) == 3)
+    {
+        // 2. Reformat and safely write to the output buffer as 'DD/MM/YYYY'
+        snprintf(output, output_size, "%02d/%02d/%04d", day, month, year);
+    }
+    else
+    {
+        // Fallback: Clear string or copy original if parsing fails
+        output[0] = '\0'; 
+    }
+}
+
 int get_month_number(const char *month_str) {
     const char *months[] = {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -2854,7 +2871,8 @@ main()
     {
         fprintf(stderr, "No strategy found matching symbol: \n");
         PQclear(pgResult);
-        // return -1;
+        PQfinish(conn);
+        return -1;
     }
 
     // Load the strategies for each symbol.
@@ -2889,18 +2907,18 @@ main()
                         "SELECT * FROM investor WHERE strategy_id = %d",
                         strat.id);
 
-                pgResult = PQexec(conn, query);
-                errorMessage = PQresultErrorMessage(pgResult);
+                PGresult *pgResultInv = PQexec(conn, query);
+                char *errorMessage = PQresultErrorMessage(pgResultInv);
                 if (strcmp(errorMessage, "") != 0)
                 {
                     printf("%s", errorMessage);
                 }
-                int ir = PQntuples(pgResult);
-                int ic = PQnfields(pgResult);
+                int ir = PQntuples(pgResultInv);
+                int ic = PQnfields(pgResultInv);
                 if (ir == 0)
                 {
                     fprintf(stderr, "No investor found matching symbol: \n");
-                    PQclear(pgResult);
+                    PQclear(pgResultInv);
                 }
                 else
                 {
@@ -2909,7 +2927,7 @@ main()
                         Investor inv = {};
                         for (int b = 0; b < ic; b++)
                         {
-                            char *str = PQgetvalue(pgResult, a, b);
+                            char *str = PQgetvalue(pgResultInv, a, b);
                             if (b == 3)
                             {
                                 strcpy(inv.name, str);
@@ -2921,6 +2939,7 @@ main()
                         }
                         strat.investors[++strat.currInvestorIndex] = inv; 
                     }
+                    PQclear(pgResultInv);
                 }
 
                 // now, add the fno_positions to the strat.
@@ -2928,18 +2947,18 @@ main()
                         "SELECT * FROM fno_position WHERE strategy_id = %d",
                         strat.id);
 
-                pgResult = PQexec(conn, query);
-                errorMessage = PQresultErrorMessage(pgResult);
+                PGresult *pgResultPos = PQexec(conn, query);
+                errorMessage = PQresultErrorMessage(pgResultPos);
                 if (strcmp(errorMessage, "") != 0)
                 {
                     printf("%s", errorMessage);
                 }
-                ir = PQntuples(pgResult);
-                ic = PQnfields(pgResult);
+                ir = PQntuples(pgResultPos);
+                ic = PQnfields(pgResultPos);
                 if (ir == 0)
                 {
                     fprintf(stderr, "No fno_position found matching symbol: \n");
-                    PQclear(pgResult);
+                    PQclear(pgResultPos);
                 }
                 else
                 {
@@ -2948,7 +2967,7 @@ main()
                         FNO_position pos = {};
                         for (int b = 0; b < ic; b++)
                         {
-                            char *str = PQgetvalue(pgResult, a, b);
+                            char *str = PQgetvalue(pgResultPos, a, b);
                             if (b == 1)
                             {
                                 strcpy(pos.sys_id, str);
@@ -2972,7 +2991,11 @@ main()
                             else if (b == 6)
                             {
                                 printf("expiry is %s\n", str);
-                                strcpy(pos.expiry, str);
+
+                                char formattedExpiry[100];
+                                ConvertDbDateToCFormat(str, formattedExpiry,
+                                                       sizeof(formattedExpiry));
+                                strcpy(pos.expiry, formattedExpiry);
                             }
                             else if (b == 7)
                             {
@@ -3015,6 +3038,7 @@ main()
                         }
                         strat.fpositions[++strat.currFPosIndex] = pos; 
                     }
+                    PQclear(pgResultPos);
                 }
             }
         }

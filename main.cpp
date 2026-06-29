@@ -3153,9 +3153,21 @@ main()
         {
             state.strategies[stratIndex].fpositions[i].ltp = 8073.00; // natural gas.
         }
+        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
+                        "SENSEX") == 0 &&
+                 state.strategies[stratIndex].fpositions[i].optType == CE)
+        {
+
+            state.strategies[stratIndex].fpositions[i].ltp = 1223.55; // sensex 75000 ce.
+        }
+        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
+                        "SENSEX") == 0 &&
+                 state.strategies[stratIndex].fpositions[i].optType == PE)
+        {
+
+            state.strategies[stratIndex].fpositions[i].ltp = 226.2; // sensex 73500 pe.
+        }
     }
-    state.strategies[stratIndex].fpositions[2].ltp = 226.2; // sensex 73500 pe.
-    state.strategies[stratIndex].fpositions[6].ltp = 1223.55; // sensex 75000 ce.
 
     makeVariationSettlements(&state, conn, stratId, stratIndex);
     printFundLedger(&state);

@@ -511,6 +511,18 @@ getDollarValue(char *line)
     return -1;
 }
 
+PGresult *
+executeQuery(PGconn *conn, char *query)
+{
+    PGresult *pgResult = PQexec(conn, query);
+    char *errorMessage = PQresultErrorMessage(pgResult);
+    if (strcmp(errorMessage, "") != 0)
+    {
+        printf("%s", errorMessage);
+    }
+    return pgResult;
+}
+
 void
 allotUnits(State *state, PGconn *conn, char *line)
 {
@@ -560,7 +572,7 @@ allotUnits(State *state, PGconn *conn, char *line)
                      units,
                      invName
                      );
-            PGresult *pgResult = PQexec(conn, query);
+            PGresult *pgResult = executeQuery(conn, query);
             char *errorMessage = PQresultErrorMessage(pgResult);
             if (strcmp(errorMessage, "") != 0)
             {
@@ -1116,12 +1128,7 @@ processBhav(FILE *bhavFile, PGconn *conn, int dbStratId,
                          OptTypeStrings[bhav.optType],
                          InstrumentTypeStrings[bhav.instType]
                          );
-                PGresult *pgResult = PQexec(conn, query);
-                char *errorMessage = PQresultErrorMessage(pgResult);
-                if (strcmp(errorMessage, "") != 0)
-                {
-                    printf("%s", errorMessage);
-                }
+                PGresult *pgResult = executeQuery(conn, query);
                 PQclear(pgResult);
 
                 snprintf(query, sizeof(query),
@@ -1129,12 +1136,7 @@ processBhav(FILE *bhavFile, PGconn *conn, int dbStratId,
                          bhav.ltp,
                          state->strategies[stratIndex].fpositions[i].sys_id
                          );
-                pgResult = PQexec(conn, query);
-                errorMessage = PQresultErrorMessage(pgResult);
-                if (strcmp(errorMessage, "") != 0)
-                {
-                    printf("%s", errorMessage);
-                }
+                pgResult = executeQuery(conn, query);
                 PQclear(pgResult);
             }
         }
@@ -1449,12 +1451,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                  TransTypeStrings[trade.transType],
                  trade.currency == USD ? "USD" : "INR" 
                  );
-        PGresult *pgResult = PQexec(conn, query);
-        char *errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
+        PGresult *pgResult = executeQuery(conn, query);
         PQclear(pgResult);
 
         // find the strategy index first.
@@ -1518,12 +1515,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                      state->strategies[stratIndex].cash,
                                      dbStratId
                                      );
-                            pgResult = PQexec(conn, query);
-                            errorMessage = PQresultErrorMessage(pgResult);
-                            if (strcmp(errorMessage, "") != 0)
-                            {
-                                printf("%s", errorMessage);
-                            }
+                            pgResult = executeQuery(conn, query);
                             PQclear(pgResult);
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
@@ -1582,12 +1574,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                      state->strategies[stratIndex].cash,
                                      dbStratId
                                      );
-                            pgResult = PQexec(conn, query);
-                            errorMessage = PQresultErrorMessage(pgResult);
-                            if (strcmp(errorMessage, "") != 0)
-                            {
-                                printf("%s", errorMessage);
-                            }
+                            pgResult = executeQuery(conn, query);
                             PQclear(pgResult);
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
@@ -1635,12 +1622,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                          state->strategies[stratIndex].fpositions[i].qty,
                          state->strategies[stratIndex].fpositions[i].sys_id
                          );
-                pgResult = PQexec(conn, query);
-                errorMessage = PQresultErrorMessage(pgResult);
-                if (strcmp(errorMessage, "") != 0)
-                {
-                    printf("%s", errorMessage);
-                }
+                pgResult = executeQuery(conn, query);
                 PQclear(pgResult);
                 char query[1024];
                 snprintf(query, sizeof(query),
@@ -1654,12 +1636,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                          assetEntry.memo,
                          assetEntry.currency == USD ? "USD" : "INR" 
                          );
-                PGresult *pgResult = PQexec(conn, query);
-                char *errorMessage = PQresultErrorMessage(pgResult);
-                if (strcmp(errorMessage, "") != 0)
-                {
-                    printf("%s", errorMessage);
-                }
+                PGresult *pgResult = executeQuery(conn, query);
                 PQclear(pgResult);
 
                 snprintf(query, sizeof(query),
@@ -1673,12 +1650,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                          liabEntry.memo,
                          liabEntry.currency == USD ? "USD" : "INR" 
                          );
-                pgResult = PQexec(conn, query);
-                errorMessage = PQresultErrorMessage(pgResult);
-                if (strcmp(errorMessage, "") != 0)
-                {
-                    printf("%s", errorMessage);
-                }
+                pgResult = executeQuery(conn, query);
                 PQclear(pgResult);
                 found = 1;
                 break;
@@ -1719,12 +1691,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                      state->strategies[stratIndex].cash,
                                      dbStratId
                                      );
-                            pgResult = PQexec(conn, query);
-                            errorMessage = PQresultErrorMessage(pgResult);
-                            if (strcmp(errorMessage, "") != 0)
-                            {
-                                printf("%s", errorMessage);
-                            }
+                            pgResult = executeQuery(conn, query);
                             PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
                             strcat(assetEntry.accountName, stratSymbol);
@@ -1769,12 +1736,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                      state->strategies[stratIndex].cash,
                                      dbStratId
                                      );
-                            pgResult = PQexec(conn, query);
-                            errorMessage = PQresultErrorMessage(pgResult);
-                            if (strcmp(errorMessage, "") != 0)
-                            {
-                                printf("%s", errorMessage);
-                            }
+                            pgResult = executeQuery(conn, query);
                             PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
                             strcat(assetEntry.accountName, stratSymbol);
@@ -1819,12 +1781,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                      OptTypeStrings[pos.optType],
                      InstrumentTypeStrings[pos.instType]
                      ); 
-            pgResult = PQexec(conn, query);
-            errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            pgResult = executeQuery(conn, query);
             PQclear(pgResult);
             char query[1024];
             snprintf(query, sizeof(query),
@@ -1838,12 +1795,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                      assetEntry.memo,
                      assetEntry.currency == USD ? "USD" : "INR" 
                      );
-            PGresult *pgResult = PQexec(conn, query);
-            char *errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            PGresult *pgResult = executeQuery(conn, query);
             PQclear(pgResult);
 
             snprintf(query, sizeof(query),
@@ -1857,12 +1809,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                      liabEntry.memo,
                      liabEntry.currency == USD ? "USD" : "INR" 
                      );
-            pgResult = PQexec(conn, query);
-            errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            pgResult = executeQuery(conn, query);
             PQclear(pgResult);
         }
         printf("cash is %f\n", state->strategies[stratIndex].cash);
@@ -1996,12 +1943,7 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                     "UPDATE strategy SET cash = %f where id = %d",
                     state->strategies[stratIndex].cash,
                     dbStratId);
-            PGresult *pgResult = PQexec(conn, query);
-            char *errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            PGresult *pgResult = executeQuery(conn, query);
             PQclear(pgResult);
             totalVariation += variation;
             // move the ltp now to the price column,
@@ -2011,12 +1953,7 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                     "UPDATE fno_position SET price = %f where sys_id = '%s'",
                     pos.ltp,
                     pos.sys_id);
-            pgResult = PQexec(conn, query);
-            errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            pgResult = executeQuery(conn, query);
             PQclear(pgResult);
             state->strategies[stratIndex].fpositions[i] = pos;
             // make the ledger entries.
@@ -2055,12 +1992,7 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                      assetEntry.memo,
                      assetEntry.currency == USD ? "USD" : "INR" 
                      );
-            pgResult = PQexec(conn, query);
-            errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            pgResult = executeQuery(conn, query);
             PQclear(pgResult);
 
             snprintf(query, sizeof(query),
@@ -2074,12 +2006,7 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                      liabEntry.memo,
                      liabEntry.currency == USD ? "USD" : "INR" 
                      );
-            pgResult = PQexec(conn, query);
-            errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            pgResult = executeQuery(conn, query);
             PQclear(pgResult);
         }
     }
@@ -2196,6 +2123,7 @@ LoadPriceUpdate(PriceUpdate *update, char *line)
     }
 }
 
+
 int
 main()
 {
@@ -2248,13 +2176,7 @@ main()
                 exRate.date,
                 exRate.base == USD ? "USD" : "INR");
 
-        PGresult *pgResult = PQexec(conn, query);
-        char *errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
-
+        PGresult *pgResult = executeQuery(conn, query);
         state.exRates[i - 1] = exRate; // it's a copy here.
         printf("ex rate is %f\n", state.exRates[i - 1].rate);
         PQclear(pgResult);
@@ -2300,12 +2222,7 @@ main()
                 strategy.symbol,
                 strategy.cash);
 
-        PGresult *pgResult = PQexec(conn, query);
-        char *errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
+        PGresult *pgResult = executeQuery(conn, query);
         PQclear(pgResult);
         i++;
     }
@@ -2338,12 +2255,7 @@ main()
                 "VALUES ('%s');",
                 inv.name);
 
-        PGresult *pgResult = PQexec(conn, query);
-        char *errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
+        PGresult *pgResult = executeQuery(conn, query);
         PQclear(pgResult);
     }
 
@@ -2381,12 +2293,7 @@ main()
                     "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
                     stratSymbol);
 
-            PGresult *pgResult = PQexec(conn, query);
-            char *errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            PGresult *pgResult = executeQuery(conn, query);
 
             if (PQntuples(pgResult) == 0)
             {
@@ -2403,12 +2310,7 @@ main()
                     "UPDATE investor SET strategy_id = %d where name = '%s'",
                     stratId,
                     inv.name);
-            pgResult = PQexec(conn, query);
-            errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            pgResult = executeQuery(conn, query);
             PQclear(pgResult);
 
         }
@@ -2425,12 +2327,7 @@ main()
                  entry.memo,
                  entry.currency == USD ? "USD" : "INR" 
                  );
-        PGresult *pgResult = PQexec(conn, query);
-        char *errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
+        PGresult *pgResult = executeQuery(conn, query);
         PQclear(pgResult);
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = entry;
         printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
@@ -2480,12 +2377,7 @@ main()
                      acc.balance,
                      acc.currency == USD ? "USD" : "INR" 
                      );
-            PGresult *pgResult = PQexec(conn, query);
-            char *errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            PGresult *pgResult = executeQuery(conn, query);
             PQclear(pgResult);
         }
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
@@ -2529,12 +2421,7 @@ main()
                  liabEntry.memo,
                  liabEntry.currency == USD ? "USD" : "INR" 
                  );
-        PGresult *pgResult = PQexec(conn, query);
-        char *errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
+        PGresult *pgResult = executeQuery(conn, query);
         PQclear(pgResult);
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
         printf("entry name is %s and value is %f\n", liabEntry.accountName,
@@ -2578,12 +2465,7 @@ main()
                  assetEntry.memo,
                  assetEntry.currency == USD ? "USD" : "INR" 
                  );
-        PGresult *pgResult = PQexec(conn, query);
-        char *errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
+        PGresult *pgResult = executeQuery(conn, query);
         PQclear(pgResult);
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
         printf("entry name is %s and value is %f\n", assetEntry.accountName,
@@ -2649,12 +2531,7 @@ main()
                  assetEntry.memo,
                  assetEntry.currency == USD ? "USD" : "INR" 
                  );
-        PGresult *pgResult = PQexec(conn, query);
-        char *errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
+        PGresult *pgResult = executeQuery(conn, query);
         PQclear(pgResult);
 
         snprintf(query, sizeof(query),
@@ -2668,12 +2545,7 @@ main()
                  liabEntry.memo,
                  liabEntry.currency == USD ? "USD" : "INR" 
                  );
-        pgResult = PQexec(conn, query);
-        errorMessage = PQresultErrorMessage(pgResult);
-        if (strcmp(errorMessage, "") != 0)
-        {
-            printf("%s", errorMessage);
-        }
+        pgResult = executeQuery(conn, query);
         PQclear(pgResult);
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = assetEntry;
         state.strategies[state.currStratIndex].ledger[++state.strategies[state.currStratIndex].currEntryId] = liabEntry;
@@ -2720,12 +2592,7 @@ main()
              OptTypeStrings[posA.optType],
              InstrumentTypeStrings[posA.instType]
              );
-    PGresult *pgResult = PQexec(conn, query);
-    char *errorMessage = PQresultErrorMessage(pgResult);
-    if (strcmp(errorMessage, "") != 0)
-    {
-        printf("%s", errorMessage);
-    }
+    PGresult *pgResult = executeQuery(conn, query);
     PQclear(pgResult);
 
     FNO_position posB = {};
@@ -2752,12 +2619,7 @@ main()
              OptTypeStrings[posB.optType],
              InstrumentTypeStrings[posB.instType]
              );
-    pgResult = PQexec(conn, query);
-    errorMessage = PQresultErrorMessage(pgResult);
-    if (strcmp(errorMessage, "") != 0)
-    {
-        printf("%s", errorMessage);
-    }
+    pgResult = executeQuery(conn, query);
     PQclear(pgResult);
 
     FNO_position posC = {};
@@ -2785,12 +2647,7 @@ main()
              OptTypeStrings[posC.optType],
              InstrumentTypeStrings[posC.instType]
              );
-    pgResult = PQexec(conn, query);
-    errorMessage = PQresultErrorMessage(pgResult);
-    if (strcmp(errorMessage, "") != 0)
-    {
-        printf("%s", errorMessage);
-    }
+    pgResult = executeQuery(conn, query);
     PQclear(pgResult);
 
     /* read the fno trades and make the positions */
@@ -2841,12 +2698,7 @@ main()
                      294.40,
                      "NATURALGAS"
                      );
-            pgResult = PQexec(conn, query);
-            errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            pgResult = executeQuery(conn, query);
             PQclear(pgResult);
         }
         else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
@@ -2858,12 +2710,7 @@ main()
                      8344.00,
                      "CRUDEOIL"
                      );
-            pgResult = PQexec(conn, query);
-            errorMessage = PQresultErrorMessage(pgResult);
-            if (strcmp(errorMessage, "") != 0)
-            {
-                printf("%s", errorMessage);
-            }
+            pgResult = executeQuery(conn, query);
             PQclear(pgResult);
         }
     }
@@ -2873,12 +2720,7 @@ main()
              700.45,
              "SENSEX"
              );
-    pgResult = PQexec(conn, query);
-    errorMessage = PQresultErrorMessage(pgResult);
-    if (strcmp(errorMessage, "") != 0)
-    {
-        printf("%s", errorMessage);
-    }
+    pgResult = executeQuery(conn, query);
     PQclear(pgResult);
 
     /* run the mtm process, i.e process variation settlements for
@@ -2900,12 +2742,7 @@ main()
             "UPDATE strategy SET cash = %f where id = %d",
             state.strategies[stratIndex].cash,
             stratId);
-    pgResult = PQexec(conn, query);
-    errorMessage = PQresultErrorMessage(pgResult);
-    if (strcmp(errorMessage, "") != 0)
-    {
-        printf("%s", errorMessage);
-    }
+    pgResult = executeQuery(conn, query);
     PQclear(pgResult);
     real64 managementFees = 301.54;
     printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
@@ -2917,12 +2754,7 @@ main()
     sprintf(query,
             "SELECT * FROM strategy");
 
-    pgResult = PQexec(conn, query);
-    errorMessage = PQresultErrorMessage(pgResult);
-    if (strcmp(errorMessage, "") != 0)
-    {
-        printf("%s", errorMessage);
-    }
+    pgResult = executeQuery(conn, query);
     int rows = PQntuples(pgResult);
     int cols = PQnfields(pgResult);
     if (rows == 0)
@@ -2965,12 +2797,7 @@ main()
                         "SELECT * FROM investor WHERE strategy_id = %d",
                         strat.id);
 
-                PGresult *pgResultInv = PQexec(conn, query);
-                char *errorMessage = PQresultErrorMessage(pgResultInv);
-                if (strcmp(errorMessage, "") != 0)
-                {
-                    printf("%s", errorMessage);
-                }
+                PGresult *pgResultInv = executeQuery(conn, query);
                 int ir = PQntuples(pgResultInv);
                 int ic = PQnfields(pgResultInv);
                 if (ir == 0)
@@ -3005,12 +2832,7 @@ main()
                         "SELECT * FROM fno_position WHERE strategy_id = %d",
                         strat.id);
 
-                PGresult *pgResultPos = PQexec(conn, query);
-                errorMessage = PQresultErrorMessage(pgResultPos);
-                if (strcmp(errorMessage, "") != 0)
-                {
-                    printf("%s", errorMessage);
-                }
+                PGresult *pgResultPos = executeQuery(conn, query);
                 ir = PQntuples(pgResultPos);
                 ic = PQnfields(pgResultPos);
                 if (ir == 0)

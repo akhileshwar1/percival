@@ -2177,6 +2177,7 @@ loadStateFromDB(State *state, PGconn *conn)
         Strategy strat = {};
         strat.currInvestorIndex = -1;
         strat.currFPosIndex = -1;
+        strat.currAccIndex = -1;
         for (int j = 0; j < cols; j++)
         {
             char *str = PQgetvalue(pgResult, i, j);
@@ -2266,6 +2267,7 @@ loadStateFromDB(State *state, PGconn *conn)
                                 acc.currency = strcmp(str, "USD") == 0 ? USD : INR;
                             }
                         }
+                        strat.accs[++strat.currAccIndex] = acc; 
                     }
                     PQclear(pgResultAcc);
                 }
@@ -2389,7 +2391,7 @@ main()
         return -1;
     }
 
-    FILE *exchangeRateFile = fopen("exchange_rate.csv", "r");
+    FILE *exchangeRateFile = fopen("exchange_rate_21.csv", "r");
     if (exchangeRateFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2963,12 +2965,6 @@ main()
         totalUnits += inv.units;
     }
 
-    // calculate the nav = (totalValue + cash) / totalUnits.
-    // state.strategies[stratIndex].cash += 2588560.68;
-    // sprintf(query,
-    //         "UPDATE strategy SET cash = %f where id = %d",
-    //         state.strategies[stratIndex].cash,
-    //         stratId);
     pgResult = executeQuery(conn, query);
     PQclear(pgResult);
     real64 managementFees = 0.0;
@@ -2983,7 +2979,7 @@ main()
 
     printFPositions(&state, stratIndex);
 
-    FILE *EFile = fopen("exchange_rate_12.csv", "r");
+    FILE *EFile = fopen("exchange_rate_24.csv", "r");
     if (EFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2993,7 +2989,7 @@ main()
     // update the ex rate for the second day.
     processExRate(EFile, &state, &exRate);
 
-    FILE *FTradessFile = fopen("trades_fno_12.csv", "r");
+    FILE *FTradessFile = fopen("ab_trades_24.csv", "r");
     if (FTradessFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -3002,7 +2998,7 @@ main()
 
     // process trades for 12th june.
     stratIndex = processTrades(FTradessFile, conn, stratId, &state);
-    FILE *FBhavvFile = fopen("bhavcopy_fno_12.csv", "r");
+    FILE *FBhavvFile = fopen("ab_bhav_24.csv", "r");
     if (FBhavvFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -3015,192 +3011,8 @@ main()
 
     makeVariationSettlements(&state, conn, stratId, stratIndex);
     printFundLedger(&state);
-    managementFees = 306.63;
+    managementFees = 0.0;
     printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
 
     PQfinish(conn);
-
-
-    // /*----------------- New strategy, equity series -----------------*/
-    // FILE *strattFile = fopen("strategy_master_eq.csv", "r");
-    // if (strattFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // Strategy strat = {};
-    // i = 0;
-    // while (fgets(line, sizeof(line), strattFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     // NOTE(Akhil): here, the headinng is too big, lines split!
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     LoadStrategyFromFile(&strat, line);
-    //     /* NOTE(Akhil): for manual testing,
-    //                     shouldn't this happen during cashflow? */
-    //     // strategy.cash = 15314483.54; // inr
-    //     strat.cash = 53764.80; // inr
-    //     strat.id = ++state.currStratIndex;
-    //     state.strategies[state.currStratIndex].currEntryId = -1;
-    //     state.strategies[state.currStratIndex] = strat;
-    //     printf("strategy id is %d\n", state.strategies[state.currStratIndex].id);
-    //     printf("strategy name is %s\n", state.strategies[state.currStratIndex].symbol);
-    //     i++;
-    // }
-    //
-    // FILE *securityFile = fopen("securities.csv", "r");
-    // if (securityFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // uploadSecurities(securityFile, &state);
-    // for (int i = 0; i < state.currStratIndex + 1; i++)
-    // {
-    //     if (strcmp("SSFSAMSTE", state.strategies[i].symbol) == 0)
-    //     {
-    //         stratIndex = i;
-    //         break;
-    //     }
-    // }
-    //
-    // if (stratIndex == -1)
-    // {
-    //     printf("Couldn't find strategy, aborting!\n");
-    //     return -2;
-    // }
-    //
-    // state.strategies[stratIndex].cash = 53764.80;
-    //
-    // // load the previous day's open positions.
-    // FILE *posFile = fopen("securities_price_qty.csv", "r");
-    // if (posFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // i = 0;
-    // while (fgets(line, sizeof(line), posFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     PositionEquity pos = {};
-    //     LoadOldPosition(&pos, line);
-    //     // populate the rest of the details from the securities data.
-    //     for (int i = 0; i < state.currSecIndex + 1; i++)
-    //     {
-    //         if (strcmp(pos.isin, state.secs[i].isin) == 0)
-    //         {
-    //             strcpy(pos.symbol,
-    //                    state.secs[i].symbol);
-    //             strcpy(pos.id,
-    //                    state.secs[i].id);
-    //         }
-    //     }
-    //     state.strategies[stratIndex].positions
-    //         [++state.strategies[stratIndex].currPosIndex] = pos;
-    // }
-    //
-    // state.strategies[stratIndex].currFPosIndex = -1;
-    // FNO_position posX = {};
-    // strcpy(posX.symbol, "MOTHERSON");
-    // strcpy(posX.expiry, "30/06/2026");
-    // posX.instType = FUTSTK;
-    // posX.optType = NA;
-    // posX.strike = 0;
-    // posX.qty = 6150;
-    // posX.price = 144.67;
-    // state.strategies[stratIndex].fpositions
-    //     [++state.strategies[stratIndex].currFPosIndex] = posX;
-    //
-    // FNO_position posY = {};
-    // strcpy(posY.symbol, "CGPOWER");
-    // strcpy(posY.expiry, "30/06/2026");
-    // posY.instType = FUTSTK;
-    // posY.optType = NA;
-    // posY.strike = 0;
-    // posY.qty = 850;
-    // posY.price = 958.15;
-    // state.strategies[stratIndex].fpositions
-    //     [++state.strategies[stratIndex].currFPosIndex] = posY;
-    //
-    // printf("here %d\n", stratIndex);
-    // printPositions(&state, stratIndex);
-    // printFPositions(&state, stratIndex);
-    //
-    // FILE *TradesFile = fopen("trades_eq.csv", "r");
-    // if (TradesFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // processTradesEq(TradesFile, &state);
-    //
-    // FILE *BhavFile = fopen("bhavcopy_eq.csv", "r");
-    // if (BhavFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // processBhavEq(BhavFile, stratIndex, &state);
-    // FILE *BhavFFile = fopen("bhavcopy_eq_fno.csv", "r");
-    // if (BhavFFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    // processBhav(BhavFFile, stratIndex, &state);
-    //
-    // FILE *priceFile = fopen("price_update.csv", "r");
-    // if (priceFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // i = 0;
-    // while (fgets(line, sizeof(line), priceFile))
-    // {
-    //     if (i == 0)
-    //     {
-    //         i++;
-    //         continue; // ignore the top heading row.
-    //     }
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     PriceUpdate update = {};
-    //     LoadPriceUpdate(&update, line);
-    //     for (int j = 0; j < state.strategies[stratIndex].currPosIndex + 1;
-    //         j++)
-    //     {
-    //         if (strcmp(state.strategies[stratIndex].positions[j].isin,
-    //                    update.symbol) == 0)
-    //         {
-    //             state.strategies[stratIndex].positions[j].ltp = update.price;
-    //         }
-    //     }
-    // }
-    //
-    // printPositions(&state, stratIndex);
-    // printFPositions(&state, stratIndex);
-    // makeVariationSettlements(&state, stratIndex);
-    // printFundLedger(&state);
-    // managementFees = 0;
-    // totalUnits = 927.387505;
-    // printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
 }

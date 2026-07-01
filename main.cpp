@@ -2267,6 +2267,7 @@ loadStateFromDB(State *state, PGconn *conn)
                             }
                         }
                     }
+                    PQclear(pgResultAcc);
                 }
 
 

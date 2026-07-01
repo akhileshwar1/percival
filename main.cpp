@@ -1512,11 +1512,12 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                 (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                                 / trade.qty; 
 
-
-                            state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            /* NOTE(Akhil): 3 because sbirc for options/fut */
+                            state->strategies[stratIndex].accs[3].balance -=
+                                trade.qty * priceAfterFee;
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].cash,
+                                     state->strategies[stratIndex].accs[3].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(conn, query);
@@ -1572,10 +1573,11 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                 / abs(trade.qty); 
 
                             // you always get less after selling.
-                            state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            state->strategies[stratIndex].accs[3].balance -=
+                                trade.qty * priceAfterFee;
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].cash,
+                                     state->strategies[stratIndex].accs[3].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(conn, query);
@@ -1689,10 +1691,11 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                         // you always pay more while buying.
                         if (pos.instType != FUTSTK)
                         {
-                            state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            state->strategies[stratIndex].accs[3].balance -=
+                                trade.qty * priceAfterFee;
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].cash,
+                                     state->strategies[stratIndex].accs[3].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(conn, query);
@@ -1734,10 +1737,11 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                         // you always get less after selling.
                         if (pos.instType != FUTSTK)
                         {
-                            state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            state->strategies[stratIndex].accs[3].balance -=
+                                trade.qty * priceAfterFee;
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].cash,
+                                     state->strategies[stratIndex].accs[3].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(conn, query);
@@ -1816,7 +1820,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
             pgResult = executeQuery(conn, query);
             PQclear(pgResult);
         }
-        printf("cash is %f\n", state->strategies[stratIndex].cash);
+        printf("cash is %f\n", state->strategies[stratIndex].accs[3].balance);
         printf("pos is %s, %d, %f\n",
                state->strategies[stratIndex].positions[stratIndex].symbol,
                state->strategies[stratIndex].positions[stratIndex].qty,
@@ -2037,6 +2041,28 @@ getTotalPositionValue(State *state, int stratIndex)
     return totalValue;
 }
 
+real64
+getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
+{
+    real64 totalCashINR = 0.0;
+    real64 totalCashUSD = 0.0;
+    // NOTE(Akhil) : starting i from 1 because we skip sbm account.
+    for (int i = 1; i <= state->strategies[stratIndex].currAccIndex;
+         i++)
+    {
+        if (state->strategies[stratIndex].accs[i].currency == INR)
+        {
+            totalCashINR += state->strategies[stratIndex].accs[i].balance;
+        }
+        else
+        {
+            totalCashUSD += state->strategies[stratIndex].accs[i].balance;
+        }
+    }
+    totalCashUSD += (totalCashINR / exRate->rate);
+    return totalCashUSD;
+}
+
 void
 printNav(State *state, Exchange_rate *exRate, real64 totalUnits,
          real64 managementFees, int stratIndex)
@@ -2044,9 +2070,8 @@ printNav(State *state, Exchange_rate *exRate, real64 totalUnits,
     // total value of fno positions.
     real64 totalValue = getTotalPositionValue(state, stratIndex); 
 
-    real64 cash = state->strategies[stratIndex].cash;
-    printf("closing inr cash balance is %f\n", cash);
-    real64 cashUSD = (cash / exRate->rate) - managementFees;
+    real64 cashUSD = getTotalCashUSD(state, stratIndex, exRate);
+    cashUSD -=  managementFees;
     printf("closing cash balance in usd is %f\n", cashUSD);
     real64 totalValueUSD = totalValue / exRate->rate;
     printf("total position value in usd is %f\n", totalValueUSD);
@@ -2173,7 +2198,7 @@ loadStateFromDB(State *state, PGconn *conn)
             }
             else if (j == 5)
             {
-                // go for the investors and positions now.
+                // go for the investors, accs, and positions now.
                 sprintf(query,
                         "SELECT * FROM investor WHERE strategy_id = %d",
                         strat.id);
@@ -2207,6 +2232,43 @@ loadStateFromDB(State *state, PGconn *conn)
                     }
                     PQclear(pgResultInv);
                 }
+
+                // go for bank accounts now.
+                sprintf(query,
+                        "SELECT * FROM bank_account WHERE strategy_id = %d",
+                        strat.id);
+                PGresult *pgResultAcc = executeQuery(conn, query);
+                ir = PQntuples(pgResultAcc);
+                ic = PQnfields(pgResultAcc);
+                if (ir == 0)
+                {
+                    fprintf(stderr, "No fno_position found matching symbol: \n");
+                    PQclear(pgResultAcc);
+                }
+                else
+                {
+                    for (int i = 0; i < ir; i++)
+                    {
+                        Bank_account acc = {};
+                        for (int j = 0; j < ic; j++)
+                        {
+                            char *str = PQgetvalue(pgResultAcc, i, j);
+                            if (j == 1)
+                            {
+                                strcpy(acc.symbol, str);
+                            }
+                            else if (j == 2)
+                            {
+                                acc.balance = atof(str);
+                            }
+                            else if (j == 3)
+                            {
+                                acc.currency = strcmp(str, "USD") == 0 ? USD : INR;
+                            }
+                        }
+                    }
+                }
+
 
                 // now, add the fno_positions to the strat.
                 sprintf(query,
@@ -2851,7 +2913,7 @@ main()
     int stratIndexx = -1;
     for (int i = 0; i < state.currStratIndex + 1; i++)
     {
-        if (strcmp("SSFSAMST", state.strategies[i].symbol) == 0)
+        if (strcmp("31500012A", state.strategies[i].symbol) == 0)
         {
             stratIndexx = i;
             break;
@@ -2864,7 +2926,7 @@ main()
     printFundLedger(&state);
 
     /* read the fno trades and make the positions */
-    FILE *FTradesFile = fopen("trades_fno.csv", "r");
+    FILE *FTradesFile = fopen("ab_trades_21.csv", "r");
     if (FTradesFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2873,7 +2935,7 @@ main()
     int stratIndex = processTrades(FTradesFile, conn, stratId, &state);
 
     //upload the bhavcopy for FNO.
-    FILE *FBhavFile = fopen("bhavcopy_fno.csv", "r");
+    FILE *FBhavFile = fopen("ab_bhav_21.csv", "r");
     if (FBhavFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2881,60 +2943,11 @@ main()
     }
     processBhav(FBhavFile, conn, stratId, stratIndex, &state);
 
-    /* collapse all the open futures positions into the same position
-       row by marking all the other independen't qtys as zero. */
-    /* read the trades pertaining to a particular strategy
-           and apply them to the position state. */
-
-    // get total value of the positions held for the strategy.
-    // real64 totalValue = 0.0;
-    // for (int i = 0; i < state.strategies[stratIndex].currPosIndex + 1; i++)
-    // {
-    //     PositionEquity pos = state.strategies[stratIndex].positions[i];
-    //     totalValue  += pos.qty * pos.ltp;
-    // }
-
     /* NOTE(Akhil): Update the bhav's of unknown symbols manually here
         usually the guy has a special file 21 price_update_us where
         he gives the ltp against the system generated symbol
         Also remember the uidff format of bse, that we need to be able
         to parse for fno */
-    for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
-    {
-
-        if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-                   "NATURALGAS") == 0)
-        {
-            state.strategies[stratIndex].fpositions[i].ltp = 294.40; // natural gas.
-            snprintf(query, sizeof(query),
-                     "UPDATE fno_position SET ltp = %f WHERE symbol = '%s'",
-                     294.40,
-                     "NATURALGAS"
-                     );
-            pgResult = executeQuery(conn, query);
-            PQclear(pgResult);
-        }
-        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-                   "CRUDEOIL") == 0)
-        {
-            state.strategies[stratIndex].fpositions[i].ltp = 8344.00; // natural gas.
-            snprintf(query, sizeof(query),
-                     "UPDATE fno_position SET ltp = %f WHERE symbol = '%s'",
-                     8344.00,
-                     "CRUDEOIL"
-                     );
-            pgResult = executeQuery(conn, query);
-            PQclear(pgResult);
-        }
-    }
-    state.strategies[stratIndex].fpositions[6].ltp = 700.45; // sensex.
-    snprintf(query, sizeof(query),
-             "UPDATE fno_position SET ltp = %f WHERE symbol = '%s'",
-             700.45,
-             "SENSEX"
-             );
-    pgResult = executeQuery(conn, query);
-    PQclear(pgResult);
 
     /* run the mtm process, i.e process variation settlements for
        open futures positions: net_qty * (ltp - prev_price) */
@@ -2942,22 +2955,22 @@ main()
 
     // get the total units from all the investors for a strategy.
     // real64 totalUnits = 1007.729 + 175.444;
-    real64 totalUnits = 1183.249;
-    // for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
-    // {
-    //     Investor inv = state.strategies[stratIndex].investors[i];
-    //     totalUnits += inv.units;
-    // }
+    real64 totalUnits = 0;
+    for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
+    {
+        Investor inv = state.strategies[stratIndex].investors[i];
+        totalUnits += inv.units;
+    }
 
     // calculate the nav = (totalValue + cash) / totalUnits.
-    state.strategies[stratIndex].cash += 2588560.68;
-    sprintf(query,
-            "UPDATE strategy SET cash = %f where id = %d",
-            state.strategies[stratIndex].cash,
-            stratId);
+    // state.strategies[stratIndex].cash += 2588560.68;
+    // sprintf(query,
+    //         "UPDATE strategy SET cash = %f where id = %d",
+    //         state.strategies[stratIndex].cash,
+    //         stratId);
     pgResult = executeQuery(conn, query);
     PQclear(pgResult);
-    real64 managementFees = 301.54;
+    real64 managementFees = 0.0;
     printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
 
     // /* 2ND DAY------------------------------------------ */
@@ -2998,34 +3011,6 @@ main()
     // process bhavcopy of 12th june.
     processBhav(FBhavvFile, conn, stratId, stratIndex, &state);
 
-    for (int i = 0; i < state.strategies[stratIndex].currFPosIndex + 1; i++)
-    {
-
-        if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-                   "NATURALGAS") == 0)
-        {
-            state.strategies[stratIndex].fpositions[i].ltp = 296.70; // natural gas.
-        }
-        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-                        "CRUDEOIL") == 0)
-        {
-            state.strategies[stratIndex].fpositions[i].ltp = 8073.00; // natural gas.
-        }
-        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-                        "SENSEX") == 0 &&
-                 state.strategies[stratIndex].fpositions[i].optType == CE)
-        {
-
-            state.strategies[stratIndex].fpositions[i].ltp = 1223.55; // sensex 75000 ce.
-        }
-        else if (strcmp(state.strategies[stratIndex].fpositions[i].symbol,
-                        "SENSEX") == 0 &&
-                 state.strategies[stratIndex].fpositions[i].optType == PE)
-        {
-
-            state.strategies[stratIndex].fpositions[i].ltp = 226.2; // sensex 73500 pe.
-        }
-    }
 
     makeVariationSettlements(&state, conn, stratId, stratIndex);
     printFundLedger(&state);

@@ -1515,6 +1515,14 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             /* NOTE(Akhil): 3 because sbirc for options/fut */
                             state->strategies[stratIndex].accs[3].balance -=
                                 trade.qty * priceAfterFee;
+                            // persist the accs balance.
+                            snprintf(query, sizeof(query),
+                                     "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[3].symbol
+                                     );
+                            pgResult = executeQuery(conn, query);
+                            PQclear(pgResult);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
                                      state->strategies[stratIndex].accs[3].balance,
@@ -1575,6 +1583,14 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                             // you always get less after selling.
                             state->strategies[stratIndex].accs[3].balance -=
                                 trade.qty * priceAfterFee;
+                            // persist the accs balance.
+                            snprintf(query, sizeof(query),
+                                     "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[3].symbol
+                                     );
+                            pgResult = executeQuery(conn, query);
+                            PQclear(pgResult);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
                                      state->strategies[stratIndex].accs[3].balance,
@@ -1693,6 +1709,14 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                         {
                             state->strategies[stratIndex].accs[3].balance -=
                                 trade.qty * priceAfterFee;
+                            // persist the accs balance.
+                            snprintf(query, sizeof(query),
+                                     "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[3].symbol
+                                     );
+                            pgResult = executeQuery(conn, query);
+                            PQclear(pgResult);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
                                      state->strategies[stratIndex].accs[3].balance,
@@ -1739,6 +1763,14 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                         {
                             state->strategies[stratIndex].accs[3].balance -=
                                 trade.qty * priceAfterFee;
+                            // persist the accs balance.
+                            snprintf(query, sizeof(query),
+                                     "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[3].symbol
+                                     );
+                            pgResult = executeQuery(conn, query);
+                            PQclear(pgResult);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
                                      state->strategies[stratIndex].accs[3].balance,
@@ -3011,8 +3043,39 @@ main()
 
     makeVariationSettlements(&state, conn, stratId, stratIndex);
     printFundLedger(&state);
-    managementFees = 0.0;
+    managementFees = 5.14;
     printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
 
+    /* 3RD DAY------------------------------------------ */
+    state = {};
+    loadStateFromDB(&state, conn);
+
+    collapsePositions(&state, stratIndex);
+
+    printFPositions(&state, stratIndex);
+
+    FILE *EeFile = fopen("exchange_rate_28.csv", "r");
+    if (EeFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    // update the ex rate for the second day.
+    processExRate(EeFile, &state, &exRate);
+
+    FILE *FTradesssFile = fopen("ab_trades_28.csv", "r");
+    if (FTradesssFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        return -1;
+    }
+
+    stratIndex = processTrades(FTradesssFile, conn, stratId, &state);
+    
+    makeVariationSettlements(&state, conn, stratId, stratIndex);
+    printFundLedger(&state);
+    managementFees = 5.14;
+    printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
     PQfinish(conn);
 }

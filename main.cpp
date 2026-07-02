@@ -198,6 +198,7 @@ typedef struct
     char symbol[100];
     real64 cash;
     real64 nav;
+    real64 feesAccrued;
     Investor investors[MAX_INVESTORS];
     PositionEquity positions[MAX_POSITIONS];
     FNO_position fpositions[MAX_POSITIONS];
@@ -2105,18 +2106,30 @@ getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
 
 void
 printNav(State *state, Exchange_rate *exRate, real64 totalUnits,
-         real64 managementFees, int stratIndex)
+         int stratIndex, PGconn *conn, int dbStratId)
 {
     // total value of fno positions.
     real64 totalValue = getTotalPositionValue(state, stratIndex); 
 
     real64 cashUSD = getTotalCashUSD(state, stratIndex, exRate);
-    cashUSD -=  managementFees;
     printf("closing cash balance in usd is %f\n", cashUSD);
     real64 totalValueUSD = totalValue / exRate->rate;
     printf("total position value in usd is %f\n", totalValueUSD);
     printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
-    real64 nav = (totalValueUSD + cashUSD) / totalUnits;
+    real64 netAssets = totalValueUSD + cashUSD;
+    real64 fee = netAssets * (0.01 / 365); // 1% p.a
+    state->strategies[stratIndex].feesAccrued += fee;
+    real64 feesAccrued = state->strategies[stratIndex].feesAccrued; 
+    char query[1024];
+    snprintf(query, sizeof(query),
+             "UPDATE strategy SET fees_accrued = %f WHERE id = %d",
+             feesAccrued, 
+             dbStratId
+             );
+    PGresult *pgResult = executeQuery(conn, query);
+    PQclear(pgResult);
+    printf("fee accrued %f, %f\n", fee, feesAccrued);
+    real64 nav = (netAssets - feesAccrued) / totalUnits;
     printf("nav is %f\n", nav);
 }
 
@@ -2235,9 +2248,13 @@ loadStateFromDB(State *state, PGconn *conn)
             }
             else if (j == 4)
             {
-                strat.nav = atof(str);
+                strat.feesAccrued = atof(str);
             }
             else if (j == 5)
+            {
+                strat.nav = atof(str);
+            }
+            else if (j == 6)
             {
                 // go for the investors, accs, and positions now.
                 sprintf(query,
@@ -3111,8 +3128,7 @@ main()
 
     pgResult = executeQuery(conn, query);
     PQclear(pgResult);
-    real64 managementFees = 0.0;
-    printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
+    printNav(&state, &exRate, totalUnits, stratIndex, conn, stratId);
 
     // /* 2ND DAY------------------------------------------ */
     // Load the state from the db.
@@ -3155,8 +3171,7 @@ main()
 
     makeVariationSettlements(&state, conn, stratId, stratIndex);
     printFundLedger(&state);
-    managementFees = 5.14;
-    printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
+    printNav(&state, &exRate, totalUnits, stratIndex, conn, stratId);
 
     /* 3RD DAY------------------------------------------ */
     state = {};
@@ -3187,7 +3202,6 @@ main()
     
     makeVariationSettlements(&state, conn, stratId, stratIndex);
     printFundLedger(&state);
-    managementFees = 5.14;
-    printNav(&state, &exRate, totalUnits, managementFees, stratIndex);
+    printNav(&state, &exRate, totalUnits, stratIndex, conn, stratId);
     PQfinish(conn);
 }

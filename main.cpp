@@ -154,6 +154,14 @@ typedef struct
 
 typedef struct
 {
+    char isin[100];
+    char exDate[100];
+    char type[100];
+    real64 div;
+} Dividend;
+
+typedef struct
+{
     char symbol[100];
     int qty;
     real64 price;
@@ -2406,6 +2414,45 @@ loadStateFromDB(State *state, PGconn *conn)
     PQclear(pgResult);
 }
 
+void formatDateForDiv(const char *in, char *out)
+{
+    sprintf(out, "%.2s/%.2s/%.4s",
+            in + 6,   // DD
+            in + 4,   // MM
+            in);      // YYYY
+}
+
+void
+LoadDividend(Dividend *div, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 6)
+        {
+            strcpy(div->isin, token);
+        }
+        else if (i == 9)
+        {
+            char formattedDate[11];  // "DD/MM/YYYY" + '\0'
+            formatDateForDiv(token, formattedDate);
+            strcpy(div->exDate, formattedDate);
+        }
+        else if (i ==  13)
+        {
+            strcpy(div->type, token);
+        }
+        else if (i ==  16)
+        {
+            div->div = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
 int
 main()
 {
@@ -2944,17 +2991,82 @@ main()
     //     i++;
     // }
 
-    /* store the previous day's i.e 10th june's open positions first */
-    int stratIndexx = -1;
+
+    int stratIndex = -1;
     for (int i = 0; i < state.currStratIndex + 1; i++)
     {
         if (strcmp("31500012A", state.strategies[i].symbol) == 0)
         {
-            stratIndexx = i;
+            stratIndex = i;
             break;
         }
     }
-    printf("strat index is %d\n", stratIndexx);
+    printf("strat index is %d\n", stratIndex);
+
+    /* process dividend file, just the code for now */
+    // FILE *DivFile = fopen("div.csv", "r");
+    // if (DivFile == NULL)
+    // {
+    //     printf("sorry, couldn't upload file!\n");
+    //     return -1;
+    // }
+    //
+    // while (fgets(line, sizeof(line), DivFile))
+    // {
+    //     char *tmp = strchr(line, '\n');
+    //     if (tmp) *tmp = '\0';
+    //     Dividend div = {};
+    //     LoadDividend(&div, line);
+    //     // only process if the ex date is today.
+    //     if (strcmp(div.exDate, today) == 0)
+    //     {
+    //         for (int j = 0;
+    //         j <= state.strategies[stratIndex].currPosIndex;
+    //         j++)
+    //         {
+    //             PositionEquity pos = state.strategies[stratIndex].positions[j];
+    //             if (strcmp(pos.isin, div.isin) == 0)
+    //             {
+    //                 // make the dividend income.
+    //                 // NOTE(Akhil): 2 stands for the equites bank acc.
+    //                 state.strategies[stratIndex].accs[2].balance += div.div * pos.qty;
+    //                 char query[1024];
+    //                 snprintf(query, sizeof(query),
+    //                          "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+    //                          state.strategies[stratIndex].accs[2].balance,
+    //                          state.strategies[stratIndex].accs[2].symbol
+    //                          );
+    //                 PGresult *pgResult = executeQuery(conn, query);
+    //                 PQclear(pgResult);
+    //                 // make the ledger entries and persist them as well.
+    //                 LedgerEntry assetEntry = {};
+    //                 LedgerEntry liabEntry = {};
+    //                 ++state.strategies[state.currStratIndex].currJournalId;
+    //                 strcat(assetEntry.accountName, div.isin);
+    //                 strcat(assetEntry.accountName, "_DIV");
+    //                 assetEntry.type = ASSET;
+    //                 assetEntry.currency = INR;
+    //                 assetEntry.debit = abs(pos.qty * div.div);
+    //                 assetEntry.id = state.strategies[state.currStratIndex].
+    //                     currJournalId;
+    //                 strcpy(liabEntry.accountName, "DIV_CASH_USD");
+    //                 liabEntry.credit = abs(pos.qty * div.div);
+    //                 liabEntry.type = REVENUE;
+    //                 liabEntry.id = state.strategies[state.currStratIndex].
+    //                     currJournalId;
+    //                 liabEntry.currency = INR;
+    //                 state.strategies[state.currStratIndex].
+    //                     ledger[++state.strategies[state.currStratIndex].
+    //                     currEntryId] = assetEntry;
+    //                 state.strategies[state.currStratIndex].
+    //                     ledger[++state.strategies[state.currStratIndex].
+    //                     currEntryId] = liabEntry;
+    //             }
+    //         }
+    //     }
+    //
+    //     i++;
+    // }
 
     char query[1024];
     PGresult *pgResult;
@@ -2967,7 +3079,7 @@ main()
         printf("sorry, couldn't upload file!\n");
         return -1;
     }
-    int stratIndex = processTrades(FTradesFile, conn, stratId, &state);
+    stratIndex = processTrades(FTradesFile, conn, stratId, &state);
 
     //upload the bhavcopy for FNO.
     FILE *FBhavFile = fopen("ab_bhav_21.csv", "r");

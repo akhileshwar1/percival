@@ -8,4 +8,5 @@ gcc \
     -fsanitize=address \
     main.cpp \
     -lpq \
+    -lmicrohttpd \
     -o percival.out \

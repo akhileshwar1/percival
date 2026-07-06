@@ -16,6 +16,7 @@ typedef double real64;
 typedef uint16_t uint16;
 
 #define PORT 8888
+#define POSTBUFFERSIZE 512
 #define MAX_STRATEGIES 100
 #define MAX_INVESTORS 100
 #define MAX_SECURITIES 100
@@ -23,6 +24,60 @@ typedef uint16_t uint16;
 #define MAX_EX_RATES 10
 
 int globalCounter = -1;
+
+typedef enum
+{
+GET = 0,
+POST = 1
+} ConnectionType;
+
+/**
+* Information we keep per connection.
+*/
+typedef struct
+{
+ConnectionType connectiontype;
+/**
+* Handle to the POST processing state.
+*/
+struct MHD_PostProcessor *postprocessor;
+/**
+* File handle where we write uploaded data.
+*/
+FILE *fp;
+/**
+* HTTP response body we will return, NULL if not yet known.
+*/
+const char *answerstring;
+/**
+* HTTP status code we will return, 0 for undecided.
+*/
+unsigned int answercode;
+} connection_info_struct;
+
+#define ASKPAGE \
+"<html><body>\n" \
+"Upload a file, please!<br>\n" \
+"There are %u clients uploading at the moment.<br>\n" \
+"<form action=\"/filepost\" method=\"post\" enctype=\"multipart/form-data\">\n" \
+"<input name=\"file\" type=\"file\">\n" \
+"<input type=\"submit\" value=\" Send \"></form>\n" \
+"</body></html>"
+// static const char *busypage =
+// "<html><body>This server is busy, please try again later.</body></html>";
+static const char *completepage =
+"<html><body>The upload has been completed.</body></html>";
+static const char *errorpage =
+"<html><body>This doesn't seem to be right.</body></html>";
+static const char *servererrorpage =
+"<html><body>Invalid request.</body></html>";
+static const char *fileexistspage =
+"<html><body>This file already exists.</body></html>";
+static const char *fileioerror =
+"<html><body>IO error writing to disk.</body></html>";
+static const char *const postprocerror =
+"<html><head><title>Error</title></head><body>Error processing POST data</body></html>";
+
 typedef enum
 {
     USD,
@@ -227,6 +282,214 @@ typedef struct
     int currSecIndex;
     int idCount;
 } State;
+
+static enum MHD_Result
+send_page (struct MHD_Connection *connection,
+           const char *page,
+           unsigned int status_code)
+{
+    enum MHD_Result ret;
+    struct MHD_Response *response;
+    response = MHD_create_response_from_buffer_static (strlen (page), page);
+    if (! response)
+        return MHD_NO;
+    if (MHD_YES !=
+        MHD_add_response_header (response,
+                                 MHD_HTTP_HEADER_CONTENT_TYPE,
+                                 "text/html"))
+    {
+        fprintf (stderr,
+                 "Failed to set content type header!\n");
+    }
+    ret = MHD_queue_response (connection,
+                              status_code,
+                              response);
+    MHD_destroy_response (response);
+    return ret;
+}
+
+static enum MHD_Result
+iterate_post (void *coninfo_cls,
+              enum MHD_ValueKind kind,
+              const char *key,
+              const char *filename,
+              const char *content_type,
+              const char *transfer_encoding,
+              const char *data,
+              uint64_t off,
+              size_t size)
+{
+    connection_info_struct *con_info = (connection_info_struct *)coninfo_cls;
+    FILE *fp;
+    (void) kind; /* Unused. Silent compiler warning. */
+    (void) content_type; /* Unused. Silent compiler warning. */
+    (void) transfer_encoding; /* Unused. Silent compiler warning. */
+    (void) off; /* Unused. Silent compiler warning. */
+    if (0 != strcmp (key, "file"))
+    {
+        con_info->answerstring = servererrorpage;
+        con_info->answercode = MHD_HTTP_BAD_REQUEST;
+        return MHD_YES;
+    }
+    if (! con_info->fp)
+    {
+        if (0 != con_info->answercode) /* something went wrong */
+            return MHD_YES;
+        if (NULL != (fp = fopen (filename, "rb")))
+        {
+            fclose (fp);
+            con_info->answerstring = fileexistspage;
+            con_info->answercode = MHD_HTTP_FORBIDDEN;
+            return MHD_YES;
+        }
+        /* NOTE: This is technically a race with the 'fopen()' above,
+but there is no easy fix, short of moving to open(O_EXCL)
+instead of using fopen(). For the example, we do not care. */
+        con_info->fp = fopen (filename, "ab");
+        if (! con_info->fp)
+        {
+            con_info->answerstring = fileioerror;
+            con_info->answercode = MHD_HTTP_INTERNAL_SERVER_ERROR;
+            return MHD_YES;
+        }
+    }
+    if (size > 0)
+    {
+        if (! fwrite (data, sizeof (char), size, con_info->fp))
+        {
+            con_info->answerstring = fileioerror;
+            con_info->answercode = MHD_HTTP_INTERNAL_SERVER_ERROR;
+            return MHD_YES;
+        }
+    }
+    return MHD_YES;
+}
+
+static void
+request_completed (void *cls,
+                   struct MHD_Connection *connection,
+                   void **req_cls,
+                   enum MHD_RequestTerminationCode toe)
+{
+    connection_info_struct *con_info = (connection_info_struct *)*req_cls;
+    (void) cls; /* Unused. Silent compiler warning. */
+    (void) connection; /* Unused. Silent compiler warning. */
+    (void) toe; /* Unused. Silent compiler warning. */
+    if (NULL == con_info)
+        return;
+    if (con_info->connectiontype == POST)
+    {
+        if (NULL != con_info->postprocessor)
+        {
+            MHD_destroy_post_processor (con_info->postprocessor);
+        }
+        if (con_info->fp)
+            fclose (con_info->fp);
+    }
+    free (con_info);
+    *req_cls = NULL;
+}
+
+static enum MHD_Result
+answer_to_connection (void *cls,
+                      struct MHD_Connection *connection,
+                      const char *url,
+                      const char *method,
+                      const char *version,
+                      const char *upload_data,
+                      size_t *upload_data_size,
+                      void **req_cls)
+{
+    (void) cls; /* Unused. Silent compiler warning. */
+    (void) url; /* Unused. Silent compiler warning. */
+    (void) version; /* Unused. Silent compiler warning. */
+    if (NULL == *req_cls)
+    {
+        /* First call, setup data structures */
+        connection_info_struct *con_info;
+
+        con_info = (connection_info_struct *)malloc (sizeof (connection_info_struct));
+        if (NULL == con_info)
+            return MHD_NO;
+        con_info->answercode = 0; /* none yet */
+        con_info->fp = NULL;
+        if (0 == strcmp (method, MHD_HTTP_METHOD_POST))
+        {
+            con_info->postprocessor =
+                MHD_create_post_processor (connection,
+                                           POSTBUFFERSIZE,
+                                           &iterate_post,
+                                           (void *) con_info);
+            if (NULL == con_info->postprocessor)
+            {
+                free (con_info);
+                return MHD_NO;
+            }
+            con_info->connectiontype = POST;
+        }
+        else
+    {
+            con_info->connectiontype = GET;
+        }
+        *req_cls = (void *) con_info;
+        return MHD_YES;
+    }
+    if (0 == strcmp (method, MHD_HTTP_METHOD_GET))
+    {
+        /* We just return the standard form for uploads on all GET requests */
+        char buffer[1024];
+        snprintf (buffer,
+                  sizeof (buffer),
+                  ASKPAGE,
+                  0);
+        return send_page (connection,
+                          buffer,
+                          MHD_HTTP_OK);
+    }
+    if (0 == strcmp (method, MHD_HTTP_METHOD_POST))
+    {
+        connection_info_struct *con_info = (connection_info_struct *)*req_cls;
+        if (0 != *upload_data_size)
+        {
+            /* Upload not yet done */
+            if (0 != con_info->answercode)
+            {
+                /* we already know the answer, skip rest of upload */
+                *upload_data_size = 0;
+                return MHD_YES;
+            }
+            if (MHD_YES !=
+                MHD_post_process (con_info->postprocessor,
+                                  upload_data,
+                                  *upload_data_size))
+            {
+                con_info->answerstring = postprocerror;
+                con_info->answercode = MHD_HTTP_INTERNAL_SERVER_ERROR;
+            }
+            *upload_data_size = 0;
+            return MHD_YES;
+        }
+        /* Upload finished */
+        if (NULL != con_info->fp)
+        {
+            fclose (con_info->fp);
+            con_info->fp = NULL;
+        }
+        if (0 == con_info->answercode)
+        {
+            /* No errors encountered, declare success */
+            con_info->answerstring = completepage;
+            con_info->answercode = MHD_HTTP_OK;
+        }
+        return send_page (connection,
+                          con_info->answerstring,
+                          con_info->answercode);
+    }
+    /* Note a GET or a POST, generate error */
+    return send_page (connection,
+                      errorpage,
+                      MHD_HTTP_BAD_REQUEST);
+}
 
 const char* LedgerEntryTypeStrings[] = {
     "ASSET",
@@ -2475,45 +2738,6 @@ LoadDividend(Dividend *div, char *line)
     }
 }
 
-#define PAGE "<html><head><title>libmicrohttpd demo</title>"\
-             "</head><body>libmicrohttpd demo</body></html>"
-
-static enum MHD_Result
-ahc_echo(void * cls,
-         struct MHD_Connection * connection,
-         const char * url,
-         const char * method,
-         const char * version,
-         const char * upload_data,
-         size_t * upload_data_size,
-         void ** ptr) {
-    static int dummy;
-    const char *page = (const char *) cls;
-    struct MHD_Response *response;
-    enum MHD_Result ret;
-
-    if (0 != strcmp(method, "GET"))
-        return MHD_NO; /* unexpected method */
-    if (&dummy != *ptr)
-    {
-        /* The first time only the headers are valid,
-       do not respond in the first round... */
-        *ptr = &dummy;
-        return MHD_YES;
-    }
-    if (0 != *upload_data_size)
-        return MHD_NO; /* upload data in a GET!? */
-    *ptr = NULL; /* clear context pointer */
-    response = MHD_create_response_from_buffer (strlen(page),
-                                                (void*) page,
-                                                MHD_RESPMEM_PERSISTENT);
-    ret = MHD_queue_response(connection,
-                             MHD_HTTP_OK,
-                             response);
-    MHD_destroy_response(response);
-    return ret;
-}
-
 int
 main()
 {
@@ -3246,8 +3470,12 @@ main()
     PQfinish(conn);
 
     struct MHD_Daemon *daemon;
-    daemon = MHD_start_daemon (MHD_USE_INTERNAL_POLLING_THREAD, PORT, NULL, NULL,
-                               &ahc_echo, (void *)PAGE, MHD_OPTION_END);
+    daemon = MHD_start_daemon (MHD_USE_INTERNAL_POLLING_THREAD,
+                               PORT, NULL, NULL,
+                               &answer_to_connection, NULL,
+                               MHD_OPTION_NOTIFY_COMPLETED, &request_completed,
+                               NULL,
+                               MHD_OPTION_END); 
     if (NULL == daemon) return 1;
     getchar ();
     MHD_stop_daemon (daemon);

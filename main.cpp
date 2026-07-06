@@ -290,7 +290,9 @@ send_page (struct MHD_Connection *connection,
 {
     enum MHD_Result ret;
     struct MHD_Response *response;
-    response = MHD_create_response_from_buffer_static (strlen (page), page);
+    response = MHD_create_response_from_buffer(strlen (page),
+                                               (void *)page,
+                                               MHD_RESPMEM_MUST_COPY);
     if (! response)
         return MHD_NO;
     if (MHD_YES !=
@@ -3477,6 +3479,10 @@ main()
                                NULL,
                                MHD_OPTION_END); 
     if (NULL == daemon) return 1;
+    while (1)
+    {
+
+    }
     getchar ();
     MHD_stop_daemon (daemon);
     return 0;

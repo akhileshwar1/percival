@@ -3247,7 +3247,7 @@ main()
 
     struct MHD_Daemon *daemon;
     daemon = MHD_start_daemon (MHD_USE_INTERNAL_POLLING_THREAD, PORT, NULL, NULL,
-                               &ahc_echo, NULL, MHD_OPTION_END);
+                               &ahc_echo, (void *)PAGE, MHD_OPTION_END);
     if (NULL == daemon) return 1;
     getchar ();
     MHD_stop_daemon (daemon);

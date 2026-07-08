@@ -597,7 +597,7 @@ executeQuery(PGconn *conn, char *query)
 }
 
 void
-allotUnits(State *state, PGconn *conn, char *line)
+allotUnits(State *state, char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -645,7 +645,7 @@ allotUnits(State *state, PGconn *conn, char *line)
                      units,
                      invName
                      );
-            PGresult *pgResult = executeQuery(conn, query);
+            PGresult *pgResult = executeQuery(state->db, query);
             char *errorMessage = PQresultErrorMessage(pgResult);
             if (strcmp(errorMessage, "") != 0)
             {
@@ -2562,6 +2562,303 @@ LoadStratSymbolFromFile(char *line, char *stratSymbol)
 }
 
 void
+handleFundExpense(State *state)
+{
+    char line[1024];
+    int i = 0;
+    FILE *expenseFile = fopen("fund_expense.csv", "r");
+    if (expenseFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+    /* fetch the strat symbol from the file */
+    char stratSymbol[100];
+    FILE *expenseFileCopy = fopen("fund_expense.csv", "r");
+    if (expenseFileCopy == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    char copyLine[1024];
+    while (fgets(copyLine, sizeof(copyLine), expenseFileCopy))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        if (i == 1)
+        {
+            LoadStratSymbolFromFile(copyLine, stratSymbol);
+        }
+        i++;
+    }
+
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+    while (fgets(line, sizeof(line), expenseFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        ++state->strategies[state->currStratIndex].currJournalId;
+        LedgerEntry assetEntry = {};
+        LedgerEntry liabEntry = {};
+        assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        AccountFromExpense(&assetEntry, &liabEntry, line);
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 stratId,
+                 LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                 assetEntry.accountName,
+                 assetEntry.debit,
+                 assetEntry.credit,
+                 assetEntry.memo,
+                 assetEntry.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 stratId,
+                 LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                 liabEntry.accountName,
+                 liabEntry.debit,
+                 liabEntry.credit,
+                 liabEntry.memo,
+                 liabEntry.currency == USD ? "USD" : "INR" 
+                 );
+        pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = assetEntry;
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        i++;
+    }
+}
+
+void
+handleAllotUnits(State *state)
+{
+    char line[1024];
+    int i = 0;
+    FILE *unitFile = fopen("ab_units.csv", "r");
+    if (unitFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    while (fgets(line, sizeof(line), unitFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        allotUnits(state, line);
+        i++;
+    }
+}
+
+void
+handleCashFlow(State *state)
+{
+    char line[1024];
+    int i = 0;
+    FILE *cashflowFile = fopen("ab_cashflow.csv", "r");
+    if (cashflowFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+    /* fetch the strat symbol from the file */
+    char stratSymbol[100];
+    FILE *cashflowFileCopy = fopen("ab_cashflow.csv", "r");
+    if (cashflowFileCopy == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    char copyLine[1024];
+    while (fgets(copyLine, sizeof(copyLine), cashflowFileCopy))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        if (i == 1)
+        {
+            LoadStratSymbolFromFile(copyLine, stratSymbol);
+        }
+        i++;
+    }
+
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+    while (fgets(line, sizeof(line), cashflowFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        /* NOTE(Akhil): here we are working on the latest strategy.
+                        usually first column discloses the strategy name. */
+        ++state->strategies[state->currStratIndex].currJournalId;
+        LedgerEntry assetEntry = {};
+        assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        AccountFromCashFlow(&assetEntry, line);
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 stratId,
+                 LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                 assetEntry.accountName,
+                 assetEntry.debit,
+                 assetEntry.credit,
+                 assetEntry.memo,
+                 assetEntry.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = assetEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        i++;
+    }
+}
+
+void
+handleReverseUPA(State *state)
+{
+    char line[1024];
+    int i = 0;
+    FILE *reverseFile = fopen("ab_subs_upa_rev.csv", "r");
+    if (reverseFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+    /* TODO(Akhil): this can be abstracted into a func */
+    /* fetch the strat symbol from the file */
+    char stratSymbol[100];
+    FILE *reverseFileCopy = fopen("ab_subs_upa_rev.csv", "r");
+    if (reverseFileCopy == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    char copyLine[1024];
+    while (fgets(copyLine, sizeof(copyLine), reverseFileCopy))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        if (i == 1)
+        {
+            LoadStratSymbolFromFile(copyLine, stratSymbol);
+        }
+        i++;
+    }
+
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+    while (fgets(line, sizeof(line), reverseFile))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        ++state->strategies[state->currStratIndex].currJournalId;
+        LedgerEntry liabEntry = {};
+        liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        AccountFromReverse(&liabEntry, line);
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 stratId,
+                 LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                 liabEntry.accountName,
+                 liabEntry.debit,
+                 liabEntry.credit,
+                 liabEntry.memo,
+                 liabEntry.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", liabEntry.accountName,
+               liabEntry.credit);
+        i++;
+    }
+}
+
+void
 handleBankTransfer(State *state)
 {
     char line[1024];
@@ -3235,6 +3532,22 @@ answer_to_connection (void *cls,
         {
             handleBankTransfer(state);
         }
+        else if (0 == strcmp(url, "/reverse-upa"))
+        {
+            handleReverseUPA(state);
+        }
+        else if (0 == strcmp(url, "/fund-cashflow"))
+        {
+            handleCashFlow(state);
+        }
+        else if (0 == strcmp(url, "/allot-units"))
+        {
+            handleAllotUnits(state);
+        }
+        else if (0 == strcmp(url, "/fund-expense"))
+        {
+            handleFundExpense(state);
+        }
         
 
         return send_page (connection,
@@ -3720,7 +4033,7 @@ main()
         }
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
-        allotUnits(&state, conn, line);
+        allotUnits(&state, line);
         i++;
     }
 

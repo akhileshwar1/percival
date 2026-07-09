@@ -2554,6 +2554,8 @@ LoadInvNameFromFile(char *line, char *invName)
         {
             strcpy(invName, token);
         }
+        token = strtok(NULL, ",");
+        i++;
     }
 }
 
@@ -2569,6 +2571,8 @@ LoadStratSymbolFromFile(char *line, char *stratSymbol)
         {
             strcpy(stratSymbol, token);
         }
+        token = strtok(NULL, ",");
+        i++;
     }
 }
 
@@ -2665,7 +2669,7 @@ handleMTM(State *state, char *stratSymbol)
 void
 handleBhavFNO(State *state, char *stratSymbol)
 {
-    FILE *FBhavFile = fopen("ab_bhav_21.csv", "r");
+    FILE *FBhavFile = fopen("tmp.csv", "r");
     if (FBhavFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2706,7 +2710,7 @@ handleBhavFNO(State *state, char *stratSymbol)
 void
 handleTradesFNO(State *state)
 {
-    FILE *FTradesFile = fopen("ab_trades_21.csv", "r");
+    FILE *FTradesFile = fopen("tmp.csv", "r");
     if (FTradesFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2714,7 +2718,7 @@ handleTradesFNO(State *state)
     /* fetch the strat symbol from the file */
     int i = 0;
     char stratSymbol[100];
-    FILE *FTradesFileCopy = fopen("fund_expense.csv", "r");
+    FILE *FTradesFileCopy = fopen("tmp.csv", "r");
     if (FTradesFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2762,14 +2766,14 @@ handleFundExpense(State *state)
 {
     char line[1024];
     int i = 0;
-    FILE *expenseFile = fopen("fund_expense.csv", "r");
+    FILE *expenseFile = fopen("tmp.csv", "r");
     if (expenseFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
     }
     /* fetch the strat symbol from the file */
     char stratSymbol[100];
-    FILE *expenseFileCopy = fopen("fund_expense.csv", "r");
+    FILE *expenseFileCopy = fopen("tmp.csv", "r");
     if (expenseFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2808,6 +2812,7 @@ handleFundExpense(State *state)
     char *id_str = PQgetvalue(pgResult, 0, 0);
     int stratId = atoi(id_str);
     PQclear(pgResult);
+    i = 0;
     while (fgets(line, sizeof(line), expenseFile))
     {
         if (i == 0)
@@ -2864,7 +2869,7 @@ handleAllotUnits(State *state)
 {
     char line[1024];
     int i = 0;
-    FILE *unitFile = fopen("ab_units.csv", "r");
+    FILE *unitFile = fopen("tmp.csv", "r");
     if (unitFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2889,14 +2894,14 @@ handleCashFlow(State *state)
 {
     char line[1024];
     int i = 0;
-    FILE *cashflowFile = fopen("ab_cashflow.csv", "r");
+    FILE *cashflowFile = fopen("tmp.csv", "r");
     if (cashflowFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
     }
     /* fetch the strat symbol from the file */
     char stratSymbol[100];
-    FILE *cashflowFileCopy = fopen("ab_cashflow.csv", "r");
+    FILE *cashflowFileCopy = fopen("tmp.csv", "r");
     if (cashflowFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2935,6 +2940,7 @@ handleCashFlow(State *state)
     char *id_str = PQgetvalue(pgResult, 0, 0);
     int stratId = atoi(id_str);
     PQclear(pgResult);
+    i = 0;
     while (fgets(line, sizeof(line), cashflowFile))
     {
         if (i == 0)
@@ -2976,7 +2982,7 @@ handleReverseUPA(State *state)
 {
     char line[1024];
     int i = 0;
-    FILE *reverseFile = fopen("ab_subs_upa_rev.csv", "r");
+    FILE *reverseFile = fopen("tmp.csv", "r");
     if (reverseFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -2984,7 +2990,7 @@ handleReverseUPA(State *state)
     /* TODO(Akhil): this can be abstracted into a func */
     /* fetch the strat symbol from the file */
     char stratSymbol[100];
-    FILE *reverseFileCopy = fopen("ab_subs_upa_rev.csv", "r");
+    FILE *reverseFileCopy = fopen("tmp.csv", "r");
     if (reverseFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -3023,6 +3029,7 @@ handleReverseUPA(State *state)
     char *id_str = PQgetvalue(pgResult, 0, 0);
     int stratId = atoi(id_str);
     PQclear(pgResult);
+    i = 0;
     while (fgets(line, sizeof(line), reverseFile))
     {
         if (i == 0)
@@ -3061,7 +3068,7 @@ void
 handleBankTransfer(State *state)
 {
     char line[1024];
-    FILE *bankFile = fopen("ab_bank.csv", "r");
+    FILE *bankFile = fopen("tmp.csv", "r");
     if (bankFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -3070,7 +3077,7 @@ handleBankTransfer(State *state)
     int i = 0;
     /* fetch the strat symbol from the file */
     char stratSymbol[100];
-    FILE *bankFileCopy = fopen("ab_bank.csv", "r");
+    FILE *bankFileCopy = fopen("tmp.csv", "r");
     if (bankFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -3109,6 +3116,7 @@ handleBankTransfer(State *state)
     char *id_str = PQgetvalue(pgResult, 0, 0);
     int stratId = atoi(id_str);
     PQclear(pgResult);
+    i = 0;
     while (fgets(line, sizeof(line), bankFile))
     {
         if (i == 0)
@@ -3258,13 +3266,14 @@ handleBankTransfer(State *state)
                assetEntry.debit);
         i++;
     }
+    printf("done\n");
 }
 
 void
 handleSubsUPA(State *state)
 {
     char line[1024];
-    FILE *subsFile = fopen("ab_subs_upa.csv", "r");
+    FILE *subsFile = fopen("tmp.csv", "r");
     if (subsFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -3397,7 +3406,7 @@ handleAddInvestor(State *state)
 {
     char line[1024];
     Investor inv = {};
-    FILE *clientFile = fopen("ab_inv.csv", "r");
+    FILE *clientFile = fopen("tmp.csv", "r");
     if (clientFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -3429,7 +3438,7 @@ handleAddInvestor(State *state)
 void
 handleCreateStrategy(State *state)
 {
-    FILE *stratFile = fopen("ab_strat.csv", "r");
+    FILE *stratFile = fopen("tmp.csv", "r");
     char line[1024];
     if (stratFile == NULL)
     {

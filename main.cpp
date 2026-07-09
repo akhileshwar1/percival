@@ -38,21 +38,25 @@ typedef struct
 {
     ConnectionType connectiontype;
     /**
-* Handle to the POST processing state.
-*/
+     * Handle to the POST processing state.
+     */
     struct MHD_PostProcessor *postprocessor;
     /**
-* File handle where we write uploaded data.
-*/
+     * File handle where we write uploaded data.
+     */
     FILE *fp;
     /**
-* HTTP response body we will return, NULL if not yet known.
-*/
+     * HTTP response body we will return, NULL if not yet known.
+     */
     const char *answerstring;
     /**
-* HTTP status code we will return, 0 for undecided.
-*/
+     * HTTP status code we will return, 0 for undecided.
+     */
     unsigned int answercode;
+
+    char strategySymbol[100];
+
+    char date[100];
 } connection_info_struct;
 
 #define ASKPAGE \
@@ -1151,7 +1155,7 @@ processBhavEq(FILE *bhavFile, int stratIndex, State *state)
 }
 
 void
-processBhav(FILE *bhavFile, PGconn *conn, int dbStratId,
+processBhav(FILE *bhavFile, int dbStratId,
             int stratIndex, State *state)
 {
     char line[1024];
@@ -1202,7 +1206,7 @@ processBhav(FILE *bhavFile, PGconn *conn, int dbStratId,
                          OptTypeStrings[bhav.optType],
                          InstrumentTypeStrings[bhav.instType]
                          );
-                PGresult *pgResult = executeQuery(conn, query);
+                PGresult *pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
 
                 snprintf(query, sizeof(query),
@@ -1210,7 +1214,7 @@ processBhav(FILE *bhavFile, PGconn *conn, int dbStratId,
                          bhav.ltp,
                          state->strategies[stratIndex].fpositions[i].sys_id
                          );
-                pgResult = executeQuery(conn, query);
+                pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
             }
         }
@@ -1486,7 +1490,7 @@ processTradesEq(FILE *tradeFile, State *state)
 }
 
 int
-processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
+processTrades(FILE *tradeFile, int dbStratId, State *state)
 {
     char line[1024];
     int i = 0;
@@ -1525,7 +1529,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                  TransTypeStrings[trade.transType],
                  trade.currency == USD ? "USD" : "INR" 
                  );
-        PGresult *pgResult = executeQuery(conn, query);
+        PGresult *pgResult = executeQuery(state->db, query);
         PQclear(pgResult);
 
         // find the strategy index first.
@@ -1591,14 +1595,14 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                      state->strategies[stratIndex].accs[3].balance,
                                      state->strategies[stratIndex].accs[3].symbol
                                      );
-                            pgResult = executeQuery(conn, query);
+                            pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
                                      state->strategies[stratIndex].accs[3].balance,
                                      dbStratId
                                      );
-                            pgResult = executeQuery(conn, query);
+                            pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
@@ -1659,14 +1663,14 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                      state->strategies[stratIndex].accs[3].balance,
                                      state->strategies[stratIndex].accs[3].symbol
                                      );
-                            pgResult = executeQuery(conn, query);
+                            pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
                                      state->strategies[stratIndex].accs[3].balance,
                                      dbStratId
                                      );
-                            pgResult = executeQuery(conn, query);
+                            pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
@@ -1714,7 +1718,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                          state->strategies[stratIndex].fpositions[i].qty,
                          state->strategies[stratIndex].fpositions[i].sys_id
                          );
-                pgResult = executeQuery(conn, query);
+                pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
                 char query[1024];
                 snprintf(query, sizeof(query),
@@ -1728,7 +1732,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                          assetEntry.memo,
                          assetEntry.currency == USD ? "USD" : "INR" 
                          );
-                PGresult *pgResult = executeQuery(conn, query);
+                PGresult *pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
 
                 snprintf(query, sizeof(query),
@@ -1742,7 +1746,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                          liabEntry.memo,
                          liabEntry.currency == USD ? "USD" : "INR" 
                          );
-                pgResult = executeQuery(conn, query);
+                pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
                 found = 1;
                 break;
@@ -1785,14 +1789,14 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                      state->strategies[stratIndex].accs[3].balance,
                                      state->strategies[stratIndex].accs[3].symbol
                                      );
-                            pgResult = executeQuery(conn, query);
+                            pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
                                      state->strategies[stratIndex].accs[3].balance,
                                      dbStratId
                                      );
-                            pgResult = executeQuery(conn, query);
+                            pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
                             strcat(assetEntry.accountName, stratSymbol);
@@ -1839,14 +1843,14 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                                      state->strategies[stratIndex].accs[3].balance,
                                      state->strategies[stratIndex].accs[3].symbol
                                      );
-                            pgResult = executeQuery(conn, query);
+                            pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
                                      state->strategies[stratIndex].accs[3].balance,
                                      dbStratId
                                      );
-                            pgResult = executeQuery(conn, query);
+                            pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
                             strcat(assetEntry.accountName, stratSymbol);
@@ -1891,7 +1895,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                      OptTypeStrings[pos.optType],
                      InstrumentTypeStrings[pos.instType]
                      ); 
-            pgResult = executeQuery(conn, query);
+            pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
             char query[1024];
             snprintf(query, sizeof(query),
@@ -1905,7 +1909,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                      assetEntry.memo,
                      assetEntry.currency == USD ? "USD" : "INR" 
                      );
-            PGresult *pgResult = executeQuery(conn, query);
+            PGresult *pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
 
             snprintf(query, sizeof(query),
@@ -1919,7 +1923,7 @@ processTrades(FILE *tradeFile, PGconn *conn, int dbStratId, State *state)
                      liabEntry.memo,
                      liabEntry.currency == USD ? "USD" : "INR" 
                      );
-            pgResult = executeQuery(conn, query);
+            pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
         }
         printf("cash is %f\n", state->strategies[stratIndex].accs[3].balance);
@@ -2037,7 +2041,7 @@ collapsePositions(State *state, int stratIndex)
 }
 
 void
-makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratIndex)
+makeVariationSettlements(State *state, int dbStratId, int stratIndex)
 {
     real64 totalVariation = 0.0;
     for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
@@ -2053,7 +2057,7 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                     "UPDATE strategy SET cash = %f where id = %d",
                     state->strategies[stratIndex].cash,
                     dbStratId);
-            PGresult *pgResult = executeQuery(conn, query);
+            PGresult *pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
             totalVariation += variation;
             // move the ltp now to the price column,
@@ -2063,7 +2067,7 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                     "UPDATE fno_position SET price = %f where sys_id = '%s'",
                     pos.ltp,
                     pos.sys_id);
-            pgResult = executeQuery(conn, query);
+            pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
             state->strategies[stratIndex].fpositions[i] = pos;
             // make the ledger entries.
@@ -2102,7 +2106,7 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                      assetEntry.memo,
                      assetEntry.currency == USD ? "USD" : "INR" 
                      );
-            pgResult = executeQuery(conn, query);
+            pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
 
             snprintf(query, sizeof(query),
@@ -2116,7 +2120,7 @@ makeVariationSettlements(State *state, PGconn *conn, int dbStratId, int stratInd
                      liabEntry.memo,
                      liabEntry.currency == USD ? "USD" : "INR" 
                      );
-            pgResult = executeQuery(conn, query);
+            pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
         }
     }
@@ -2166,9 +2170,16 @@ getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
 }
 
 void
-printNav(State *state, Exchange_rate *exRate, real64 totalUnits,
-         int stratIndex, PGconn *conn, int dbStratId)
+printNav(State *state, Exchange_rate *exRate,
+         int stratIndex, int dbStratId)
 {
+    real64 totalUnits = 0;
+    for (int i = 0; i < state->strategies[stratIndex].currInvestorIndex + 1; i++)
+    {
+        Investor inv = state->strategies[stratIndex].investors[i];
+        totalUnits += inv.units;
+    }
+
     // total value of fno positions.
     real64 totalValue = getTotalPositionValue(state, stratIndex); 
 
@@ -2187,7 +2198,7 @@ printNav(State *state, Exchange_rate *exRate, real64 totalUnits,
              feesAccrued, 
              dbStratId
              );
-    PGresult *pgResult = executeQuery(conn, query);
+    PGresult *pgResult = executeQuery(state->db, query);
     PQclear(pgResult);
     printf("fee accrued %f, %f\n", fee, feesAccrued);
     real64 nav = (netAssets - feesAccrued) / totalUnits;
@@ -2562,6 +2573,191 @@ LoadStratSymbolFromFile(char *line, char *stratSymbol)
 }
 
 void
+handleNAV(State *state, char *stratSymbol, char *date)
+{
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+
+    /* get the stratIndex from the memory */
+    int stratIndex = -1;
+    for (int i = 0; i < state->currStratIndex + 1; i++)
+    {
+        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
+        {
+            stratIndex = i;
+            break;
+        }
+    }
+    printf("strat index is %d\n", stratIndex);
+
+    /* handle exchange_rate for the date from the db */
+    sprintf(query,
+            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') LIMIT 1",
+            date);
+
+    pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *rate_str = PQgetvalue(pgResult, 0, 2);
+    int rate = atof(rate_str);
+    PQclear(pgResult);
+    Exchange_rate exRate = {};
+    exRate.rate = rate;
+    printNav(state, &exRate, stratIndex, stratId);
+}
+
+void
+handleMTM(State *state, char *stratSymbol)
+{
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+
+    /* get the stratIndex from the memory */
+    int stratIndex = -1;
+    for (int i = 0; i < state->currStratIndex + 1; i++)
+    {
+        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
+        {
+            stratIndex = i;
+            break;
+        }
+    }
+    printf("strat index is %d\n", stratIndex);
+
+    makeVariationSettlements(state, stratId, stratIndex);
+}
+
+void
+handleBhavFNO(State *state, char *stratSymbol)
+{
+    FILE *FBhavFile = fopen("ab_bhav_21.csv", "r");
+    if (FBhavFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+
+    /* get the stratIndex from the memory */
+    int stratIndex = -1;
+    for (int i = 0; i < state->currStratIndex + 1; i++)
+    {
+        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
+        {
+            stratIndex = i;
+            break;
+        }
+    }
+    printf("strat index is %d\n", stratIndex);
+
+    processBhav(FBhavFile, stratId, stratIndex, state);
+}
+
+void
+handleTradesFNO(State *state)
+{
+    FILE *FTradesFile = fopen("ab_trades_21.csv", "r");
+    if (FTradesFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+    /* fetch the strat symbol from the file */
+    int i = 0;
+    char stratSymbol[100];
+    FILE *FTradesFileCopy = fopen("fund_expense.csv", "r");
+    if (FTradesFileCopy == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    char copyLine[1024];
+    while (fgets(copyLine, sizeof(copyLine), FTradesFileCopy))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        if (i == 1)
+        {
+            LoadStratSymbolFromFile(copyLine, stratSymbol);
+            break;
+        }
+        i++;
+    }
+
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+
+    processTrades(FTradesFile, stratId, state);
+}
+
+void
 handleFundExpense(State *state)
 {
     char line[1024];
@@ -2590,6 +2786,7 @@ handleFundExpense(State *state)
         if (i == 1)
         {
             LoadStratSymbolFromFile(copyLine, stratSymbol);
+            break;
         }
         i++;
     }
@@ -2716,6 +2913,7 @@ handleCashFlow(State *state)
         if (i == 1)
         {
             LoadStratSymbolFromFile(copyLine, stratSymbol);
+            break;
         }
         i++;
     }
@@ -2803,6 +3001,7 @@ handleReverseUPA(State *state)
         if (i == 1)
         {
             LoadStratSymbolFromFile(copyLine, stratSymbol);
+            break;
         }
         i++;
     }
@@ -2888,6 +3087,7 @@ handleBankTransfer(State *state)
         if (i == 1)
         {
             LoadStratSymbolFromFile(copyLine, stratSymbol);
+            break;
         }
         i++;
     }
@@ -3351,8 +3551,17 @@ iterate_post (void *coninfo_cls,
     (void) kind; /* Unused. Silent compiler warning. */
     (void) content_type; /* Unused. Silent compiler warning. */
     (void) transfer_encoding; /* Unused. Silent compiler warning. */
-    (void) off; /* Unused. Silent compiler warning. */
     (void) filename; /* Unused. Silent compiler warning. */
+    if (strcmp(key, "strategySymbol") == 0)
+    {
+        memcpy(con_info->strategySymbol + off, data, size);
+        con_info->strategySymbol[off + size] = '\0';
+    }
+    if (strcmp(key, "date") == 0)
+    {
+        memcpy(con_info->date + off, data, size);
+        con_info->date[off + size] = '\0';
+    }
     if (0 != strcmp (key, "file"))
     {
         con_info->answerstring = servererrorpage;
@@ -3497,7 +3706,7 @@ answer_to_connection (void *cls,
             *upload_data_size = 0;
             return MHD_YES;
         }
-        /* Upload finished */
+        /* Upload finished as upload data size is 0 */
         if (NULL != con_info->fp)
         {
             fclose (con_info->fp);
@@ -3509,9 +3718,7 @@ answer_to_connection (void *cls,
             con_info->answerstring = completepage;
             con_info->answercode = MHD_HTTP_OK;
         }
-        /* call the handler here based on the url
-         * Assumes that all the routes only have file uploads,
-         * no form data */
+        /* form data included in con_info struct */
         if (0 == strcmp(url, "/exchange-rate"))
         {
             handleExchangeRate(state);
@@ -3547,6 +3754,22 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/fund-expense"))
         {
             handleFundExpense(state);
+        }
+        else if (0 == strcmp(url, "/trades-fno"))
+        {
+            handleTradesFNO(state);
+        }
+        else if (0 == strcmp(url, "/bhav-fno"))
+        {
+            handleBhavFNO(state, con_info->strategySymbol);
+        }
+        else if (0 == strcmp(url, "/mtm-process"))
+        {
+            handleMTM(state, con_info->strategySymbol);
+        }
+        else if (0 == strcmp(url, "/process-nav"))
+        {
+            handleNAV(state, con_info->strategySymbol, con_info->date);
         }
         
 
@@ -4183,7 +4406,7 @@ main()
         printf("sorry, couldn't upload file!\n");
         return -1;
     }
-    stratIndex = processTrades(FTradesFile, conn, stratId, &state);
+    stratIndex = processTrades(FTradesFile, stratId, &state);
 
     //upload the bhavcopy for FNO.
     FILE *FBhavFile = fopen("ab_bhav_21.csv", "r");
@@ -4192,7 +4415,7 @@ main()
         printf("sorry, couldn't upload file!\n");
         return -1;
     }
-    processBhav(FBhavFile, conn, stratId, stratIndex, &state);
+    processBhav(FBhavFile, stratId, stratIndex, &state);
 
     /* NOTE(Akhil): Update the bhav's of unknown symbols manually here
         usually the guy has a special file 21 price_update_us where
@@ -4202,20 +4425,15 @@ main()
 
     /* run the mtm process, i.e process variation settlements for
        open futures positions: net_qty * (ltp - prev_price) */
-    makeVariationSettlements(&state, conn, stratId, stratIndex);
+    makeVariationSettlements(&state, stratId, stratIndex);
 
     // get the total units from all the investors for a strategy.
     // real64 totalUnits = 1007.729 + 175.444;
-    real64 totalUnits = 0;
-    for (int i = 0; i < state.strategies[stratIndex].currInvestorIndex + 1; i++)
-    {
-        Investor inv = state.strategies[stratIndex].investors[i];
-        totalUnits += inv.units;
-    }
+    
 
     pgResult = executeQuery(conn, query);
     PQclear(pgResult);
-    printNav(&state, &exRate, totalUnits, stratIndex, conn, stratId);
+    printNav(&state, &exRate, stratIndex, stratId);
 
     // /* 2ND DAY------------------------------------------ */
     // Load the state from the db.
@@ -4244,7 +4462,7 @@ main()
     }
 
     // process trades for 12th june.
-    stratIndex = processTrades(FTradessFile, conn, stratId, &state);
+    stratIndex = processTrades(FTradessFile, stratId, &state);
     FILE *FBhavvFile = fopen("ab_bhav_24.csv", "r");
     if (FBhavvFile == NULL)
     {
@@ -4253,12 +4471,12 @@ main()
     }
 
     // process bhavcopy of 12th june.
-    processBhav(FBhavvFile, conn, stratId, stratIndex, &state);
+    processBhav(FBhavvFile, stratId, stratIndex, &state);
 
 
-    makeVariationSettlements(&state, conn, stratId, stratIndex);
+    makeVariationSettlements(&state, stratId, stratIndex);
     printFundLedger(&state);
-    printNav(&state, &exRate, totalUnits, stratIndex, conn, stratId);
+    printNav(&state, &exRate, stratIndex, stratId);
 
     /* 3RD DAY------------------------------------------ */
     state = {};
@@ -4285,11 +4503,11 @@ main()
         return -1;
     }
 
-    stratIndex = processTrades(FTradesssFile, conn, stratId, &state);
+    stratIndex = processTrades(FTradesssFile, stratId, &state);
     
-    makeVariationSettlements(&state, conn, stratId, stratIndex);
+    makeVariationSettlements(&state, stratId, stratIndex);
     printFundLedger(&state);
-    printNav(&state, &exRate, totalUnits, stratIndex, conn, stratId);
+    printNav(&state, &exRate, stratIndex, stratId);
     PQfinish(conn);
 
     struct MHD_Daemon *daemon;

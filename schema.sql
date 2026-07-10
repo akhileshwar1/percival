@@ -199,3 +199,11 @@ CREATE TABLE position_equity (
 
 -- Index for blistering fast lookups when validating a specific stock position inside a strategy loop
 CREATE INDEX idx_position_equity_lookup ON position_equity (strategy_id, symbol);
+
+DROP TABLE IF EXISTS bhav CASCADE;
+
+CREATE TABLE equity_bhav (
+    symbol VARCHAR(100) PRIMARY KEY,
+    ltp DOUBLE PRECISION NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

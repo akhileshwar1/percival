@@ -441,7 +441,7 @@ LoadBhav(Bhav *bhav, char *line)
     {
         if (i == 3)
         {
-            strcpy(bhav->symbol, token);
+            strcpy(bhav->symbol, token); //symbol here is isin.
         }
         else if (i ==  9)
         {
@@ -1137,18 +1137,28 @@ processBhavEq(FILE *bhavFile, int stratIndex, State *state)
                         need to update the posns in all of them. */
         for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
         {
-            if (strcmp(bhav.symbol, state->strategies[stratIndex].positions[i].symbol) == 0)
+            if (strcmp(bhav.symbol, state->strategies[stratIndex].positions[i].isin) == 0)
             {
                 state->strategies[stratIndex].positions[i].ltp = bhav.ltp;
             }
-            // printf("pos after bhav is %s, %d, %f\n",
-            //        state->strategies[stratIndex].positions[1].symbol,
-            //        state->strategies[stratIndex].positions[1].qty,
-            //        state->strategies[stratIndex].positions[1].ltp);
-            // printf("pos after bhav is %s, %d, %f\n",
-            //        state->strategies[stratIndex].positions[1].symbol,
-            //        state->strategies[stratIndex].positions[1].qty,
-            //        state->strategies[stratIndex].positions[1].ltp);
+            char query[512];
+            snprintf(query, sizeof(query),
+                     "INSERT INTO equity_bhav (symbol, ltp) VALUES ('%s', %f) "
+                     "ON CONFLICT (symbol) DO UPDATE SET "
+                     "ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
+                     bhav.symbol,
+                     bhav.ltp
+                     ); 
+            PGresult *pgResult = executeQuery(state->db, query);
+            PQclear(pgResult);
+
+            snprintf(query, sizeof(query),
+                     "UPDATE position SET ltp = %f WHERE sys_id = '%s'",
+                     bhav.ltp,
+                     state->strategies[stratIndex].positions[i].sys_id
+                     );
+            pgResult = executeQuery(state->db, query);
+            PQclear(pgResult);
         }
         // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
     }

@@ -822,6 +822,7 @@ AccountFromSubs(LedgerEntry *entry, State *state, Investor inv,
     char *token;
     token = strtok(line, ",");
     int i = 0;
+    printf("in here %s\n", line);
     while (token != NULL)
     {
         if (i ==  1)
@@ -2179,6 +2180,7 @@ printNav(State *state, Exchange_rate *exRate,
         Investor inv = state->strategies[stratIndex].investors[i];
         totalUnits += inv.units;
     }
+    printf("total units are %f\n", totalUnits);
 
     // total value of fno positions.
     real64 totalValue = getTotalPositionValue(state, stratIndex); 
@@ -2189,6 +2191,7 @@ printNav(State *state, Exchange_rate *exRate,
     printf("total position value in usd is %f\n", totalValueUSD);
     printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
     real64 netAssets = totalValueUSD + cashUSD;
+    printf("net assets are %f\n", netAssets);
     real64 fee = netAssets * (0.01 / 365); // 1% p.a
     state->strategies[stratIndex].feesAccrued += fee;
     real64 feesAccrued = state->strategies[stratIndex].feesAccrued; 
@@ -3284,14 +3287,14 @@ handleSubsUPA(State *state)
     */
 
     Investor inv = {};
-    FILE *subsFileCopy = fopen("ab_subs_upa.csv", "r");
+    FILE *subsFileCopy = fopen("tmp.csv", "r");
     if (subsFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
     }
     char copyLine[1024];
     int k = 0;
-    while (fgets(copyLine, sizeof(copyLine), subsFile))
+    while (fgets(copyLine, sizeof(copyLine), subsFileCopy))
     {
         if (k == 0)
         {
@@ -3302,8 +3305,7 @@ handleSubsUPA(State *state)
         {
             /* get the investor from the db. */
             char invName[100];
-            strcpy(copyLine, line);
-            LoadInvNameFromFile(line, invName);
+            LoadInvNameFromFile(copyLine, invName);
             char query[1024];
             sprintf(query,
                     "SELECT * FROM investor where name = '%s' LIMIT 1",
@@ -3313,7 +3315,7 @@ handleSubsUPA(State *state)
             int rows = PQntuples(pgResult);
             if (rows == 0)
             {
-                fprintf(stderr, "No investor found matching name: \n");
+                printf("No investor found matching name: %s\n", invName);
                 PQclear(pgResult);
             }
             else
@@ -3323,8 +3325,10 @@ handleSubsUPA(State *state)
                 int id = atoi(idStr);
                 inv.id = id;
                 char *nameStr = PQgetvalue(pgResult, 0, 3);
+                printf("name str is %s\n", nameStr);
                 strcpy(inv.name, nameStr);
-                char *unitsStr = PQgetvalue(pgResult, 0, 0);
+                char *unitsStr = PQgetvalue(pgResult, 0, 4);
+                printf("units str is %s\n", unitsStr);
                 real64 units = atof(unitsStr);
                 inv.units = units;
             }

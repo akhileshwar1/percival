@@ -1,2 +1,2 @@
 PlanId,TranDate,TranType,CashFlowValue,NAV,NAV Date,Bank Code,Bank Ac Id ,Ban Ac type,Chq No,Chq Detl,Remarks,NAV/Unit Flag,Face Value
-31500012A,3/21/2025,I,46305.03,100,3/20/2025,SBM,50100000661500,C,,,Subscription Inflow,N,100
+3/21/2025,31500012A,,I,46305.03,100,3/20/2025,SBM,50100000661500,C,,,Subscription Inflow,N,100

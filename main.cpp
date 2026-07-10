@@ -822,7 +822,6 @@ AccountFromSubs(LedgerEntry *entry, State *state, Investor inv,
     char *token;
     token = strtok(line, ",");
     int i = 0;
-    printf("in here %s\n", line);
     while (token != NULL)
     {
         if (i ==  1)
@@ -2621,7 +2620,7 @@ handleNAV(State *state, char *stratSymbol, char *date)
 
     if (PQntuples(pgResult) == 0)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
     }
 

@@ -159,3 +159,43 @@ CREATE TABLE fno_bhav (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
+
+
+DROP TABLE IF EXISTS equity_trade CASCADE;
+
+CREATE TABLE equity_trade (
+    id SERIAL PRIMARY KEY,                                             
+    symbol VARCHAR(100) NOT NULL,                                      
+    broker_code VARCHAR(100) NOT NULL,
+    trade_date DATE NOT NULL,                                          
+    strategy_symbol VARCHAR(100) NOT NULL,
+    qty INTEGER NOT NULL,
+    price DOUBLE PRECISION NOT NULL,                                   
+    brokerage DOUBLE PRECISION DEFAULT 0.0,
+    service_tax DOUBLE PRECISION DEFAULT 0.0,
+    trans_type trans_type_enum NOT NULL,                               
+    currency VARCHAR(10) NOT NULL,                                    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,     
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE,     
+);
+
+-- Index for scanning trades filtered by symbol (ISIN) and strategy quickly
+CREATE INDEX idx_equity_trade_lookup ON equity_trade (strategy_id, symbol);
+
+
+DROP TABLE IF EXISTS position_equity CASCADE;
+
+CREATE TABLE position_equity (
+    id SERIAL PRIMARY KEY,                                             
+    sys_id VARCHAR(100),
+    isin VARCHAR(100) NOT NULL,
+    symbol VARCHAR(100) NOT NULL,
+    qty INTEGER NOT NULL,
+    price DOUBLE PRECISION NOT NULL,                                   
+    ltp DOUBLE PRECISION NOT NULL,                                     
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,      
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE     
+);
+
+-- Index for blistering fast lookups when validating a specific stock position inside a strategy loop
+CREATE INDEX idx_position_equity_lookup ON position_equity (strategy_id, symbol);

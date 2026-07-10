@@ -213,7 +213,7 @@ typedef struct
     int qty;
     real64 price;
     real64 ltp;
-    char id[100];
+    char sys_id[100];
 } PositionEquity;
 
 typedef struct
@@ -1223,7 +1223,7 @@ processBhav(FILE *bhavFile, int dbStratId,
 }
 
 int
-processTradesEq(FILE *tradeFile, State *state)
+processTradesEq(FILE *tradeFile, int dbStratId, State *state)
 {
     char line[1024];
     int i = 0;
@@ -1239,6 +1239,26 @@ processTradesEq(FILE *tradeFile, State *state)
         if (tmp) *tmp = '\0';
         Trade trade = {};
         LoadTrade(&trade, line);
+        /* persist */
+        char query[1024]; // High buffer boundary to prevent memory truncation issues
+        snprintf(query, sizeof(query),
+                 "INSERT INTO equity_trade (strategy_id, symbol, broker_code, trade_date, strategy_symbol, "
+                 "qty, price, brokerage, service_tax, trans_type, currency) "
+                 "VALUES (%d, '%s', '%s', to_date('%s', 'DD/MM/YYYY'), '%s', %d, %f, %f, %f, '%s', '%s');",
+                 dbStratId,
+                 trade.symbol,
+                 trade.brokerCode,
+                 trade.date,
+                 trade.strategySymbol,
+                 trade.qty,
+                 trade.price,
+                 trade.brokerage,
+                 trade.serviceTax,
+                 TransTypeStrings[trade.transType],
+                 trade.currency == USD ? "USD" : "INR");
+        PGresult *pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+
         // find the strategy index first.
         for (int i = 0; i < state->currStratIndex + 1; i++)
         {
@@ -1264,6 +1284,9 @@ processTradesEq(FILE *tradeFile, State *state)
             if (strcmp(state->strategies[stratIndex].positions[i].isin,
                        trade.symbol) == 0)
             {
+
+                LedgerEntry assetEntry = {};
+                LedgerEntry liabEntry = {};
                 switch (trade.transType)
                 {
                     case MB:
@@ -1275,8 +1298,24 @@ processTradesEq(FILE *tradeFile, State *state)
                             (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty; 
 
-
-                            state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            /* NOTE(Akhil): 2 because sbirc for equities */
+                            state->strategies[stratIndex].accs[2].balance -=
+                                trade.qty * priceAfterFee;
+                            /* persist the accs balance. */
+                            snprintf(query, sizeof(query),
+                                     "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                                     state->strategies[stratIndex].accs[2].balance,
+                                     state->strategies[stratIndex].accs[2].symbol
+                                     );
+                            pgResult = executeQuery(state->db, query);
+                            PQclear(pgResult);
+                            snprintf(query, sizeof(query),
+                                     "UPDATE strategy SET cash = %f WHERE id = %d",
+                                     state->strategies[stratIndex].accs[2].balance,
+                                     dbStratId
+                                     );
+                            pgResult = executeQuery(state->db, query);
+                            PQclear(pgResult);
                             if (state->strategies[stratIndex].positions[i].qty + 
                                 trade.qty == 0)
                             {
@@ -1296,7 +1335,6 @@ processTradesEq(FILE *tradeFile, State *state)
 
                             // add the entries to the ledger.
                             ++state->strategies[state->currStratIndex].currJournalId;
-                            LedgerEntry assetEntry = {};
                             strcat(assetEntry.accountName, stratSymbol);
                             strcat(assetEntry.accountName, "_POSN");
                             assetEntry.type = ASSET;
@@ -1304,7 +1342,6 @@ processTradesEq(FILE *tradeFile, State *state)
                             assetEntry.debit = abs(trade.qty * priceAfterFee);
                             assetEntry.id = state->strategies[state->currStratIndex].
                                             currJournalId;
-                            LedgerEntry liabEntry = {};
                             strcpy(liabEntry.accountName, stratSymbol);
                             strcpy(liabEntry.accountName, "_CASH_USD");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
@@ -1331,7 +1368,24 @@ processTradesEq(FILE *tradeFile, State *state)
                             / abs(trade.qty); 
 
                             // you always get less after selling.
-                            state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                            state->strategies[stratIndex].accs[2].balance -=
+                                trade.qty * priceAfterFee; 
+                            /* persist the accs balance. */
+                            snprintf(query, sizeof(query),
+                                     "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[3].symbol
+                                     );
+                            pgResult = executeQuery(state->db, query);
+                            PQclear(pgResult);
+                            snprintf(query, sizeof(query),
+                                     "UPDATE strategy SET cash = %f WHERE id = %d",
+                                     state->strategies[stratIndex].accs[3].balance,
+                                     dbStratId
+                                     );
+                            pgResult = executeQuery(state->db, query);
+                            PQclear(pgResult);
+
                             if (state->strategies[stratIndex].positions[i].qty + 
                                 trade.qty == 0)
                             {
@@ -1373,7 +1427,44 @@ processTradesEq(FILE *tradeFile, State *state)
                             break;
                         }
                 } 
+                /* persist the updates to price and qty. */
+                snprintf(query, sizeof(query),
+                         "UPDATE position_equity SET price = %f, qty = %d "
+                         " WHERE sys_id = '%s'",
+                         state->strategies[stratIndex].positions[i].price,
+                         state->strategies[stratIndex].positions[i].qty,
+                         state->strategies[stratIndex].positions[i].sys_id
+                         );
+                pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+                char query[1024];
+                snprintf(query, sizeof(query),
+                         "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                         "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                         dbStratId,
+                         LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                         assetEntry.accountName,
+                         assetEntry.debit,
+                         assetEntry.credit,
+                         assetEntry.memo,
+                         assetEntry.currency == USD ? "USD" : "INR" 
+                         );
+                PGresult *pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
 
+                snprintf(query, sizeof(query),
+                         "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                         "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                         dbStratId,
+                         LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                         liabEntry.accountName,
+                         liabEntry.debit,
+                         liabEntry.credit,
+                         liabEntry.memo,
+                         liabEntry.currency == USD ? "USD" : "INR" 
+                         );
+                pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
                 found = 1;
                 break;
             }
@@ -1394,10 +1485,11 @@ processTradesEq(FILE *tradeFile, State *state)
                 if (strcmp(trade.symbol, state->secs[i].isin) == 0)
                 {
                     strcpy(pos.symbol, state->secs[i].symbol);
-                    strcpy(pos.id , state->secs[i].id);
+                    strcpy(pos.sys_id, state->secs[i].id);
                 }
             }
-
+            LedgerEntry assetEntry = {};
+            LedgerEntry liabEntry = {};
             switch(trade.transType)
             {
                 case MB:
@@ -1408,11 +1500,26 @@ processTradesEq(FILE *tradeFile, State *state)
                             (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty;
                         // you always pay more while buying.
-                        state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                        state->strategies[stratIndex].accs[2].balance -=
+                            trade.qty * priceAfterFee; 
+                        /* persist the accs balance. */
+                        snprintf(query, sizeof(query),
+                                 "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                                 state->strategies[stratIndex].accs[2].balance,
+                                 state->strategies[stratIndex].accs[2].symbol
+                                 );
+                        pgResult = executeQuery(state->db, query);
+                        PQclear(pgResult);
+                        snprintf(query, sizeof(query),
+                                 "UPDATE strategy SET cash = %f WHERE id = %d",
+                                 state->strategies[stratIndex].accs[3].balance,
+                                 dbStratId
+                                 );
+                        pgResult = executeQuery(state->db, query);
+                        PQclear(pgResult);
                         pos.price = priceAfterFee;
                         pos.qty = trade.qty;
                         ++state->strategies[state->currStratIndex].currJournalId;
-                        LedgerEntry assetEntry = {};
                         strcat(assetEntry.accountName, stratSymbol);
                         strcat(assetEntry.accountName, "_POSN");
                         assetEntry.type = ASSET;
@@ -1420,7 +1527,6 @@ processTradesEq(FILE *tradeFile, State *state)
                         assetEntry.debit = abs(trade.qty * priceAfterFee);
                         assetEntry.id = state->strategies[state->currStratIndex].
                             currJournalId;
-                        LedgerEntry liabEntry = {};
                         strcat(liabEntry.accountName, stratSymbol);
                         strcat(liabEntry.accountName, "_CASH_USD");
                         liabEntry.credit = abs(trade.qty * priceAfterFee);
@@ -1444,7 +1550,23 @@ processTradesEq(FILE *tradeFile, State *state)
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
                             / abs(trade.qty);
                         // you always get less after selling.
-                        state->strategies[stratIndex].cash -= trade.qty * priceAfterFee;
+                        state->strategies[stratIndex].accs[2].balance -=
+                            trade.qty * priceAfterFee;
+                        /* persist the accs balance. */
+                        snprintf(query, sizeof(query),
+                                 "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                                 state->strategies[stratIndex].accs[2].balance,
+                                 state->strategies[stratIndex].accs[2].symbol
+                                 );
+                        pgResult = executeQuery(state->db, query);
+                        PQclear(pgResult);
+                        snprintf(query, sizeof(query),
+                                 "UPDATE strategy SET cash = %f WHERE id = %d",
+                                 state->strategies[stratIndex].accs[3].balance,
+                                 dbStratId
+                                 );
+                        pgResult = executeQuery(state->db, query);
+                        PQclear(pgResult);
                         pos.price = priceAfterFee;
                         pos.qty = trade.qty;
                         ++state->strategies[state->currStratIndex].currJournalId;
@@ -1474,6 +1596,50 @@ processTradesEq(FILE *tradeFile, State *state)
                     }
             }
             state->strategies[stratIndex].positions[++state->strategies[stratIndex].currPosIndex] = pos;
+            /* persist the updates to price and qty. */
+            snprintf(query, sizeof(query),
+                     "INSERT INTO position_equity (sys_id, strategy_id, isin, symbol, qty, price, ltp) "
+                     "VALUES ('%s', %d, '%s', '%s', %d, %f, %f) "
+                     "ON CONFLICT (sys_id) DO UPDATE SET "
+                     "qty = EXCLUDED.qty, price = EXCLUDED.price, ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
+                     pos.sys_id,
+                     dbStratId,
+                     pos.isin,
+                     pos.symbol,
+                     pos.qty,
+                     pos.price,
+                     pos.ltp
+                     ); 
+            pgResult = executeQuery(state->db, query);
+            PQclear(pgResult);
+            char query[1024];
+            snprintf(query, sizeof(query),
+                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     dbStratId,
+                     LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                     assetEntry.accountName,
+                     assetEntry.debit,
+                     assetEntry.credit,
+                     assetEntry.memo,
+                     assetEntry.currency == USD ? "USD" : "INR" 
+                     );
+            PGresult *pgResult = executeQuery(state->db, query);
+            PQclear(pgResult);
+
+            snprintf(query, sizeof(query),
+                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     dbStratId,
+                     LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                     liabEntry.accountName,
+                     liabEntry.debit,
+                     liabEntry.credit,
+                     liabEntry.memo,
+                     liabEntry.currency == USD ? "USD" : "INR" 
+                     );
+            pgResult = executeQuery(state->db, query);
+            PQclear(pgResult);
         }
         printf("cash is %f\n", state->strategies[stratIndex].cash);
         printf("pos is %s, %d, %f\n",
@@ -1554,10 +1720,6 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
         int found = 0;
         for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
         {
-            if (strcmp(trade.symbol, "NATURALGAS") == 0)
-            {
-                printf("here\n");
-            }
             if (strcmp(state->strategies[stratIndex].fpositions[i].symbol,
                        trade.symbol) == 0 &&
                 strcmp(state->strategies[stratIndex].fpositions[i].expiry,
@@ -1936,7 +2098,6 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                state->strategies[stratIndex].positions[1].qty,
                state->strategies[stratIndex].positions[1].ltp);
     }
-
     return stratIndex;
 }
 

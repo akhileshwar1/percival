@@ -2840,6 +2840,47 @@ handleMTM(State *state, char *stratSymbol)
 }
 
 void
+handleBhavEq(State *state, char *stratSymbol)
+{
+    FILE *FBhavFile = fopen("tmp.csv", "r");
+    if (FBhavFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+
+    /* get the stratIndex from the memory */
+    int stratIndex = -1;
+    for (int i = 0; i < state->currStratIndex + 1; i++)
+    {
+        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
+        {
+            stratIndex = i;
+            break;
+        }
+    }
+    printf("strat index is %d\n", stratIndex);
+
+    processBhavEq(FBhavFile, stratIndex, state);
+}
+
+void
 handleBhavFNO(State *state, char *stratSymbol)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
@@ -2878,6 +2919,60 @@ handleBhavFNO(State *state, char *stratSymbol)
     printf("strat index is %d\n", stratIndex);
 
     processBhav(FBhavFile, stratId, stratIndex, state);
+}
+
+void
+handleTradesEq(State *state)
+{
+    FILE *FTradesFile = fopen("tmp.csv", "r");
+    if (FTradesFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+    /* fetch the strat symbol from the file */
+    int i = 0;
+    char stratSymbol[100];
+    FILE *FTradesFileCopy = fopen("tmp.csv", "r");
+    if (FTradesFileCopy == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    char copyLine[1024];
+    while (fgets(copyLine, sizeof(copyLine), FTradesFileCopy))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        if (i == 1)
+        {
+            LoadStratSymbolFromFile(copyLine, stratSymbol);
+            break;
+        }
+        i++;
+    }
+
+    /* fetch the strategy's id from the db */
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+
+    processTradesEq(FTradesFile, stratId, state);
 }
 
 void
@@ -3942,9 +4037,17 @@ answer_to_connection (void *cls,
         {
             handleTradesFNO(state);
         }
+        else if (0 == strcmp(url, "/trades-equity"))
+        {
+            handleTradesEq(state);
+        }
         else if (0 == strcmp(url, "/bhav-fno"))
         {
             handleBhavFNO(state, con_info->strategySymbol);
+        }
+        else if (0 == strcmp(url, "/bhav-eq"))
+        {
+            handleBhavEq(state, con_info->strategySymbol);
         }
         else if (0 == strcmp(url, "/mtm-process"))
         {

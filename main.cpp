@@ -17,11 +17,11 @@ typedef uint16_t uint16;
 
 #define PORT 8888
 #define POSTBUFFERSIZE 512
-#define MAX_STRATEGIES 100
+#define MAX_STRATEGIES 50
 #define MAX_INVESTORS 100
-#define MAX_SECURITIES 100
+#define MAX_SECURITIES 50
 #define MAX_POSITIONS 100
-#define MAX_EX_RATES 10
+#define MAX_EX_RATES 5
 
 int globalCounter = -1;
 
@@ -4577,121 +4577,6 @@ main()
     //
     //     i++;
     // }
-
-    // char query[1024];
-    // PGresult *pgResult;
-    // printFundLedger(&state);
-    //
-    // /* read the fno trades and make the positions */
-    // FILE *FTradesFile = fopen("ab_trades_21.csv", "r");
-    // if (FTradesFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    // stratIndex = processTrades(FTradesFile, stratId, &state);
-    //
-    // //upload the bhavcopy for FNO.
-    // FILE *FBhavFile = fopen("ab_bhav_21.csv", "r");
-    // if (FBhavFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    // processBhav(FBhavFile, stratId, stratIndex, &state);
-    //
-    // /* NOTE(Akhil): Update the bhav's of unknown symbols manually here
-    //     usually the guy has a special file 21 price_update_us where
-    //     he gives the ltp against the system generated symbol
-    //     Also remember the uidff format of bse, that we need to be able
-    //     to parse for fno */
-    //
-    // /* run the mtm process, i.e process variation settlements for
-    //    open futures positions: net_qty * (ltp - prev_price) */
-    // makeVariationSettlements(&state, stratId, stratIndex);
-    //
-    // // get the total units from all the investors for a strategy.
-    // // real64 totalUnits = 1007.729 + 175.444;
-    //
-    //
-    // pgResult = executeQuery(conn, query);
-    // PQclear(pgResult);
-    // printNav(&state, &exRate, stratIndex, stratId);
-    //
-    // // /* 2ND DAY------------------------------------------ */
-    // // Load the state from the db.
-    // state = {};
-    // loadStateFromDB(&state, conn);
-    //
-    // collapsePositions(&state, stratIndex);
-    //
-    // printFPositions(&state, stratIndex);
-    //
-    // FILE *EFile = fopen("exchange_rate_24.csv", "r");
-    // if (EFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // // update the ex rate for the second day.
-    // processExRate(EFile, &state, &exRate);
-    //
-    // FILE *FTradessFile = fopen("ab_trades_24.csv", "r");
-    // if (FTradessFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // // process trades for 12th june.
-    // stratIndex = processTrades(FTradessFile, stratId, &state);
-    // FILE *FBhavvFile = fopen("ab_bhav_24.csv", "r");
-    // if (FBhavvFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // // process bhavcopy of 12th june.
-    // processBhav(FBhavvFile, stratId, stratIndex, &state);
-    //
-    //
-    // makeVariationSettlements(&state, stratId, stratIndex);
-    // printFundLedger(&state);
-    // printNav(&state, &exRate, stratIndex, stratId);
-    //
-    // /* 3RD DAY------------------------------------------ */
-    // state = {};
-    // loadStateFromDB(&state, conn);
-    //
-    // collapsePositions(&state, stratIndex);
-    //
-    // printFPositions(&state, stratIndex);
-    //
-    // FILE *EeFile = fopen("exchange_rate_28.csv", "r");
-    // if (EeFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // // update the ex rate for the second day.
-    // processExRate(EeFile, &state, &exRate);
-    //
-    // FILE *FTradesssFile = fopen("ab_trades_28.csv", "r");
-    // if (FTradesssFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // stratIndex = processTrades(FTradesssFile, stratId, &state);
-    //
-    // makeVariationSettlements(&state, stratId, stratIndex);
-    // printFundLedger(&state);
-    // printNav(&state, &exRate, stratIndex, stratId);
-    // PQfinish(conn);
 
     struct MHD_Daemon *daemon;
     daemon = MHD_start_daemon (MHD_USE_INTERNAL_POLLING_THREAD,

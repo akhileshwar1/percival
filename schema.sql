@@ -22,7 +22,7 @@ CREATE TABLE strategy
     curr_f_pos_index INTEGER DEFAULT -1,
     curr_investor_index INTEGER DEFAULT -1,
     curr_entry_id INTEGER DEFAULT -1,
-    curr_journal_id INTEGER DEFAULT -1 
+    curr_journal_id INTEGER DEFAULT -1,
 
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint
 );
@@ -61,7 +61,7 @@ CREATE TABLE ledger_entry (
     memo VARCHAR(100),
     currency VARCHAR(10) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE,
 
     -- This ensures a specific transaction ID cannot be recorded twice for the same strategy
     CONSTRAINT unique_ledger_transaction UNIQUE (strategy_id, journal_id)
@@ -179,10 +179,10 @@ CREATE TABLE equity_trade (
     price DOUBLE PRECISION NOT NULL,                                   
     brokerage DOUBLE PRECISION DEFAULT 0.0,
     service_tax DOUBLE PRECISION DEFAULT 0.0,
-    trans_type trans_type_enum NOT NULL,                               
+    trans_type trans_type NOT NULL,                               
     currency VARCHAR(10) NOT NULL,                                    
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,     
-    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE,     
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE     
 );
 
 -- Index for scanning trades filtered by symbol (ISIN) and strategy quickly

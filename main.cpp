@@ -2295,7 +2295,6 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
             PQclear(pgResult);
         }
     }
-    printf("total variation is %f\n", totalVariation);
 }
 
 real64
@@ -2340,7 +2339,7 @@ getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
     return totalCashUSD;
 }
 
-void
+real64
 printNav(State *state, Exchange_rate *exRate,
          int stratIndex, int dbStratId)
 {
@@ -2375,7 +2374,7 @@ printNav(State *state, Exchange_rate *exRate,
     PQclear(pgResult);
     printf("fee accrued %f, %f\n", fee, feesAccrued);
     real64 nav = (netAssets - feesAccrued) / totalUnits;
-    printf("nav is %f\n", nav);
+    return nav;
 }
 
 void
@@ -2750,7 +2749,7 @@ LoadStratSymbolFromFile(char *line, char *stratSymbol)
 }
 
 void
-handleNAV(State *state, char *stratSymbol, char *date)
+handleNAV(State *state, char *stratSymbol, char *date, const char *res)
 {
     /* fetch the strategy's id from the db */
     char query[1024];
@@ -2800,11 +2799,12 @@ handleNAV(State *state, char *stratSymbol, char *date)
     PQclear(pgResult);
     Exchange_rate exRate = {};
     exRate.rate = rate;
-    printNav(state, &exRate, stratIndex, stratId);
+    real64 nav = printNav(state, &exRate, stratIndex, stratId);
+    sprintf((char *)res, "nav is %f", nav);
 }
 
 void
-handleMTM(State *state, char *stratSymbol)
+handleMTM(State *state, char *stratSymbol, const char *res)
 {
     /* fetch the strategy's id from the db */
     char query[1024];
@@ -2837,33 +2837,17 @@ handleMTM(State *state, char *stratSymbol)
     printf("strat index is %d\n", stratIndex);
 
     makeVariationSettlements(state, stratId, stratIndex);
+    strcpy((char *)res, "completed");
 }
 
 void
-handleBhavEq(State *state, char *stratSymbol)
+handleBhavEq(State *state, char *stratSymbol, const char *res)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
     if (FBhavFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
     }
-    /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
-    {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
-    }
-
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
 
     /* get the stratIndex from the memory */
     int stratIndex = -1;
@@ -2878,10 +2862,11 @@ handleBhavEq(State *state, char *stratSymbol)
     printf("strat index is %d\n", stratIndex);
 
     processBhavEq(FBhavFile, stratIndex, state);
+    strcpy((char *)res, "completed");
 }
 
 void
-handleBhavFNO(State *state, char *stratSymbol)
+handleBhavFNO(State *state, char *stratSymbol, const char *res)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
     if (FBhavFile == NULL)
@@ -2919,10 +2904,11 @@ handleBhavFNO(State *state, char *stratSymbol)
     printf("strat index is %d\n", stratIndex);
 
     processBhav(FBhavFile, stratId, stratIndex, state);
+    strcpy((char *)res, "completed");
 }
 
 void
-handleTradesEq(State *state)
+handleTradesEq(State *state, const char *res)
 {
     FILE *FTradesFile = fopen("tmp.csv", "r");
     if (FTradesFile == NULL)
@@ -2973,10 +2959,11 @@ handleTradesEq(State *state)
     PQclear(pgResult);
 
     processTradesEq(FTradesFile, stratId, state);
+    strcpy((char *)res, "completed");
 }
 
-void
-handleTradesFNO(State *state)
+void 
+handleTradesFNO(State *state, const char *res)
 {
     FILE *FTradesFile = fopen("tmp.csv", "r");
     if (FTradesFile == NULL)
@@ -3027,10 +3014,11 @@ handleTradesFNO(State *state)
     PQclear(pgResult);
 
     processTrades(FTradesFile, stratId, state);
+    strcpy((char *)res, "completed");
 }
 
 void
-handleFundExpense(State *state)
+handleFundExpense(State *state, const char *res)
 {
     char line[1024];
     int i = 0;
@@ -3130,10 +3118,11 @@ handleFundExpense(State *state)
                assetEntry.debit);
         i++;
     }
+    strcpy((char *)res, "completed");
 }
 
 void
-handleAllotUnits(State *state)
+handleAllotUnits(State *state, const char *res)
 {
     char line[1024];
     int i = 0;
@@ -3155,10 +3144,11 @@ handleAllotUnits(State *state)
         allotUnits(state, line);
         i++;
     }
+    strcpy((char *)res, "completed");
 }
 
 void
-handleCashFlow(State *state)
+handleCashFlow(State *state, const char *res)
 {
     char line[1024];
     int i = 0;
@@ -3243,10 +3233,11 @@ handleCashFlow(State *state)
                assetEntry.debit);
         i++;
     }
+    strcpy((char *)res, "completed");
 }
 
 void
-handleReverseUPA(State *state)
+handleReverseUPA(State *state, const char *res)
 {
     char line[1024];
     int i = 0;
@@ -3330,10 +3321,11 @@ handleReverseUPA(State *state)
                liabEntry.credit);
         i++;
     }
+    strcpy((char *)res, "completed");
 }
 
 void
-handleBankTransfer(State *state)
+handleBankTransfer(State *state, const char *res)
 {
     char line[1024];
     FILE *bankFile = fopen("tmp.csv", "r");
@@ -3534,11 +3526,11 @@ handleBankTransfer(State *state)
                assetEntry.debit);
         i++;
     }
-    printf("done\n");
+    strcpy((char *)res, "completed");
 }
 
 void
-handleSubsUPA(State *state)
+handleSubsUPA(State *state, const char *res)
 {
     char line[1024];
     FILE *subsFile = fopen("tmp.csv", "r");
@@ -3668,10 +3660,11 @@ handleSubsUPA(State *state)
         printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
         i++;
     }
+    strcpy((char *)res, "completed");
 }
 
 void
-handleAddInvestor(State *state)
+handleAddInvestor(State *state, const char *res)
 {
     char line[1024];
     Investor inv = {};
@@ -3702,10 +3695,11 @@ handleAddInvestor(State *state)
         PGresult *pgResult = executeQuery(state->db, query);
         PQclear(pgResult);
     }
+    strcpy((char *)res, "completed");
 }
 
 void
-handleCreateStrategy(State *state)
+handleCreateStrategy(State *state, const char *res)
 {
     FILE *stratFile = fopen("tmp.csv", "r");
     char line[1024];
@@ -3745,10 +3739,11 @@ handleCreateStrategy(State *state)
         PQclear(pgResult);
         i++;
     }
+    strcpy((char *)res, "completed");
 }
 
 void
-handleExchangeRate(State *state)
+handleExchangeRate(State *state, const char *res)
 {
     FILE *exchangeRateFile = fopen("tmp.csv", "r");
     if (exchangeRateFile == NULL)
@@ -3784,6 +3779,7 @@ handleExchangeRate(State *state)
         printf("ex rate is %f\n", state->exRates[i - 1].rate);
         PQclear(pgResult);
     }
+    strcpy((char *)res, "completed");
 }
 
 static enum MHD_Result
@@ -3999,65 +3995,67 @@ answer_to_connection (void *cls,
         /* form data included in con_info struct */
         if (0 == strcmp(url, "/exchange-rate"))
         {
-            handleExchangeRate(state);
+            handleExchangeRate(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/create-strategy"))
         {
-            handleCreateStrategy(state);
+             handleCreateStrategy(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/add-investor"))
         {
-            handleAddInvestor(state);
+             handleAddInvestor(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/subs-upa"))
         {
-            handleSubsUPA(state);
+             handleSubsUPA(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/bank-transfer"))
         {
-            handleBankTransfer(state);
+             handleBankTransfer(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/reverse-upa"))
         {
-            handleReverseUPA(state);
+             handleReverseUPA(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/fund-cashflow"))
         {
-            handleCashFlow(state);
+             handleCashFlow(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/allot-units"))
         {
-            handleAllotUnits(state);
+             handleAllotUnits(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/fund-expense"))
         {
-            handleFundExpense(state);
+             handleFundExpense(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/trades-fno"))
         {
-            handleTradesFNO(state);
+             handleTradesFNO(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/trades-equity"))
         {
-            handleTradesEq(state);
+             handleTradesEq(state, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/bhav-fno"))
         {
-            handleBhavFNO(state, con_info->strategySymbol);
+             handleBhavFNO(state, con_info->strategySymbol, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/bhav-eq"))
         {
-            handleBhavEq(state, con_info->strategySymbol);
+             handleBhavEq(state, con_info->strategySymbol, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/mtm-process"))
         {
-            handleMTM(state, con_info->strategySymbol);
+             handleMTM(state, con_info->strategySymbol, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/process-nav"))
         {
-            handleNAV(state, con_info->strategySymbol, con_info->date);
+             handleNAV(state,
+                         con_info->strategySymbol,
+                         con_info->date,
+                         con_info->answerstring);
         }
-        
 
         return send_page (connection,
                           con_info->answerstring,

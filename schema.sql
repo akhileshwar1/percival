@@ -53,6 +53,7 @@ CREATE TYPE ledger_entry_type AS ENUM (
 
 CREATE TABLE ledger_entry (
     id SERIAL PRIMARY KEY,
+    journal_id INTEGER,
     type ledger_entry_type NOT NULL,
     account_name VARCHAR(100) NOT NULL,
     debit DOUBLE PRECISION DEFAULT 0.0,
@@ -61,6 +62,9 @@ CREATE TABLE ledger_entry (
     currency VARCHAR(10) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
+
+    -- This ensures a specific transaction ID cannot be recorded twice for the same strategy
+    CONSTRAINT unique_ledger_transaction UNIQUE (strategy_id, journal_id)
 );
 
 

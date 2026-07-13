@@ -248,7 +248,7 @@ typedef enum
 
 typedef struct
 {
-    int id;
+    int id; // refers to the journal id.
     LedgerEntryType type;
     char accountName[100];
     real64 debit;
@@ -1449,8 +1449,9 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                 PQclear(pgResult);
                 char query[1024];
                 snprintf(query, sizeof(query),
-                         "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                         "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                         "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                         "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                         assetEntry.id,
                          dbStratId,
                          LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
                          assetEntry.accountName,
@@ -1463,8 +1464,9 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                 PQclear(pgResult);
 
                 snprintf(query, sizeof(query),
-                         "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                         "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                         "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                         "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                         liabEntry.id,
                          dbStratId,
                          LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
                          liabEntry.accountName,
@@ -1624,8 +1626,9 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
             PQclear(pgResult);
             char query[1024];
             snprintf(query, sizeof(query),
-                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                     assetEntry.id,
                      dbStratId,
                      LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
                      assetEntry.accountName,
@@ -1638,8 +1641,9 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
             PQclear(pgResult);
 
             snprintf(query, sizeof(query),
-                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                     liabEntry.id,
                      dbStratId,
                      LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
                      liabEntry.accountName,
@@ -1894,8 +1898,9 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                 PQclear(pgResult);
                 char query[1024];
                 snprintf(query, sizeof(query),
-                         "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                         "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                         "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                         "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                         assetEntry.id,
                          dbStratId,
                          LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
                          assetEntry.accountName,
@@ -1908,8 +1913,9 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                 PQclear(pgResult);
 
                 snprintf(query, sizeof(query),
-                         "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                         "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                         "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                         "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                         liabEntry.id,
                          dbStratId,
                          LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
                          liabEntry.accountName,
@@ -2071,8 +2077,9 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             PQclear(pgResult);
             char query[1024];
             snprintf(query, sizeof(query),
-                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                     assetEntry.id,
                      dbStratId,
                      LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
                      assetEntry.accountName,
@@ -2085,8 +2092,9 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             PQclear(pgResult);
 
             snprintf(query, sizeof(query),
-                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                     liabEntry.id,
                      dbStratId,
                      LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
                      liabEntry.accountName,
@@ -2267,8 +2275,9 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
                 ledger[++state->strategies[state->currStratIndex].
                 currEntryId] = liabEntry;
             snprintf(query, sizeof(query),
-                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                     assetEntry.id,
                      dbStratId,
                      LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
                      assetEntry.accountName,
@@ -2281,8 +2290,9 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
             PQclear(pgResult);
 
             snprintf(query, sizeof(query),
-                     "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                     "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                     "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                     "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                     liabEntry.id,
                      dbStratId,
                      LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
                      liabEntry.accountName,
@@ -2498,6 +2508,10 @@ loadStateFromDB(State *state, PGconn *conn)
             {
                 strat.nav = atof(str);
             }
+            else if (j == 5)
+            {
+                strat.currJournalId = atoi(str);
+            }
             else if (j == 6)
             {
                 // go for the investors, accs, and positions now.
@@ -2639,7 +2653,7 @@ loadStateFromDB(State *state, PGconn *conn)
                                     pos.optType = CE;
                                 }
                                 else
-                            {
+                                {
                                     pos.optType = NA;
                                 }
                             }
@@ -3089,8 +3103,9 @@ handleFundExpense(State *state, const char *res)
         AccountFromExpense(&assetEntry, &liabEntry, line);
         char query[1024];
         snprintf(query, sizeof(query),
-                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 assetEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
                  assetEntry.accountName,
@@ -3103,8 +3118,9 @@ handleFundExpense(State *state, const char *res)
         PQclear(pgResult);
 
         snprintf(query, sizeof(query),
-                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 liabEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
                  liabEntry.accountName,
@@ -3225,8 +3241,9 @@ handleCashFlow(State *state, const char *res)
         AccountFromCashFlow(&assetEntry, line);
         char query[1024];
         snprintf(query, sizeof(query),
-                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 assetEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
                  assetEntry.accountName,
@@ -3316,8 +3333,9 @@ handleReverseUPA(State *state, const char *res)
         AccountFromReverse(&liabEntry, line);
         char query[1024];
         snprintf(query, sizeof(query),
-                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 liabEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
                  liabEntry.accountName,
@@ -3642,6 +3660,8 @@ handleSubsUPA(State *state, const char *res)
             {
                 fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
                 PQclear(pgResult);
+                sprintf((char *)res, "No strategy found for symbol %s", stratSymbol);
+                return;
             }
 
             char *id_str = PQgetvalue(pgResult, 0, 0);
@@ -3658,8 +3678,11 @@ handleSubsUPA(State *state, const char *res)
         }
         char query[1024];
         snprintf(query, sizeof(query),
-                 "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, '%s', '%s', %f, %f, '%s', '%s');",
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
+                 "ON CONFLICT (strategy_id, entry_id) DO UPDATE SET "
+                 "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
+                 entry.id,
                  stratId,
                  LedgerEntryTypeStrings[entry.type], // Converts enum integer index to matching string literal
                  entry.accountName,

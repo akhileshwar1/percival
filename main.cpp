@@ -3689,6 +3689,7 @@ handleAddInvestor(State *state, const char *res)
     }
 
     int i = 0;
+    PGresult *pgResult;
     while (fgets(line, sizeof(line), clientFile))
     {
         if (i == 0)
@@ -3706,13 +3707,24 @@ handleAddInvestor(State *state, const char *res)
         sprintf(query,
                 "INSERT INTO investor"
                 "(name) "
-                "VALUES ('%s');",
+                "VALUES ('%s') "
+                "ON CONFLICT (name) DO UPDATE SET units = EXCLUDED.units, cash = EXCLUDED.cash;",
                 inv.name);
 
-        PGresult *pgResult = executeQuery(state->db, query);
-        PQclear(pgResult);
+        pgResult = executeQuery(state->db, query);
     }
-    strcpy((char *)res, "completed");
+    /* Assumes there is only one row in the file we read */
+    char *error = PQresultErrorMessage(pgResult);
+    if (strcmp(error, "") != 0)
+    {
+        printf("%s", error);
+        strcpy((char *)res, error);
+    }
+    else
+    {
+        strcpy((char *)res, "completed");
+    }
+    PQclear(pgResult); 
 }
 
 void
@@ -3751,7 +3763,7 @@ handleCreateStrategy(State *state, const char *res)
         sprintf(query,
                 "INSERT INTO strategy"
                 "(symbol, cash) "
-                "VALUES ('%s', %f)"
+                "VALUES ('%s', %f) "
                 "ON CONFLICT (symbol) DO NOTHING;",
                 strategy.symbol,
                 strategy.cash);
@@ -3801,7 +3813,7 @@ handleExchangeRate(State *state, const char *res)
         sprintf(query,
                 "INSERT INTO exchange_rate "
                 "(curr, rate, date, base) "
-                "VALUES ('%s', %f, '%s', '%s')"
+                "VALUES ('%s', %f, '%s', '%s') "
                 "ON CONFLICT (curr, base, date) DO UPDATE SET rate = EXCLUDED.rate;",
                 exRate.curr == USD ? "USD" : "INR",
                 exRate.rate,

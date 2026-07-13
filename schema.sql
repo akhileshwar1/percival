@@ -207,3 +207,6 @@ CREATE TABLE equity_bhav (
     ltp DOUBLE PRECISION NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE exchange_rate 
+ADD CONSTRAINT unique_exchange_rate UNIQUE (curr, base, date);

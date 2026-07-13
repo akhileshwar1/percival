@@ -3076,8 +3076,11 @@ handleFundExpense(State *state, const char *res)
             i++;
             continue; // ignore the top heading row.
         }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[len - 1] = '\0';
+            len--;
+        } 
         ++state->strategies[state->currStratIndex].currJournalId;
         LedgerEntry assetEntry = {};
         LedgerEntry liabEntry = {};
@@ -3139,8 +3142,11 @@ handleAllotUnits(State *state, const char *res)
             i++;
             continue; // ignore the top heading row.
         }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[len - 1] = '\0';
+            len--;
+        } 
         allotUnits(state, line);
         i++;
     }
@@ -3206,8 +3212,11 @@ handleCashFlow(State *state, const char *res)
             i++;
             continue; // ignore the top heading row.
         }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[len - 1] = '\0';
+            len--;
+        } 
         /* NOTE(Akhil): here we are working on the latest strategy.
                         usually first column discloses the strategy name. */
         ++state->strategies[state->currStratIndex].currJournalId;
@@ -3296,8 +3305,11 @@ handleReverseUPA(State *state, const char *res)
             i++;
             continue; // ignore the top heading row.
         }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[len - 1] = '\0';
+            len--;
+        } 
         ++state->strategies[state->currStratIndex].currJournalId;
         LedgerEntry liabEntry = {};
         liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
@@ -3604,8 +3616,11 @@ handleSubsUPA(State *state, const char *res)
             i++;
             continue; // ignore the top heading row.
         }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[len - 1] = '\0';
+            len--;
+        } 
         LedgerEntry entry = {};
         entry.id = state->strategies[state->currStratIndex].currJournalId;
         if (i == 1) entry.type = EQUITY;
@@ -3641,7 +3656,6 @@ handleSubsUPA(State *state, const char *res)
             PQclear(pgResult);
 
         }
-        /* NOTE(Akhil): BUG here!!!, need to address the root split csv lines.*/
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (strategy_id, type, account_name, debit, credit, memo, currency) "
@@ -3682,8 +3696,11 @@ handleAddInvestor(State *state, const char *res)
             i++;
             continue; // ignore the top heading row.
         }
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[len - 1] = '\0';
+            len--;
+        } 
         LoadInvestorFromClient(&inv, line);
         char query[512];
         sprintf(query,
@@ -3717,9 +3734,11 @@ handleCreateStrategy(State *state, const char *res)
             i++;
             continue; // ignore the top heading row.
         }
-        // NOTE(Akhil): here, the headinng is too big, lines split!
-        char *tmp = strchr(line, '\n');
-        if (tmp) *tmp = '\0';
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[len - 1] = '\0';
+            len--;
+        } 
         LoadStrategyFromFile(&strategy, line);
         strategy.cash = 0;
         strategy.id = ++state->currStratIndex;
@@ -3753,6 +3772,7 @@ handleExchangeRate(State *state, const char *res)
     char line[1024];
     int i = 0;
     Exchange_rate exRate = {};
+    PGresult *pgResult;
     while (fgets(line, sizeof(line), exchangeRateFile))
     {
         if (i == 0)
@@ -3765,21 +3785,33 @@ handleExchangeRate(State *state, const char *res)
         LoadExchangeRate(&exRate, line);
         // Persist the exchange rate in db.
         char query[512];
+        /* Prevent duplicate entries */
         sprintf(query,
                 "INSERT INTO exchange_rate "
                 "(curr, rate, date, base) "
-                "VALUES ('%s', %f, '%s', '%s');",
+                "VALUES ('%s', %f, '%s', '%s');"
+                "ON CONFLICT (curr, base, date) DO UPDATE SET rate = EXCLUDED.rate;",
                 exRate.curr == USD ? "USD" : "INR",
                 exRate.rate,
                 exRate.date,
                 exRate.base == USD ? "USD" : "INR");
 
-        PGresult *pgResult = executeQuery(state->db, query);
+        pgResult = executeQuery(state->db, query);
         state->exRates[i - 1] = exRate; // it's a copy here.
         printf("ex rate is %f\n", state->exRates[i - 1].rate);
-        PQclear(pgResult);
     }
-    strcpy((char *)res, "completed");
+    /* Assumes there is only one row in the file we read */
+    char *error = PQresultErrorMessage(pgResult);
+    if (strcmp(error, "") != 0)
+    {
+        printf("%s", error);
+        strcpy((char *)res, error);
+    }
+    else
+    {
+        strcpy((char *)res, "completed");
+    }
+    PQclear(pgResult);
 }
 
 static enum MHD_Result
@@ -4052,9 +4084,9 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/process-nav"))
         {
              handleNAV(state,
-                         con_info->strategySymbol,
-                         con_info->date,
-                         con_info->answerstring);
+                       con_info->strategySymbol,
+                       con_info->date,
+                       con_info->answerstring);
         }
 
         return send_page (connection,

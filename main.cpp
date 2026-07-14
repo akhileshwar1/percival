@@ -48,7 +48,7 @@ typedef struct
     /**
      * HTTP response body we will return, NULL if not yet known.
      */
-    const char *answerstring;
+    char *answerstring;
     /**
      * HTTP status code we will return, 0 for undecided.
      */
@@ -69,17 +69,17 @@ typedef struct
 "</body></html>"
 // static const char *busypage =
 // "<html><body>This server is busy, please try again later.</body></html>";
-static const char *completepage =
+char completepage[] =
 "<html><body>The upload has been completed.</body></html>";
-static const char *errorpage =
+char errorpage[] =
 "<html><body>This doesn't seem to be right.</body></html>";
-static const char *servererrorpage =
+char servererrorpage[] =
 "<html><body>Invalid request.</body></html>";
 /* static const char *fileexistspage =
  "<html><body>This file already exists.</body></html>"; */
-static const char *fileioerror =
+char fileioerror[] =
 "<html><body>IO error writing to disk.</body></html>";
-static const char *const postprocerror =
+char postprocerror[] =
 "<html><head><title>Error</title></head><body>Error processing POST data</body></html>";
 
 typedef enum
@@ -2763,7 +2763,7 @@ LoadStratSymbolFromFile(char *line, char *stratSymbol)
 }
 
 void
-handleNAV(State *state, char *stratSymbol, char *date, const char *res)
+handleNAV(State *state, char *stratSymbol, char *date, char *res)
 {
     /* fetch the strategy's id from the db */
     char query[1024];
@@ -2814,11 +2814,11 @@ handleNAV(State *state, char *stratSymbol, char *date, const char *res)
     Exchange_rate exRate = {};
     exRate.rate = rate;
     real64 nav = printNav(state, &exRate, stratIndex, stratId);
-    sprintf((char *)res, "nav is %f", nav);
+    sprintf(res, "nav is %f", nav);
 }
 
 void
-handleMTM(State *state, char *stratSymbol, const char *res)
+handleMTM(State *state, char *stratSymbol, char *res)
 {
     /* fetch the strategy's id from the db */
     char query[1024];
@@ -2851,11 +2851,11 @@ handleMTM(State *state, char *stratSymbol, const char *res)
     printf("strat index is %d\n", stratIndex);
 
     makeVariationSettlements(state, stratId, stratIndex);
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleBhavEq(State *state, char *stratSymbol, const char *res)
+handleBhavEq(State *state, char *stratSymbol, char *res)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
     if (FBhavFile == NULL)
@@ -2876,11 +2876,11 @@ handleBhavEq(State *state, char *stratSymbol, const char *res)
     printf("strat index is %d\n", stratIndex);
 
     processBhavEq(FBhavFile, stratIndex, state);
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleBhavFNO(State *state, char *stratSymbol, const char *res)
+handleBhavFNO(State *state, char *stratSymbol, char *res)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
     if (FBhavFile == NULL)
@@ -2918,11 +2918,11 @@ handleBhavFNO(State *state, char *stratSymbol, const char *res)
     printf("strat index is %d\n", stratIndex);
 
     processBhav(FBhavFile, stratId, stratIndex, state);
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleTradesEq(State *state, const char *res)
+handleTradesEq(State *state, char *res)
 {
     FILE *FTradesFile = fopen("tmp.csv", "r");
     if (FTradesFile == NULL)
@@ -2973,11 +2973,11 @@ handleTradesEq(State *state, const char *res)
     PQclear(pgResult);
 
     processTradesEq(FTradesFile, stratId, state);
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void 
-handleTradesFNO(State *state, const char *res)
+handleTradesFNO(State *state, char *res)
 {
     FILE *FTradesFile = fopen("tmp.csv", "r");
     if (FTradesFile == NULL)
@@ -3028,11 +3028,11 @@ handleTradesFNO(State *state, const char *res)
     PQclear(pgResult);
 
     processTrades(FTradesFile, stratId, state);
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleFundExpense(State *state, const char *res)
+handleFundExpense(State *state, char *res)
 {
     char line[1024];
     int i = 0;
@@ -3137,11 +3137,11 @@ handleFundExpense(State *state, const char *res)
                assetEntry.debit);
         i++;
     }
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleAllotUnits(State *state, const char *res)
+handleAllotUnits(State *state, char *res)
 {
     char line[1024];
     int i = 0;
@@ -3166,11 +3166,11 @@ handleAllotUnits(State *state, const char *res)
         allotUnits(state, line);
         i++;
     }
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleCashFlow(State *state, const char *res)
+handleCashFlow(State *state, char *res)
 {
     char line[1024];
     int i = 0;
@@ -3259,11 +3259,11 @@ handleCashFlow(State *state, const char *res)
                assetEntry.debit);
         i++;
     }
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleReverseUPA(State *state, const char *res)
+handleReverseUPA(State *state, char *res)
 {
     char line[1024];
     int i = 0;
@@ -3351,11 +3351,11 @@ handleReverseUPA(State *state, const char *res)
                liabEntry.credit);
         i++;
     }
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleBankTransfer(State *state, const char *res)
+handleBankTransfer(State *state, char *res)
 {
     char line[1024];
     FILE *bankFile = fopen("tmp.csv", "r");
@@ -3556,11 +3556,11 @@ handleBankTransfer(State *state, const char *res)
                assetEntry.debit);
         i++;
     }
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleSubsUPA(State *state, const char *res)
+handleSubsUPA(State *state, char *res)
 {
     char line[1024];
     FILE *subsFile = fopen("tmp.csv", "r");
@@ -3680,7 +3680,7 @@ handleSubsUPA(State *state, const char *res)
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
                  "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
-                 "ON CONFLICT (strategy_id, entry_id) DO UPDATE SET "
+                 "ON CONFLICT (strategy_id, journal_id) DO UPDATE SET "
                  "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
                  entry.id,
                  stratId,
@@ -3697,11 +3697,11 @@ handleSubsUPA(State *state, const char *res)
         printf("entry name is %s and value is %f\n", entry.accountName, entry.debit);
         i++;
     }
-    strcpy((char *)res, "completed");
+    strcpy(res, "completed");
 }
 
 void
-handleAddInvestor(State *state, const char *res)
+handleAddInvestor(State *state, char *res)
 {
     char line[1024];
     Investor inv = {};
@@ -3741,17 +3741,17 @@ handleAddInvestor(State *state, const char *res)
     if (strcmp(error, "") != 0)
     {
         printf("%s", error);
-        strcpy((char *)res, error);
+        strcpy(res, error);
     }
     else
     {
-        strcpy((char *)res, "completed");
+        strcpy(res, "completed");
     }
     PQclear(pgResult); 
 }
 
 void
-handleCreateStrategy(State *state, const char *res)
+handleCreateStrategy(State *state, char *res)
 {
     FILE *stratFile = fopen("tmp.csv", "r");
     char line[1024];
@@ -3799,17 +3799,17 @@ handleCreateStrategy(State *state, const char *res)
     if (strcmp(error, "") != 0)
     {
         printf("%s", error);
-        strcpy((char *)res, error);
+        strcpy(res, error);
     }
     else
     {
-        strcpy((char *)res, "completed");
+        strcpy(res, "completed");
     }
     PQclear(pgResult); 
 }
 
 void
-handleExchangeRate(State *state, const char *res)
+handleExchangeRate(State *state, char *res)
 {
     FILE *exchangeRateFile = fopen("tmp.csv", "r");
     if (exchangeRateFile == NULL)
@@ -3852,11 +3852,11 @@ handleExchangeRate(State *state, const char *res)
     if (strcmp(error, "") != 0)
     {
         printf("%s", error);
-        strcpy((char *)res, error);
+        strcpy(res, error);
     }
     else
     {
-        strcpy((char *)res, "completed");
+        strcpy(res, "completed");
     }
     PQclear(pgResult);
 }

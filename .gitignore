@@ -3,3 +3,4 @@
 .fuse*
 *.env
 *.pem
+tmp.csv

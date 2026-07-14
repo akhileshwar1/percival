@@ -1655,16 +1655,8 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
             pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
         }
-        printf("cash is %f\n", state->strategies[stratIndex].cash);
-        printf("pos is %s, %d, %f\n",
-               state->strategies[stratIndex].positions[stratIndex].symbol,
-               state->strategies[stratIndex].positions[stratIndex].qty,
-               state->strategies[stratIndex].positions[stratIndex].ltp);
-        printf("pos is %s, %d, %f\n",
-               state->strategies[stratIndex].positions[1].symbol,
-               state->strategies[stratIndex].positions[1].qty,
-               state->strategies[stratIndex].positions[1].ltp);
-
+        printf("cash is %f\n", state->strategies[stratIndex].accs[2].balance);
+        
     }
     return stratIndex;
 }
@@ -1687,6 +1679,7 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
         FNO_trade trade = {};
         LoadFNOTrade(&trade, line);
         // persist.
+        /* NOTE(Akhil): there is no trade id here to check for duplicates! */
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO fno_trade (strategy_id, symbol, broker_code, trade_date, strategy_symbol, "
@@ -2107,14 +2100,6 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             PQclear(pgResult);
         }
         printf("cash is %f\n", state->strategies[stratIndex].accs[3].balance);
-        printf("pos is %s, %d, %f\n",
-               state->strategies[stratIndex].positions[stratIndex].symbol,
-               state->strategies[stratIndex].positions[stratIndex].qty,
-               state->strategies[stratIndex].positions[stratIndex].ltp);
-        printf("pos is %s, %d, %f\n",
-               state->strategies[stratIndex].positions[1].symbol,
-               state->strategies[stratIndex].positions[1].qty,
-               state->strategies[stratIndex].positions[1].ltp);
     }
     return stratIndex;
 }
@@ -2360,6 +2345,7 @@ printNav(State *state, Exchange_rate *exRate,
         totalUnits += inv.units;
     }
     printf("total units are %f\n", totalUnits);
+    printf("rate is %f\n", exRate->rate);
 
     // total value of fno positions.
     real64 totalValue = getTotalPositionValue(state, stratIndex); 
@@ -2777,6 +2763,8 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
@@ -2806,10 +2794,12 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     {
         fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *rate_str = PQgetvalue(pgResult, 0, 2);
-    int rate = atof(rate_str);
+    real64 rate = atof(rate_str);
     PQclear(pgResult);
     Exchange_rate exRate = {};
     exRate.rate = rate;
@@ -2832,6 +2822,8 @@ handleMTM(State *state, char *stratSymbol, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
@@ -2861,6 +2853,8 @@ handleBhavEq(State *state, char *stratSymbol, char *res)
     if (FBhavFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
 
     /* get the stratIndex from the memory */
@@ -2886,6 +2880,8 @@ handleBhavFNO(State *state, char *stratSymbol, char *res)
     if (FBhavFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
     /* fetch the strategy's id from the db */
     char query[1024];
@@ -2899,6 +2895,8 @@ handleBhavFNO(State *state, char *stratSymbol, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
@@ -2928,6 +2926,8 @@ handleTradesEq(State *state, char *res)
     if (FTradesFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
     /* fetch the strat symbol from the file */
     int i = 0;
@@ -2936,6 +2936,8 @@ handleTradesEq(State *state, char *res)
     if (FTradesFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
 
     char copyLine[1024];
@@ -2966,14 +2968,24 @@ handleTradesEq(State *state, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
     int stratId = atoi(id_str);
     PQclear(pgResult);
 
-    processTradesEq(FTradesFile, stratId, state);
-    strcpy(res, "completed");
+    int result = processTradesEq(FTradesFile, stratId, state);
+    if (result < 0)
+    {
+
+        strcpy(res, "couldn't find strategy");
+    }
+    else
+    {
+        strcpy(res, "completed");
+    }
 }
 
 void 
@@ -2983,6 +2995,8 @@ handleTradesFNO(State *state, char *res)
     if (FTradesFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
     /* fetch the strat symbol from the file */
     int i = 0;
@@ -2991,6 +3005,8 @@ handleTradesFNO(State *state, char *res)
     if (FTradesFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
 
     char copyLine[1024];
@@ -3021,14 +3037,23 @@ handleTradesFNO(State *state, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
     int stratId = atoi(id_str);
     PQclear(pgResult);
 
-    processTrades(FTradesFile, stratId, state);
-    strcpy(res, "completed");
+    int result = processTrades(FTradesFile, stratId, state);
+    if (result < 0)
+    {
+        strcpy(res, "couldn't find strategy");
+    }
+    else
+    {
+        strcpy(res, "completed");
+    }
 }
 
 void
@@ -3040,6 +3065,8 @@ handleFundExpense(State *state, char *res)
     if (expenseFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
     /* fetch the strat symbol from the file */
     char stratSymbol[100];
@@ -3047,6 +3074,8 @@ handleFundExpense(State *state, char *res)
     if (expenseFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
 
     char copyLine[1024];
@@ -3077,6 +3106,8 @@ handleFundExpense(State *state, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
@@ -3104,7 +3135,9 @@ handleFundExpense(State *state, char *res)
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
+                 "ON CONFLICT (strategy_id, journal_id) DO UPDATE SET "
+                 "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
                  assetEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
@@ -3119,7 +3152,9 @@ handleFundExpense(State *state, char *res)
 
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
+                 "ON CONFLICT (strategy_id, journal_id) DO UPDATE SET "
+                 "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
                  liabEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
@@ -3149,6 +3184,8 @@ handleAllotUnits(State *state, char *res)
     if (unitFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
 
     while (fgets(line, sizeof(line), unitFile))
@@ -3178,6 +3215,8 @@ handleCashFlow(State *state, char *res)
     if (cashflowFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
     /* fetch the strat symbol from the file */
     char stratSymbol[100];
@@ -3185,6 +3224,8 @@ handleCashFlow(State *state, char *res)
     if (cashflowFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
 
     char copyLine[1024];
@@ -3215,6 +3256,8 @@ handleCashFlow(State *state, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
@@ -3242,7 +3285,9 @@ handleCashFlow(State *state, char *res)
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
+                 "ON CONFLICT (strategy_id, journal_id) DO UPDATE SET "
+                 "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
                  assetEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
@@ -3271,6 +3316,8 @@ handleReverseUPA(State *state, char *res)
     if (reverseFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
     /* TODO(Akhil): this can be abstracted into a func */
     /* fetch the strat symbol from the file */
@@ -3279,6 +3326,8 @@ handleReverseUPA(State *state, char *res)
     if (reverseFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
 
     char copyLine[1024];
@@ -3309,6 +3358,8 @@ handleReverseUPA(State *state, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
@@ -3371,6 +3422,8 @@ handleBankTransfer(State *state, char *res)
     if (bankFileCopy == NULL)
     {
         printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
     }
 
     char copyLine[1024];
@@ -3401,6 +3454,8 @@ handleBankTransfer(State *state, char *res)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
@@ -3910,12 +3965,12 @@ iterate_post (void *coninfo_cls,
         memcpy(con_info->strategySymbol + off, data, size);
         con_info->strategySymbol[off + size] = '\0';
     }
-    if (strcmp(key, "date") == 0)
+    else if (strcmp(key, "date") == 0)
     {
         memcpy(con_info->date + off, data, size);
         con_info->date[off + size] = '\0';
     }
-    if (0 != strcmp (key, "file"))
+    else if (0 != strcmp (key, "file"))
     {
         con_info->answerstring = servererrorpage;
         con_info->answercode = MHD_HTTP_BAD_REQUEST;

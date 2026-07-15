@@ -97,3 +97,24 @@ curl -v -X POST \
     -F "strategySymbol=31500012A" \
     -F "date=24/03/2025" \
     $SERVER/process-nav
+
+# 3RD DAY -----------------------------------------------------
+# 1. Exchange Rate
+curl -v -X POST \
+    -F "file=@exchange_rate_28.csv" \
+    $SERVER/exchange-rate
+
+curl -v -X POST \
+    -F "file=@ab_trades_28.csv" \
+    $SERVER/trades-fno
+
+# 12. MTM Process
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    $SERVER/mtm-process
+
+# 13. Process NAV
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=28/03/2025" \
+    $SERVER/process-nav

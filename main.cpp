@@ -2364,12 +2364,21 @@ printNav(State *state, Exchange_rate *exRate,
     snprintf(query, sizeof(query),
              "UPDATE strategy SET fees_accrued = %f WHERE id = %d",
              feesAccrued, 
-             dbStratId
-             );
+             dbStratId);
     PGresult *pgResult = executeQuery(state->db, query);
     PQclear(pgResult);
     printf("fee accrued %f, %f\n", fee, feesAccrued);
     real64 nav = (netAssets - feesAccrued) / totalUnits;
+    /* persist nav in its own seperate table. */
+    snprintf(query, sizeof(query),
+             "INSERT INTO strategy_nav (strategy_id, nav_date, nav) "
+             "VALUES (%d, to_date('%s', 'DD/MM/YYYY'), %f) "
+             "ON CONFLICT (strategy_id, nav_date) DO NOTHING;",
+             dbStratId,
+             exRate->date,
+             nav);
+    pgResult = executeQuery(state->db, query);
+    PQclear(pgResult);
     return nav;
 }
 
@@ -2803,6 +2812,7 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     PQclear(pgResult);
     Exchange_rate exRate = {};
     exRate.rate = rate;
+    strcpy(exRate.date, date);
     real64 nav = printNav(state, &exRate, stratIndex, stratId);
     sprintf(res, "nav is %f", nav);
 }

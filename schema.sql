@@ -216,3 +216,19 @@ CREATE TABLE equity_bhav (
 
 ALTER TABLE exchange_rate 
 ADD CONSTRAINT unique_exchange_rate UNIQUE (curr, base, date);
+
+DROP TABLE IF EXISTS strategy_nav CASCADE;
+
+CREATE TABLE strategy_nav (
+    id SERIAL PRIMARY KEY,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE,
+    nav_date DATE NOT NULL,
+    nav DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- This enforces that a specific strategy can only have ONE NAV entry per day
+    CONSTRAINT unique_strategy_date_nav UNIQUE (strategy_id, nav_date)
+);
+
+-- Index for blistering fast historical performance chart lookups
+CREATE INDEX idx_strategy_nav_history ON strategy_nav (strategy_id, nav_date);

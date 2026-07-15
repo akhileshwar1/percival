@@ -23,6 +23,7 @@ CREATE TABLE strategy
     curr_investor_index INTEGER DEFAULT -1,
     curr_entry_id INTEGER DEFAULT -1,
     curr_journal_id INTEGER DEFAULT -1,
+    
 
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint
 );
@@ -232,3 +233,29 @@ CREATE TABLE strategy_nav (
 
 -- Index for blistering fast historical performance chart lookups
 CREATE INDEX idx_strategy_nav_history ON strategy_nav (strategy_id, nav_date);
+
+DROP TABLE IF EXISTS security CASCADE;
+DROP TABLE IF EXISTS global_state CASCADE;
+
+-- Create a State Tracking table to persist your counters
+CREATE TABLE global_state (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    curr_sec_id_count INTEGER DEFAULT 0, -- for security naming.
+    curr_opt_id_count INTEGER DEFAULT 0, -- for options naming.
+    CONSTRAINT check_single_row CHECK (id = 1) -- Ensures only one row exists
+);
+
+-- Initialize the counter to 0 (run once during database setup)
+INSERT INTO global_state (id, curr_sec_id_count) VALUES (1, 0) ON CONFLICT DO NOTHING;
+INSERT INTO global_state (id, curr_opt_id_count) VALUES (1, 0) ON CONFLICT DO NOTHING;
+
+-- Create the Security table
+CREATE TABLE security (
+    id SERIAL PRIMARY KEY,
+    sys_id VARCHAR(100) UNIQUE,
+    isin VARCHAR(100) NOT NULL UNIQUE,
+    symbol VARCHAR(100) NOT NULL,
+    listing_date DATE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

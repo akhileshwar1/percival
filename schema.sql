@@ -62,10 +62,7 @@ CREATE TABLE ledger_entry (
     memo VARCHAR(100),
     currency VARCHAR(10) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE,
-
-    -- This ensures a specific transaction ID cannot be recorded twice for the same strategy
-    CONSTRAINT unique_ledger_transaction UNIQUE (strategy_id, journal_id)
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
 
 

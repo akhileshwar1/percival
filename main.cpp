@@ -670,7 +670,7 @@ AccountFromCashFlow(LedgerEntry *assetEntry, char *line)
     char accountName[100] = "";
     while (token != NULL)
     {
-        if (i ==  0)
+        if (i ==  1)
         {
             strcat(accountName, token); 
             strcat(accountName, "_CASH_USD"); 
@@ -1351,8 +1351,8 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             assetEntry.debit = abs(trade.qty * priceAfterFee);
                             assetEntry.id = state->strategies[state->currStratIndex].
                                             currJournalId;
-                            strcpy(liabEntry.accountName, stratSymbol);
-                            strcpy(liabEntry.accountName, "_CASH_USD");
+                            strcat(liabEntry.accountName, stratSymbol);
+                            strcat(liabEntry.accountName, "_CASH_USD");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
                             liabEntry.type = REVENUE;
                             liabEntry.id = state->strategies[state->currStratIndex].
@@ -1420,8 +1420,8 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             assetEntry.id = state->strategies[state->currStratIndex].
                                             currJournalId;
                             LedgerEntry liabEntry = {};
-                            strcpy(liabEntry.accountName, stratSymbol);
-                            strcpy(liabEntry.accountName, "_POSN");
+                            strcat(liabEntry.accountName, stratSymbol);
+                            strcat(liabEntry.accountName, "_POSN");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
                             liabEntry.type = EQUITY;
                             liabEntry.id = state->strategies[state->currStratIndex].
@@ -1797,8 +1797,8 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                             assetEntry.debit = abs(trade.qty * priceAfterFee);
                             assetEntry.id = state->strategies[state->currStratIndex].
                                 currJournalId;
-                            strcpy(liabEntry.accountName, stratSymbol);
-                            strcpy(liabEntry.accountName, "_CASH_USD");
+                            strcat(liabEntry.accountName, stratSymbol);
+                            strcat(liabEntry.accountName, "_CASH_USD");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
                             liabEntry.type = REVENUE;
                             liabEntry.id = state->strategies[state->currStratIndex].
@@ -1862,8 +1862,8 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                             assetEntry.debit = abs(trade.qty * priceAfterFee);
                             assetEntry.id = state->strategies[state->currStratIndex].
                                 currJournalId;
-                            strcpy(liabEntry.accountName, stratSymbol);
-                            strcpy(liabEntry.accountName, "_POSN");
+                            strcat(liabEntry.accountName, stratSymbol);
+                            strcat(liabEntry.accountName, "_POSN");
                             liabEntry.credit = abs(trade.qty * priceAfterFee);
                             liabEntry.type = EQUITY;
                             liabEntry.id = state->strategies[state->currStratIndex].
@@ -3242,9 +3242,7 @@ handleFundExpense(State *state, char *res)
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
-                 "ON CONFLICT (strategy_id, journal_id) DO UPDATE SET "
-                 "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
                  assetEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
@@ -3259,9 +3257,7 @@ handleFundExpense(State *state, char *res)
 
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
-                 "ON CONFLICT (strategy_id, journal_id) DO UPDATE SET "
-                 "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
                  liabEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
@@ -3392,9 +3388,7 @@ handleCashFlow(State *state, char *res)
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
-                 "ON CONFLICT (strategy_id, journal_id) DO UPDATE SET "
-                 "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
                  assetEntry.id,
                  stratId,
                  LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
@@ -3841,9 +3835,7 @@ handleSubsUPA(State *state, char *res)
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
-                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s') "
-                 "ON CONFLICT (strategy_id, journal_id) DO UPDATE SET "
-                 "debit = EXCLUDED.debit, credit = EXCLUDED.credit, memo = EXCLUDED.memo;",
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
                  entry.id,
                  stratId,
                  LedgerEntryTypeStrings[entry.type], // Converts enum integer index to matching string literal

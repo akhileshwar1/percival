@@ -15,11 +15,15 @@ typedef float real32;
 typedef double real64;
 typedef uint16_t uint16;
 
+#define kilobytes(value) (value*1024LL)
+#define megabytes(value) (kilobytes(value*1024LL))
+#define gigabytes(value) (megabytes(value*1024LL))
+
 #define PORT 8888
 #define POSTBUFFERSIZE 512
-#define MAX_STRATEGIES 50
+#define MAX_STRATEGIES 100
 #define MAX_INVESTORS 100
-#define MAX_SECURITIES 50
+#define MAX_SECURITIES 1000
 #define MAX_POSITIONS 100
 #define MAX_EX_RATES 5
 
@@ -3158,7 +3162,7 @@ handleTradesFNO(State *state, char *res)
         strcpy(res, "couldn't find strategy");
     }
     else
-{
+    {
         strcpy(res, "completed");
     }
 }
@@ -4009,7 +4013,7 @@ handleExchangeRate(State *state, char *res)
         strcpy(res, error);
     }
     else
-{
+    {
         strcpy(res, "completed");
     }
     PQclear(pgResult);
@@ -4324,9 +4328,14 @@ main()
         return -1;
     }
 
-    State state = {};
-    state.db = conn;
-    loadStateFromDB(&state);
+    State *state = (State *)malloc(megabytes(256));
+    if (state == NULL)
+    {
+        printf("couldn't allocate memory for state, abort\n");
+        return -1;
+    }
+    state->db = conn;
+    loadStateFromDB(state);
     // char line[1024];
     // int i = 0;
     // Exchange_rate exRate = {};
@@ -4835,9 +4844,9 @@ main()
 
 
     int stratIndex = -1;
-    for (int i = 0; i < state.currStratIndex + 1; i++)
+    for (int i = 0; i < state->currStratIndex + 1; i++)
     {
-        if (strcmp("31500012A", state.strategies[i].symbol) == 0)
+        if (strcmp("31500012A", state->strategies[i].symbol) == 0)
         {
             stratIndex = i;
             break;
@@ -4913,7 +4922,7 @@ main()
     struct MHD_Daemon *daemon;
     daemon = MHD_start_daemon (MHD_USE_INTERNAL_POLLING_THREAD,
                                PORT, NULL, NULL,
-                               &answer_to_connection, &state,
+                               &answer_to_connection, state,
                                MHD_OPTION_NOTIFY_COMPLETED, &request_completed,
                                NULL,
                                MHD_OPTION_END); 
@@ -4922,5 +4931,6 @@ main()
     {}
     getchar ();
     MHD_stop_daemon (daemon);
+    free(state);
     return 0;
 }

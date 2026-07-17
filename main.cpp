@@ -22,10 +22,12 @@ typedef uint16_t uint16;
 #define PORT 8888
 #define POSTBUFFERSIZE 512
 #define MAX_STRATEGIES 100
-#define MAX_INVESTORS 100
+#define MAX_INVESTORS 1000
 #define MAX_SECURITIES 1000
-#define MAX_POSITIONS 100
+#define MAX_POSITIONS 1000
 #define MAX_EX_RATES 5
+#define MAX_ACCS 10 
+#define MAX_LEDGER_ENTRIES 1000 
 
 typedef enum
 {
@@ -268,12 +270,12 @@ typedef struct
     Investor investors[MAX_INVESTORS];
     PositionEquity positions[MAX_POSITIONS];
     FNO_position fpositions[MAX_POSITIONS];
-    Bank_account accs[10];
+    Bank_account accs[MAX_ACCS];
     int id;
     int currPosIndex;
     int currFPosIndex;
     int currInvestorIndex;
-    LedgerEntry ledger[100];
+    LedgerEntry ledger[MAX_LEDGER_ENTRIES];
     int currEntryId;
     int currJournalId;
     int currAccIndex;

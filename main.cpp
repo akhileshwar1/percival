@@ -2860,30 +2860,34 @@ LoadStratSymbolFromFile(char *line, char *stratSymbol)
     }
 }
 
-void
-handleNAV(State *state, char *stratSymbol, char *date, char *res)
+/* from the db */
+int
+getStratId(char *stratSymbol, PGconn *conn)
 {
-    /* fetch the strategy's id from the db */
     char query[1024];
     sprintf(query,
             "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
             stratSymbol);
 
-    PGresult *pgResult = executeQuery(state->db, query);
+    PGresult *pgResult = executeQuery(conn, query);
 
     if (PQntuples(pgResult) == 0)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
         PQclear(pgResult);
-        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
-        return;
+        return -1;
     }
 
     char *id_str = PQgetvalue(pgResult, 0, 0);
     int stratId = atoi(id_str);
     PQclear(pgResult);
+    return stratId;
+}
 
-    /* get the stratIndex from the memory */
+/* from the memory, not the db */
+int
+getStratIndex(State *state, char *stratSymbol)
+{
     int stratIndex = -1;
     for (int i = 0; i < state->currStratIndex + 1; i++)
     {
@@ -2894,13 +2898,30 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
         }
     }
     printf("strat index is %d\n", stratIndex);
+    return stratIndex;
+}
 
+void
+handleNAV(State *state, char *stratSymbol, char *date, char *res)
+{
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    /* get the stratIndex from the memory */
+    int stratIndex = getStratIndex(state, stratSymbol);
+
+    char query[1024];
     /* handle exchange_rate for the date from the db */
     sprintf(query,
             "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') LIMIT 1",
             date);
 
-    pgResult = executeQuery(state->db, query);
+    PGresult *pgResult = executeQuery(state->db, query);
 
     if (PQntuples(pgResult) == 0)
     {
@@ -2921,39 +2942,134 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
 }
 
 void
-handleMTM(State *state, char *stratSymbol, char *res)
+handleCorpAction(State *state,
+                 char *stratSymbol,
+                 char *date,
+                 char *res)
 {
-    /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
+    /* process dividend file, just the code for now */
+    char line[1024];
+    FILE *DivFile = fopen("tmp.csv", "r");
+    if (DivFile == NULL)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
+        printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
+    }
+
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
 
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
+    /* get the stratIndex from the memory */
+    int stratIndex = getStratIndex(state, stratSymbol);
+
+    int i = 0;
+    while (fgets(line, sizeof(line), DivFile))
+    {
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        Dividend div = {};
+        LoadDividend(&div, line);
+        // only process if the ex date is today.
+        if (strcmp(div.exDate, date) == 0)
+        {
+            for (int j = 0;
+            j <= state->strategies[stratIndex].currPosIndex;
+            j++)
+            {
+                PositionEquity pos = state->strategies[stratIndex].positions[j];
+                if (strcmp(pos.isin, div.isin) == 0)
+                {
+                    // make the dividend income.
+                    // NOTE(Akhil): 2 stands for the equites bank acc.
+                    state->strategies[stratIndex].accs[2].balance += div.div * pos.qty;
+                    char query[1024];
+                    snprintf(query, sizeof(query),
+                             "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                             state->strategies[stratIndex].accs[2].balance,
+                             state->strategies[stratIndex].accs[2].symbol
+                             );
+                    PGresult *pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+                    // make the ledger entries and persist them as well.
+                    LedgerEntry assetEntry = {};
+                    LedgerEntry liabEntry = {};
+                    ++state->strategies[state->currStratIndex].currJournalId;
+                    strcat(assetEntry.accountName, div.isin);
+                    strcat(assetEntry.accountName, "_DIV");
+                    assetEntry.type = ASSET;
+                    assetEntry.currency = INR;
+                    assetEntry.debit = abs(pos.qty * div.div);
+                    assetEntry.id = state->strategies[state->currStratIndex].
+                        currJournalId;
+                    strcpy(liabEntry.accountName, "DIV_CASH_USD");
+                    liabEntry.credit = abs(pos.qty * div.div);
+                    liabEntry.type = REVENUE;
+                    liabEntry.id = state->strategies[state->currStratIndex].
+                        currJournalId;
+                    liabEntry.currency = INR;
+                    state->strategies[state->currStratIndex].
+                        ledger[++state->strategies[state->currStratIndex].
+                        currEntryId] = assetEntry;
+                    state->strategies[state->currStratIndex].
+                        ledger[++state->strategies[state->currStratIndex].
+                        currEntryId] = liabEntry;
+                    snprintf(query, sizeof(query),
+                             "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                             "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                             assetEntry.id,
+                             stratId,
+                             LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                             assetEntry.accountName,
+                             assetEntry.debit,
+                             assetEntry.credit,
+                             assetEntry.memo,
+                             assetEntry.currency == USD ? "USD" : "INR" 
+                             );
+                    pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+
+                    snprintf(query, sizeof(query),
+                             "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                             "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                             liabEntry.id,
+                             stratId,
+                             LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                             liabEntry.accountName,
+                             liabEntry.debit,
+                             liabEntry.credit,
+                             liabEntry.memo,
+                             liabEntry.currency == USD ? "USD" : "INR" 
+                             );
+                    pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+                }
+            }
+        }
+
+        i++;
+    }
+    sprintf(res, "completed");
+}
+
+void
+handleMTM(State *state, char *stratSymbol, char *res)
+{
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
 
     /* get the stratIndex from the memory */
-    int stratIndex = -1;
-    for (int i = 0; i < state->currStratIndex + 1; i++)
-    {
-        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
-        {
-            stratIndex = i;
-            break;
-        }
-    }
-    printf("strat index is %d\n", stratIndex);
+    int stratIndex = getStratIndex(state, stratSymbol);
 
     makeVariationSettlements(state, stratId, stratIndex);
     strcpy(res, "completed");
@@ -2971,16 +3087,7 @@ handleBhavEq(State *state, char *stratSymbol, char *res)
     }
 
     /* get the stratIndex from the memory */
-    int stratIndex = -1;
-    for (int i = 0; i < state->currStratIndex + 1; i++)
-    {
-        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
-        {
-            stratIndex = i;
-            break;
-        }
-    }
-    printf("strat index is %d\n", stratIndex);
+    int stratIndex = getStratIndex(state, stratSymbol);
 
     processBhavEq(FBhavFile, stratIndex, state);
     strcpy(res, "completed");
@@ -2997,35 +3104,15 @@ handleBhavFNO(State *state, char *stratSymbol, char *res)
         return;
     }
     /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
 
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
-
     /* get the stratIndex from the memory */
-    int stratIndex = -1;
-    for (int i = 0; i < state->currStratIndex + 1; i++)
-    {
-        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
-        {
-            stratIndex = i;
-            break;
-        }
-    }
+    int stratIndex = getStratIndex(state, stratSymbol);
     printf("strat index is %d\n", stratIndex);
 
     processBhav(FBhavFile, stratId, stratIndex, state);
@@ -3070,24 +3157,12 @@ handleTradesEq(State *state, char *res)
     }
 
     /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
-
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
 
     int result = processTradesEq(FTradesFile, stratId, state);
     if (result < 0)
@@ -3096,7 +3171,7 @@ handleTradesEq(State *state, char *res)
         strcpy(res, "couldn't find strategy");
     }
     else
-{
+    {
         strcpy(res, "completed");
     }
 }
@@ -3139,24 +3214,12 @@ handleTradesFNO(State *state, char *res)
     }
 
     /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
-
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
 
     int result = processTrades(FTradesFile, stratId, state);
     if (result < 0)
@@ -3208,24 +3271,13 @@ handleFundExpense(State *state, char *res)
     }
 
     /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
 
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
     i = 0;
     while (fgets(line, sizeof(line), expenseFile))
     {
@@ -3354,24 +3406,13 @@ handleCashFlow(State *state, char *res)
     }
 
     /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
 
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
     i = 0;
     while (fgets(line, sizeof(line), cashflowFile))
     {
@@ -3454,24 +3495,13 @@ handleReverseUPA(State *state, char *res)
     }
 
     /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
 
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
     i = 0;
     while (fgets(line, sizeof(line), reverseFile))
     {
@@ -3550,24 +3580,13 @@ handleBankTransfer(State *state, char *res)
     }
 
     /* fetch the strategy's id from the db */
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    if (PQntuples(pgResult) == 0)
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
     {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
 
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
     i = 0;
     while (fgets(line, sizeof(line), bankFile))
     {
@@ -3593,7 +3612,7 @@ handleBankTransfer(State *state, char *res)
             AccountFromBank(&assetEntry, &liabEntry, line, INR);
         }
         else
-    {
+        {
             AccountFromBank(&assetEntry, &liabEntry, line, USD);
         }
 
@@ -3630,7 +3649,7 @@ handleBankTransfer(State *state, char *res)
                 .accs[++state->strategies[state->currStratIndex].currAccIndex] = acc;
         }
         else
-    {
+        {
             //update the bank acc balance.
             // first, in memory, then in db.
             for (int i = 0; i <= state->strategies[state->currStratIndex].currAccIndex;
@@ -3690,7 +3709,7 @@ handleBankTransfer(State *state, char *res)
                 .accs[++state->strategies[state->currStratIndex].currAccIndex] = acc;
         }
         else
-    {
+        {
             //update the bank acc balance.
             // first, in memory, then in db.
             for (int i = 0; i <= state->strategies[state->currStratIndex].currAccIndex;
@@ -3768,7 +3787,7 @@ handleSubsUPA(State *state, char *res)
                 PQclear(pgResult);
             }
             else
-        {
+            {
                 /* there will only be one row */
                 char *idStr = PQgetvalue(pgResult, 0, 0);
                 int id = atoi(idStr);
@@ -4287,6 +4306,13 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/mtm-process"))
         {
             handleMTM(state, con_info->strategySymbol, con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/corporate-action"))
+        {
+            handleCorpAction(state,
+                             con_info->strategySymbol,
+                             con_info->date,
+                             con_info->answerstring);
         }
         else if (0 == strcmp(url, "/process-nav"))
         {
@@ -4856,70 +4882,7 @@ main()
     }
     printf("strat index is %d\n", stratIndex);
 
-    /* process dividend file, just the code for now */
-    // FILE *DivFile = fopen("div.csv", "r");
-    // if (DivFile == NULL)
-    // {
-    //     printf("sorry, couldn't upload file!\n");
-    //     return -1;
-    // }
-    //
-    // while (fgets(line, sizeof(line), DivFile))
-    // {
-    //     char *tmp = strchr(line, '\n');
-    //     if (tmp) *tmp = '\0';
-    //     Dividend div = {};
-    //     LoadDividend(&div, line);
-    //     // only process if the ex date is today.
-    //     if (strcmp(div.exDate, today) == 0)
-    //     {
-    //         for (int j = 0;
-    //         j <= state.strategies[stratIndex].currPosIndex;
-    //         j++)
-    //         {
-    //             PositionEquity pos = state.strategies[stratIndex].positions[j];
-    //             if (strcmp(pos.isin, div.isin) == 0)
-    //             {
-    //                 // make the dividend income.
-    //                 // NOTE(Akhil): 2 stands for the equites bank acc.
-    //                 state.strategies[stratIndex].accs[2].balance += div.div * pos.qty;
-    //                 char query[1024];
-    //                 snprintf(query, sizeof(query),
-    //                          "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
-    //                          state.strategies[stratIndex].accs[2].balance,
-    //                          state.strategies[stratIndex].accs[2].symbol
-    //                          );
-    //                 PGresult *pgResult = executeQuery(conn, query);
-    //                 PQclear(pgResult);
-    //                 // make the ledger entries and persist them as well.
-    //                 LedgerEntry assetEntry = {};
-    //                 LedgerEntry liabEntry = {};
-    //                 ++state.strategies[state.currStratIndex].currJournalId;
-    //                 strcat(assetEntry.accountName, div.isin);
-    //                 strcat(assetEntry.accountName, "_DIV");
-    //                 assetEntry.type = ASSET;
-    //                 assetEntry.currency = INR;
-    //                 assetEntry.debit = abs(pos.qty * div.div);
-    //                 assetEntry.id = state.strategies[state.currStratIndex].
-    //                     currJournalId;
-    //                 strcpy(liabEntry.accountName, "DIV_CASH_USD");
-    //                 liabEntry.credit = abs(pos.qty * div.div);
-    //                 liabEntry.type = REVENUE;
-    //                 liabEntry.id = state.strategies[state.currStratIndex].
-    //                     currJournalId;
-    //                 liabEntry.currency = INR;
-    //                 state.strategies[state.currStratIndex].
-    //                     ledger[++state.strategies[state.currStratIndex].
-    //                     currEntryId] = assetEntry;
-    //                 state.strategies[state.currStratIndex].
-    //                     ledger[++state.strategies[state.currStratIndex].
-    //                     currEntryId] = liabEntry;
-    //             }
-    //         }
-    //     }
-    //
-    //     i++;
-    // }
+    
 
     struct MHD_Daemon *daemon;
     daemon = MHD_start_daemon (MHD_USE_INTERNAL_POLLING_THREAD,

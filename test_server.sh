@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SERVER=http://localhost:8888
+# SERVER=http://13.53.186.189:8888
 
 # 1. Exchange Rate
 curl -v -X POST \

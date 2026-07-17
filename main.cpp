@@ -318,6 +318,7 @@ const char* TransTypeStrings[] = {
     "MB", "MS", "LB", "LS", "MOB", "MCB", "MOS", "MCS", "FSO", "FSC", "FBO", "FBC"
 };
 
+/* yyyy-mm-dd to dd/mm/yyyy */
 void ConvertDbDateToCFormat(const char *db_date, char *output, size_t output_size)
 {
     int year = 0, month = 0, day = 0;
@@ -349,6 +350,7 @@ int get_month_number(const char *month_str) {
     return -1; // Return -1 if the month is invalid
 }
 
+/* 30-Jun-2026 to 30/06/2026 */
 int convert_date_format(const char *input_date, char *output_date) {
     int day, year;
     char month_str[4]; // 3 chars + null terminator
@@ -366,6 +368,26 @@ int convert_date_format(const char *input_date, char *output_date) {
     sprintf(output_date, "%02d/%02d/%04d", day, month, year);
     return 0; // Success
 }
+
+/* mm/dd/yy or mm/dd/yyyy or m/d/yy to dd/mm/yyyy */
+void
+mmddyyyy_to_ddmmyyyy(const char *in, char *out)
+{
+    int month, day, year;
+
+    if (sscanf(in, "%d/%d/%d", &month, &day, &year) != 3)
+    {
+        out[0] = '\0';   // Invalid date
+        return;
+    }
+
+    // Convert 2-digit year if necessary
+    if (year < 100)
+        year += 2000;
+
+    sprintf(out, "%02d/%02d/%04d", day, month, year);
+}
+
 
 void
 LoadFNOBhav(FNO_bhav *bhav, char *line)
@@ -471,7 +493,11 @@ LoadExchangeRate(Exchange_rate *exRate, char *line)
         }
         else if (i ==  1)
         {
-            strcpy(exRate->date, token);
+            char output[11];
+            if (convert_date_format(token, output) == 0)
+            {
+                strcpy(exRate->date, output);
+            } 
         }
         else if (i ==  2)
         {
@@ -971,7 +997,12 @@ LoadFNOTrade(FNO_trade *trade, char *line)
         }
         else if (i == 5)
         {
-            strcpy(trade->date, token);
+            char output[11];
+            mmddyyyy_to_ddmmyyyy(token, output);
+            if (output[0] != '\0')
+            {
+                strcpy(trade->date, output);
+            }
         }
         else if (i == 7)
         {
@@ -996,6 +1027,7 @@ LoadFNOTrade(FNO_trade *trade, char *line)
         }
         else if (i == 17)
         {
+            /* for some reason here the date format is correct */
             strcpy(trade->expiry, token);
         }
         else if (i == 18)
@@ -1078,7 +1110,12 @@ LoadTrade(Trade *trade, char *line)
         }
         else if (i == 5)
         {
-            strcpy(trade->date, token);
+            char output[11];
+            mmddyyyy_to_ddmmyyyy(token, output);
+            if (output[0] != '\0')
+            {
+                strcpy(trade->date, output);
+            }
         }
         else if (i == 7)
         {

@@ -5,3 +5,4 @@
 * Dividend route.
 * String instead of char *.
 * offboarding.
+* Don't reverse state and reapply instead apply again on the current state.

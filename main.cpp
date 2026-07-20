@@ -721,7 +721,9 @@ allotUnits(State *state, char *line)
 }
 
 void
-AccountFromCashFlow(LedgerEntry *assetEntry, char *line)
+AccountFromCashFlow(LedgerEntry *assetEntry,
+                    LedgerEntry *liabEntry,
+                    char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -738,8 +740,22 @@ AccountFromCashFlow(LedgerEntry *assetEntry, char *line)
         else if (i == 3)
         {
             assetEntry->debit = (real64)atof(token);
+            liabEntry->credit = (real64)atof(token);
+            liabEntry->currency = USD;
+            liabEntry->type = REVENUE;
             assetEntry->currency = USD;
             assetEntry->type = ASSET;
+            strcpy(accountName, ""); 
+        }
+        else if (i == 6)
+        {
+            strcat(accountName, token); 
+            strcat(accountName, "_"); 
+        }
+        else if (i == 7)
+        {
+            strcat(accountName, token); 
+            strcpy(liabEntry->accountName, accountName);
         }
         token = strtok(NULL, ",");
         i++;
@@ -747,7 +763,9 @@ AccountFromCashFlow(LedgerEntry *assetEntry, char *line)
 }
 
 void
-AccountFromReverse(LedgerEntry *liabEntry, char *line)
+AccountFromReverse(LedgerEntry *assetEntry,
+                   LedgerEntry *liabEntry,
+                   char *line)
 {
     char *token;
     token = strtok(line, ",");
@@ -764,12 +782,16 @@ AccountFromReverse(LedgerEntry *liabEntry, char *line)
         {
             strcat(accountName, token); 
             strcpy(liabEntry->accountName, accountName);
+            strcpy(assetEntry->accountName, strcat(accountName, "REV"));
             liabEntry->type = LIABILITY;
+            assetEntry->type = ASSET;
         }
         else if (i == 7)
         {
             liabEntry->credit = (real64)atof(token);
             liabEntry->currency = USD;
+            assetEntry->debit = (real64)atof(token);
+            assetEntry->currency = USD;
         }
         token = strtok(NULL, ",");
         i++;
@@ -3514,7 +3536,9 @@ handleCashFlow(State *state, char *res)
         ++state->strategies[state->currStratIndex].currJournalId;
         LedgerEntry assetEntry = {};
         assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
-        AccountFromCashFlow(&assetEntry, line);
+        LedgerEntry liabEntry = {};
+        liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        AccountFromCashFlow(&assetEntry, &liabEntry, line);
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
@@ -3531,8 +3555,25 @@ handleCashFlow(State *state, char *res)
         PGresult *pgResult = executeQuery(state->db, query);
         PQclear(pgResult);
         state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = assetEntry;
-        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+        printf("cashflow entry name is %s and value is %f\n", assetEntry.accountName,
                assetEntry.debit);
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 liabEntry.id,
+                 stratId,
+                 LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                 liabEntry.accountName,
+                 liabEntry.debit,
+                 liabEntry.credit,
+                 liabEntry.memo,
+                 liabEntry.currency == USD ? "USD" : "INR" 
+                 );
+        pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = liabEntry;
+        printf("cashflow entry name is %s and value is %f\n", liabEntry.accountName,
+               liabEntry.credit);
         i++;
     }
     strcpy(res, "completed");
@@ -3603,7 +3644,9 @@ handleReverseUPA(State *state, char *res)
         ++state->strategies[state->currStratIndex].currJournalId;
         LedgerEntry liabEntry = {};
         liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
-        AccountFromReverse(&liabEntry, line);
+        LedgerEntry assetEntry = {};
+        assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        AccountFromReverse(&assetEntry, &liabEntry, line);
         char query[1024];
         snprintf(query, sizeof(query),
                  "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
@@ -3622,11 +3665,29 @@ handleReverseUPA(State *state, char *res)
         state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = liabEntry;
         printf("entry name is %s and value is %f\n", liabEntry.accountName,
                liabEntry.credit);
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 assetEntry.id,
+                 stratId,
+                 LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                 assetEntry.accountName,
+                 assetEntry.debit,
+                 assetEntry.credit,
+                 assetEntry.memo,
+                 assetEntry.currency == USD ? "USD" : "INR" 
+                 );
+        pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = assetEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.credit);
         i++;
     }
     strcpy(res, "completed");
 }
 
+/* TODO(Akhil): Persist the ledger entries here */
 void
 handleBankTransfer(State *state, char *res)
 {
@@ -3826,7 +3887,7 @@ handleBankTransfer(State *state, char *res)
 }
 
 void
-handleSubsUPA(State *state, char *res)
+handleSubsUPA(State *state, char *res, char *stratSymbol)
 {
     char line[1024];
     FILE *subsFile = fopen("tmp.csv", "r");
@@ -3892,7 +3953,14 @@ handleSubsUPA(State *state, char *res)
 
     int i = 0;
     ++state->strategies[state->currStratIndex].currJournalId; // same id for the couple.
-    int stratId = -1;
+     
+
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
     while (fgets(line, sizeof(line), subsFile))
     {
         TrimString(line);
@@ -3910,7 +3978,6 @@ handleSubsUPA(State *state, char *res)
         entry.id = state->strategies[state->currStratIndex].currJournalId;
         if (i == 1) entry.type = EQUITY;
         else if (i == 2) entry.type = ASSET;
-        char stratSymbol[100];
         AccountFromSubs(&entry, state, inv, stratSymbol, line);
         printf("strat symbol is %s\n", stratSymbol);
         if (i == 2)
@@ -4358,7 +4425,7 @@ answer_to_connection (void *cls,
         }
         else if (0 == strcmp(url, "/subs-upa"))
         {
-            handleSubsUPA(state, con_info->answerstring);
+            handleSubsUPA(state, con_info->answerstring, con_info->strategySymbol);
         }
         else if (0 == strcmp(url, "/bank-transfer"))
         {

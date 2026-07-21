@@ -3000,6 +3000,114 @@ getStratIndex(State *state, char *stratSymbol)
 }
 
 void
+handleOffCashFlow(State *state, char *res)
+{
+    char line[1024];
+    int i = 0;
+    FILE *cashflowFile = fopen("tmp.csv", "r");
+    if (cashflowFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
+    }
+    /* fetch the strat symbol from the file */
+    char stratSymbol[100];
+    FILE *cashflowFileCopy = fopen("tmp.csv", "r");
+    if (cashflowFileCopy == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
+    }
+
+    char copyLine[1024];
+    while (fgets(copyLine, sizeof(copyLine), cashflowFileCopy))
+    {
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        if (i == 1)
+        {
+            LoadStratSymbolFromFile(copyLine, stratSymbol);
+            break;
+        }
+        i++;
+    }
+
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), cashflowFile))
+    {
+        TrimString(line);
+
+        if (line[0] == '\0') {
+            continue; 
+        } 
+
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        /* NOTE(Akhil): here we are working on the latest strategy.
+                        usually first column discloses the strategy name. */
+        ++state->strategies[state->currStratIndex].currJournalId;
+        LedgerEntry assetEntry = {};
+        assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        LedgerEntry liabEntry = {};
+        liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        AccountFromCashFlow(&assetEntry, &liabEntry, line);
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 assetEntry.id,
+                 stratId,
+                 LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                 assetEntry.accountName,
+                 assetEntry.debit,
+                 assetEntry.credit,
+                 assetEntry.memo,
+                 assetEntry.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = assetEntry;
+        printf("off cashflow entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 liabEntry.id,
+                 stratId,
+                 LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                 liabEntry.accountName,
+                 liabEntry.debit,
+                 liabEntry.credit,
+                 liabEntry.memo,
+                 liabEntry.currency == USD ? "USD" : "INR" 
+                 );
+        pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = liabEntry;
+        printf("off cashflow entry name is %s and value is %f\n", liabEntry.accountName,
+               liabEntry.credit);
+        i++;
+    }
+    strcpy(res, "completed");
+}
+
+void
 handleNAV(State *state, char *stratSymbol, char *date, char *res)
 {
     /* fetch the strategy's id from the db */
@@ -4480,6 +4588,10 @@ answer_to_connection (void *cls,
                       con_info->strategySymbol,
                       con_info->date,
                       con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/offboard-cashflow"))
+        {
+            handleOffCashFlow(state, con_info->answerstring);
         }
 
         return send_page (connection,

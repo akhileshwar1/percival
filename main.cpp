@@ -415,6 +415,23 @@ mmddyyyy_to_ddmmyyyy(const char *in, char *out)
     sprintf(out, "%02d/%02d/%04d", day, month, year);
 }
 
+/* 30-06-2026 to 30/06/2026 */
+void ConvertDateSeparator(const char *input_date, char *output, size_t output_size)
+{
+    int day = 0, month = 0, year = 0;
+
+    /* 1. Extract pieces from DD-MM-YYYY layout */
+    if (sscanf(input_date, "%d-%d-%d", &day, &month, &year) == 3)
+    {
+        /* 2. Format with zero padding into your destination buffer */
+        snprintf(output, output_size, "%02d/%02d/%04d", day, month, year);
+    }
+    else
+    {
+        /* Fallback: Clear string if parsing fails */
+        if (output_size > 0) output[0] = '\0';
+    }
+}
 
 void
 LoadFNOBhav(FNO_bhav *bhav, char *line)
@@ -1047,7 +1064,7 @@ LoadFNOTrade(FNO_trade *trade, char *line)
         else if (i == 5)
         {
             char output[11];
-            mmddyyyy_to_ddmmyyyy(token, output);
+            ConvertDateSeparator(token, output, sizeof(output));
             if (output[0] != '\0')
             {
                 strcpy(trade->date, output);
@@ -1077,7 +1094,12 @@ LoadFNOTrade(FNO_trade *trade, char *line)
         else if (i == 17)
         {
             /* for some reason here the date format is correct */
-            strcpy(trade->expiry, token);
+            char output[11];
+            ConvertDateSeparator(token, output, sizeof(output));
+            if (output[0] != '\0')
+            {
+                strcpy(trade->expiry, token);
+            }
         }
         else if (i == 18)
         {
@@ -1160,7 +1182,7 @@ LoadTrade(Trade *trade, char *line)
         else if (i == 5)
         {
             char output[11];
-            mmddyyyy_to_ddmmyyyy(token, output);
+            ConvertDateSeparator(token, output, sizeof(output));
             if (output[0] != '\0')
             {
                 strcpy(trade->date, output);

@@ -1,2 +1,2 @@
 Broker Code,Broker Account,Parent Symbol,Exchange,Transaction Type,Transaction Date,Settlement date,Quantity,Rate,Brokerage per share,Service tax,Set date flag,Filler,Cash Symbol,STT,Filler,Block Id,Expiry date,Strike price,Option type,Series,BANKREF,DESCMEMO,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG
-DHAN,31500012A,NIFTY,NSE,MCS,3/24/2025,3/24/2025,150,27.45,0,0,F,0,CASH_INR,0,0,0,27/03/2025,23850,CE,OPTIDX,,,Y,CASH_INR,,N
+DHAN,31500012A,NIFTY,NSE,MCS,24-03-2025,24-03-2025,150,27.45,0,0,F,0,CASH_INR,0,0,0,24-03-2025,23850,CE,OPTIDX,,,Y,CASH_INR,,N

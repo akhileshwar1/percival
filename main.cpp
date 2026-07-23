@@ -84,8 +84,31 @@ char servererrorpage[] =
  "<html><body>This file already exists.</body></html>"; */
 char fileioerror[] =
 "<html><body>IO error writing to disk.</body></html>";
+char invalidfileformaterror[] =
+"<html><body>invalid file format error.</body></html>";
 char postprocerror[] =
 "<html><head><title>Error</title></head><body>Error processing POST data</body></html>";
+
+char exchangeRateHeader[] =
+    "currency_code,date,rate,base";
+char strategyHeader[] =
+    "GROUPCODE,GROUPNAME,GROUPCONTACT,ACCOUNTCODE,SALUTATION,FIRSTNAME,MIDDLENAME,LASTNAME,ADDR1,ADDR2,CITY,STATE,PINCD,PHONE,PHONEWORK,MOBILE,FAX,EMAIL,AUTOEMAILFLAG,OCCUPATION,CLIENTSTATUS,PAN,TAXABLE,INCEPTIONDATE,MATURITYDATE,ACCOUNTTYPE,USERNAME,BANKCD1,BANKACID1,DEPID,DPID,DPCLIENTID,BILLGROUP,MAPIN,MFINVESTNUMBER,REFERENCECODE2,REFERENCECODE3,REFERENCECODE4,SCHEMECODE,INTERCODE,FIRMCODE,ADVISORCODE,RELMGRCODE,BRANCHCODE,COUNTRY,NATIONALITY,CAPITALCOMMITEMENTAMT,PERFREPORTINGDATE,BANKACT_NAME,BANKACT_BRANCH,BANKACT_TYPE,BANKACT_NO,BANKACT_MICR,NEFT,RTGS,H1DEPCODE,H1DPID,H1DPCLIENTID,H1DOB,H1GUARDIAN,H1GENDER,H1FATHER_HUSB,H1WARD,H1CIRCLE,H1TANNO,SHAREREPORTS,H2NAME,H2PANNO,H2RELATION,H2DOB,H2GENDER,H2FATHER_HUSB,BANKACT2_NAME,BANKACT2_BRANCH,BANKACT2_NO,BANKACT2_TYPE,BANKACT2_MICR,H2NEFT,H2RTGS,H2DEPCODE,H2DPID,H2DPNAME,H2DPCLIENTID,H3NAME,H3PANNO,H3RELATION,H3DOB,H3GENDER,H3FATHER_HUSB,BANKACT3_NAME,BANKACT3_BRANCH,BANKACT3_NO,BANKACT3_TYPE,BANKACT3_MICR,H3NEFT,H3RTGS,H3DEPCODE,H3DPID,H3DPNAME,H3DPCLIENTID,POOLMAPINID,BANKNAME,OPERATIONTYPE,MAILH1ADD1,MAILH1ADD2,MAILH1CITY,MAILH1STATE,MAILH1PIN,MAILH1PHONE,MAILH1MOBILE,MAILH1PAGER,MAILH1FAX,MAILH1EMAILID,HOFFLAG,CLIENTID,WEALTHADVISORNAME,ARNNO,H1CKYC,H1AADHAR,H1FATCA,H1UBO,H2CKYC,H2AADHAR,H2FATCA,H2UBO,H3CKYC,H3AADHAR,H3FATCA,H3UBO,ACCOUNTINGTXN,TXNFEETAKENAS,STTTAKENAS,BASEFUNDID,H1MODEOFHOLDING,NOMINEENAME,NOMINEERELATION,NOMINEEADD1,NOMINEEADD2,NOMINEECITY,NOMINEESTATE,NOMINEEPIN,NOMINEEPHONE,NOMINEEFAX,GUARDIANNAME,GUARDIANADD1,GUARDIANADD2,GUARDIANCITY,GUARDIANSTATE,GUARDIANPIN,GUARDIANPHONE,GUARDIANFAX,NOMDOB,NOMPAN,NGDOB,NGPAN,NGAADHAR,NGCKYC,NGFATCA,NGUBO,BANKACTYPE,BANKBRANCH,BANKCODE2,BANKACID2,BANKNAME2,BANKACTYPE2,BANKBRANCH2,INCCATG,MODELPORTFOLIO,PLANALLOWED,RECOPRODUCT,RMRIGHTS,ADVISORRIGHTS,FMRIGHTS,CLIENTRIGHTS,HOFRESTRICTED,SHARES,BOND_DEB,MF,FUTURES,OPTIONS,EQUITY_DEB,OTHER_ASSETS,PERFCLASSIFYDAILY,ONLYLOWESTCLASSIFY,RELMAPPING1,RISKPROFILENAME,CLIENTCATEGORY,ACCREDITEDINVESTOR,REFCODE5,REFCODE6,REFCODE7,REFCODE8,REFCODE9,REFCODE10";
+char investorHeader[] =
+    "GROUPCODE,GROUPNAME,GROUPCONTACT,ACCOUNTCODE,SALUTATION,FIRSTNAME,MIDDLENAME,LASTNAME,ADDR1,ADDR2,CITY,STATE,PINCD,PHONE,PHONEWORK,MOBILE,FAX,EMAIL,AUTOEMAILFLAG,OCCUPATION,CLIENTSTATUS,PAN,TAXABLE,INCEPTIONDATE,MATURITYDATE,ACCOUNTTYPE,USERNAME,BANKCD1,BANKACID1,DEPID,DPID,DPCLIENTID,BILLGROUP,MAPIN,MFINVESTNUMBER,REFERENCECODE2,REFERENCECODE3,REFERENCECODE4,SCHEMECODE,INTERCODE,FIRMCODE,ADVISORCODE,RELMGRCODE,BRANCHCODE,COUNTRY,NATIONALITY,CAPITALCOMMITEMENTAMT,PERFREPORTINGDATE,BANKACT_NAME,BANKACT_BRANCH,BANKACT_TYPE,BANKACT_NO,BANKACT_MICR,NEFT,RTGS,H1DEPCODE,H1DPID,H1DPCLIENTID,H1DOB,H1GUARDIAN,H1GENDER,H1FATHER_HUSB,H1WARD,H1CIRCLE,H1TANNO,SHAREREPORTS,H2NAME,H2PANNO,H2RELATION,H2DOB,H2GENDER,H2FATHER_HUSB,BANKACT2_NAME,BANKACT2_BRANCH,BANKACT2_NO,BANKACT2_TYPE,BANKACT2_MICR,H2NEFT,H2RTGS,H2DEPCODE,H2DPID,H2DPNAME,H2DPCLIENTID,H3NAME,H3PANNO,H3RELATION,H3DOB,H3GENDER,H3FATHER_HUSB,BANKACT3_NAME,BANKACT3_BRANCH,BANKACT3_NO,BANKACT3_TYPE,BANKACT3_MICR,H3NEFT,H3RTGS,H3DEPCODE,H3DPID,H3DPNAME,H3DPCLIENTID,POOLMAPINID,BANKNAME,OPERATIONTYPE,MAILH1ADD1,MAILH1ADD2,MAILH1CITY,MAILH1STATE,MAILH1PIN,MAILH1PHONE,MAILH1MOBILE,MAILH1PAGER,MAILH1FAX,MAILH1EMAILID,HOFFLAG,CLIENTID,WEALTHADVISORNAME,ARNNO,H1CKYC,H1AADHAR,H1FATCA,H1UBO,H2CKYC,H2AADHAR,H2FATCA,H2UBO,H3CKYC,H3AADHAR,H3FATCA,H3UBO,ACCOUNTINGTXN,TXNFEETAKENAS,STTTAKENAS,BASEFUNDID,H1MODEOFHOLDING,NOMINEENAME,NOMINEERELATION,NOMINEEADD1,NOMINEEADD2,NOMINEECITY,NOMINEESTATE,NOMINEEPIN,NOMINEEPHONE,NOMINEEFAX,GUARDIANNAME,GUARDIANADD1,GUARDIANADD2,GUARDIANCITY,GUARDIANSTATE,GUARDIANPIN,GUARDIANPHONE,GUARDIANFAX,NOMDOB,NOMPAN,NGDOB,NGPAN,NGAADHAR,NGCKYC,NGFATCA,NGUBO,BANKACTYPE,BANKBRANCH,BANKCODE2,BANKACID2,BANKNAME2,BANKACTYPE2,BANKBRANCH2,INCCATG,MODELPORTFOLIO,PLANALLOWED,RECOPRODUCT,RMRIGHTS,ADVISORRIGHTS,FMRIGHTS,CLIENTRIGHTS,HOFRESTRICTED,SHARES,BOND_DEB,MF,FUTURES,OPTIONS,EQUITY_DEB,OTHER_ASSETS,PERFCLASSIFYDAILY,ONLYLOWESTCLASSIFY,RELMAPPING1,RISKPROFILENAME,CLIENTCATEGORY,ACCREDITEDINVESTOR,REFCODE5,REFCODE6,REFCODE7,REFCODE8,REFCODE9,REFCODE10";
+char subsHeader[] =
+    "BROKERCODE,BROKERACID,SYMBOLCODE,EXCHG,TRANTYPE,DATEPUR_ACQUI,SETDATE,QUANTITY,RATE,BROKERAGEPERSHARE,SERVICETAX,SETDATEFLAG,MKTRATE,CASHSYMBOLCODE,TRANEXPENSE,ACCRUEDINTEREST,BLOCKID,TRANSREF,DESCMEMO,CHEQUENO,CHEQUEDTL,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG,TRFEXCHGRATE,CASHFLAG,BANKREF,CASHSETDATE";
+char bankHeader[] =
+    "TRANSFERDATE,CLIENTCODE,TRANSTYPE,FROMBANKCODE,FROMBANKACID,TRFBALANCEFROM,TRFBALANCETO,TOBANKCODE,TOBANKACID";
+char revHeader[] =
+    "BROKERCODE,BROKERACID,SYMBOLCODE,EXCHG,TRANTYPE,DATEPUR_ACQUI,SETDATE,QUANTITY,RATE,BROKERAGEPERSHARE,SERVICETAX,SETDATEFLAG,MKTRATE,CASHSYMBOLCODE,TRANEXPENSE,ACCRUEDINTEREST,BLOCKID,TRANSREF,DESCMEMO,CHEQUENO,CHEQUEDTL,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG,TRFEXCHGRATE,CASHFLAG,BANKREF,CASHSETDATE";
+char cashflowHeader [] =
+    "PlanId,TranDate,TranType,CashFlowValue,NAV,NAV Date,Bank Code,Bank Ac Id ,Ban Ac type,Chq No,Chq Detl,Remarks,NAV/Unit Flag,Face Value";
+char unitsHeader [] =
+    "BROKERCODE,BROKERACID,SYMBOLCODE,EXCHG,TRANTYPE,DATEPUR_ACQUI,SETDATE,QUANTITY,RATE,BROKERAGEPERSHARE,SERVICETAX,SETDATEFLAG,MKTRATE,CASHSYMBOLCODE,TRANEXPENSE,ACCRUEDINTEREST,BLOCKID,TRANSREF,DESCMEMO,CHEQUENO,CHEQUEDTL,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG,TRFEXCHGRATE,CASHFLAG,BANKREF,CASHSETDATE";
+char expenseHeader [] =
+    "BROKERCODE,BROKERACID,SYMBOLCODE,EXCHG,TRANTYPE,DATEPUR_ACQUI,SETDATE,QUANTITY,RATE,BROKERAGEPERSHARE,SERVICETAX,SETDATEFLAG,MKTRATE,CASHSYMBOLCODE,TRANEXPENSE,ACCRUEDINTEREST,BLOCKID,TRANSREF,DESCMEMO,CHEQUENO,CHEQUEDTL,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG,TRFEXCHGRATE,CASHFLAG,BANKREF,CASHSETDATE";
+char fnoTradesHeader [] =
+    "Broker Code,Broker Account,Parent Symbol,Exchange,Transaction Type,Transaction Date,Settlement date,Quantity,Rate,Brokerage per share,Service tax,Set date flag,Filler,Cash Symbol,STT,Filler,Block Id,Expiry date,Strike price,Option type,Series,BANKREF,DESCMEMO,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG";
 
 typedef enum
 {
@@ -293,6 +316,15 @@ typedef struct
     int currOptIDCount;
     PGconn *db;
 } State;
+
+int ValidateCsvHeader(char *firstLine, char *expectedHeader)
+{
+    if (strcmp(firstLine, expectedHeader) == 0) {
+        return 0; // Valid CSV header structure!
+    }
+
+    return -1;
+}
 
 /* Modifies the string in place to remove leading/trailing spaces, \r, and \n */
 char* TrimString(char *str)
@@ -1285,7 +1317,7 @@ void
 processBhav(FILE *bhavFile, int dbStratId,
             int stratIndex, State *state)
 {
-    char line[1024];
+    char line[4096];
     int i = 0;
     while (fgets(line, sizeof(line), bhavFile))
     {
@@ -3347,6 +3379,7 @@ handleBhavFNO(State *state, char *stratSymbol, char *res)
     int stratIndex = getStratIndex(state, stratSymbol);
     printf("strat index is %d\n", stratIndex);
 
+    /* TODO(Akhil) : format error for bhav file */
     processBhav(FBhavFile, stratId, stratIndex, state);
     strcpy(res, "completed");
 }
@@ -3372,11 +3405,17 @@ handleTradesEq(State *state, char *res)
         return;
     }
 
-    char copyLine[1024];
+    char copyLine[4096];
     while (fgets(copyLine, sizeof(copyLine), FTradesFileCopy))
     {
         if (i == 0)
         {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, fnoTradesHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -3429,11 +3468,17 @@ handleTradesFNO(State *state, char *res)
         return;
     }
 
-    char copyLine[1024];
+    char copyLine[4096];
     while (fgets(copyLine, sizeof(copyLine), FTradesFileCopy))
     {
         if (i == 0)
         {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, fnoTradesHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -3467,7 +3512,7 @@ handleTradesFNO(State *state, char *res)
 void
 handleFundExpense(State *state, char *res)
 {
-    char line[1024];
+    char line[4096];
     int i = 0;
     FILE *expenseFile = fopen("tmp.csv", "r");
     if (expenseFile == NULL)
@@ -3486,11 +3531,17 @@ handleFundExpense(State *state, char *res)
         return;
     }
 
-    char copyLine[1024];
+    char copyLine[4096];
     while (fgets(copyLine, sizeof(copyLine), expenseFileCopy))
     {
         if (i == 0)
         {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, expenseHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -3572,7 +3623,7 @@ handleFundExpense(State *state, char *res)
 void
 handleAllotUnits(State *state, char *res)
 {
-    char line[1024];
+    char line[4096];
     int i = 0;
     FILE *unitFile = fopen("tmp.csv", "r");
     if (unitFile == NULL)
@@ -3592,6 +3643,12 @@ handleAllotUnits(State *state, char *res)
 
         if (i == 0)
         {
+            TrimString(line);
+            if(ValidateCsvHeader(line, unitsHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -3604,7 +3661,7 @@ handleAllotUnits(State *state, char *res)
 void
 handleCashFlow(State *state, char *res)
 {
-    char line[1024];
+    char line[4096];
     int i = 0;
     FILE *cashflowFile = fopen("tmp.csv", "r");
     if (cashflowFile == NULL)
@@ -3623,11 +3680,17 @@ handleCashFlow(State *state, char *res)
         return;
     }
 
-    char copyLine[1024];
+    char copyLine[4096];
     while (fgets(copyLine, sizeof(copyLine), cashflowFileCopy))
     {
         if (i == 0)
         {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, cashflowHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -3712,7 +3775,7 @@ handleCashFlow(State *state, char *res)
 void
 handleReverseUPA(State *state, char *res)
 {
-    char line[1024];
+    char line[4096];
     int i = 0;
     FILE *reverseFile = fopen("tmp.csv", "r");
     if (reverseFile == NULL)
@@ -3732,11 +3795,17 @@ handleReverseUPA(State *state, char *res)
         return;
     }
 
-    char copyLine[1024];
+    char copyLine[4096];
     while (fgets(copyLine, sizeof(copyLine), reverseFileCopy))
     {
         if (i == 0)
         {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, revHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -3821,7 +3890,7 @@ handleReverseUPA(State *state, char *res)
 void
 handleBankTransfer(State *state, char *res)
 {
-    char line[1024];
+    char line[4096];
     FILE *bankFile = fopen("tmp.csv", "r");
     if (bankFile == NULL)
     {
@@ -3839,11 +3908,17 @@ handleBankTransfer(State *state, char *res)
         return;
     }
 
-    char copyLine[1024];
+    char copyLine[4096];
     while (fgets(copyLine, sizeof(copyLine), bankFileCopy))
     {
         if (i == 0)
         {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, bankHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -3874,6 +3949,7 @@ handleBankTransfer(State *state, char *res)
 
         if (i == 0)
         {
+            
             i++;
             continue; // ignore the top heading row.
         }
@@ -4019,7 +4095,7 @@ handleBankTransfer(State *state, char *res)
 void
 handleSubsUPA(State *state, char *res, char *stratSymbol)
 {
-    char line[1024];
+    char line[4096];
     FILE *subsFile = fopen("tmp.csv", "r");
     if (subsFile == NULL)
     {
@@ -4036,15 +4112,24 @@ handleSubsUPA(State *state, char *res, char *stratSymbol)
     {
         printf("sorry, couldn't upload file!\n");
     }
-    char copyLine[1024];
+    char copyLine[4096];
     int k = 0;
     while (fgets(copyLine, sizeof(copyLine), subsFileCopy))
     {
+        TrimString(copyLine);
+        printf("line is %s\n", copyLine);
         if (k == 0)
         {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, subsHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             k++;
             continue;
         }
+
         if (k == 1)
         {
             /* get the investor from the db. */
@@ -4165,7 +4250,7 @@ handleSubsUPA(State *state, char *res, char *stratSymbol)
 void
 handleAddInvestor(State *state, char *res)
 {
-    char line[1024];
+    char line[4096];
     Investor inv = {};
     FILE *clientFile = fopen("tmp.csv", "r");
     if (clientFile == NULL)
@@ -4185,6 +4270,12 @@ handleAddInvestor(State *state, char *res)
 
         if (i == 0)
         {
+            TrimString(line);
+            if(ValidateCsvHeader(line, investorHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -4217,7 +4308,7 @@ void
 handleCreateStrategy(State *state, char *res)
 {
     FILE *stratFile = fopen("tmp.csv", "r");
-    char line[1024];
+    char line[4096];
     if (stratFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -4236,6 +4327,12 @@ handleCreateStrategy(State *state, char *res)
 
         if (i == 0)
         {
+            TrimString(line);
+            if(ValidateCsvHeader(line, strategyHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -4294,6 +4391,12 @@ handleExchangeRate(State *state, char *res)
 
         if (i == 0)
         {
+            TrimString(line);
+            if(ValidateCsvHeader(line, exchangeRateHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -4378,11 +4481,13 @@ iterate_post (void *coninfo_cls,
     {
         memcpy(con_info->strategySymbol + off, data, size);
         con_info->strategySymbol[off + size] = '\0';
+        return MHD_YES;
     }
     else if (strcmp(key, "date") == 0)
     {
         memcpy(con_info->date + off, data, size);
         con_info->date[off + size] = '\0';
+        return MHD_YES;
     }
     else if (0 != strcmp (key, "file"))
     {

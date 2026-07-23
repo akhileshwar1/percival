@@ -109,6 +109,10 @@ char expenseHeader [] =
     "BROKERCODE,BROKERACID,SYMBOLCODE,EXCHG,TRANTYPE,DATEPUR_ACQUI,SETDATE,QUANTITY,RATE,BROKERAGEPERSHARE,SERVICETAX,SETDATEFLAG,MKTRATE,CASHSYMBOLCODE,TRANEXPENSE,ACCRUEDINTEREST,BLOCKID,TRANSREF,DESCMEMO,CHEQUENO,CHEQUEDTL,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG,TRFEXCHGRATE,CASHFLAG,BANKREF,CASHSETDATE";
 char fnoTradesHeader [] =
     "Broker Code,Broker Account,Parent Symbol,Exchange,Transaction Type,Transaction Date,Settlement date,Quantity,Rate,Brokerage per share,Service tax,Set date flag,Filler,Cash Symbol,STT,Filler,Block Id,Expiry date,Strike price,Option type,Series,BANKREF,DESCMEMO,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG";
+char offcashflowHeader [] =
+    "TranDate,PlanId,TranType,CashFlowValue,NAV,NAV Date,Bank Code,Bank Ac Id ,Ban Ac type,Chq No,Chq Detl,Remarks,NAV/Unit Flag,Face Value";
+char offredeemHeader [] =
+    "BROKERCODE,BROKERACID,SYMBOLCODE,EXCHG,TRANTYPE,DATEPUR_ACQUI,SETDATE,QUANTITY,RATE,BROKERAGEPERSHARE,SERVICETAX,SETDATEFLAG,MKTRATE,CASHSYMBOLCODE,TRANEXPENSE,ACCRUEDINTEREST,BLOCKID,TRANSREF,DESCMEMO,CHEQUENO,CHEQUEDTL,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG,TRFEXCHGRATE,CASHFLAG,BANKREF,CASHSETDATE";
 
 typedef enum
 {
@@ -763,6 +767,63 @@ allotUnits(State *state, char *line)
                 printf("%s", errorMessage);
             }
             PQclear(pgResult);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
+AccountFromRedeem(LedgerEntry *assetEntry,
+                    LedgerEntry *liabEntry,
+                    char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    char accountName[100] = "";
+    real64 result = 1;
+    while (token != NULL)
+    {
+        if (i ==  1)
+        {
+            strcat(accountName, token); 
+            strcat(accountName, "_CASH_USD"); 
+            strcpy(assetEntry->accountName, accountName);
+            strcpy(accountName, ""); 
+        }
+        else if (i == 2)
+        {
+            strcat(accountName, token); 
+            strcat(accountName, "_CASH_USD");
+            strcpy(liabEntry->accountName, accountName);
+        }
+        else if (i == 7)
+        {
+            result *= atof(token);
+        }
+        else if (i == 8)
+        {
+            result *= atof(token); /* nav units * nav rate */
+            assetEntry->debit = result;
+            liabEntry->credit = result;
+        }
+        else if (i == 13)
+        {
+            if (0 == strcmp(token, "CASH_USD"))
+            {
+                liabEntry->currency = USD;
+                liabEntry->type = REVENUE;
+                assetEntry->currency = USD;
+                assetEntry->type = ASSET;
+            }
+            else
+            {
+                liabEntry->currency = INR;
+                liabEntry->type = REVENUE;
+                assetEntry->currency = INR;
+                assetEntry->type = ASSET;
+            }
         }
         token = strtok(NULL, ",");
         i++;
@@ -3012,6 +3073,24 @@ LoadStratSymbolFromFile(char *line, char *stratSymbol)
     }
 }
 
+/* Present at the 2nd column */
+void
+LoadStratSymbolFromFileSecond(char *line, char *stratSymbol)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i ==  2)
+        {
+            strcpy(stratSymbol, token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
 /* from the db */
 int
 getStratId(char *stratSymbol, PGconn *conn)
@@ -3053,6 +3132,120 @@ getStratIndex(State *state, char *stratSymbol)
     return stratIndex;
 }
 
+/* only for accounting, no state changes */
+void
+handleOffRedeem(State *state, char *res)
+{
+    char line[1024];
+    int i = 0;
+    FILE *redeemFile = fopen("tmp.csv", "r");
+    if (redeemFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
+    }
+    /* fetch the strat symbol from the file */
+    char stratSymbol[100];
+    FILE *redeemFileCopy = fopen("tmp.csv", "r");
+    if (redeemFileCopy == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
+    }
+
+    char copyLine[1024];
+    while (fgets(copyLine, sizeof(copyLine), redeemFileCopy))
+    {
+        if (i == 0)
+        {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, offredeemHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
+            i++;
+            continue; // ignore the top heading row.
+        }
+        if (i == 1)
+        {
+            LoadStratSymbolFromFileSecond(copyLine, stratSymbol);
+            break;
+        }
+        i++;
+    }
+
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), redeemFile))
+    {
+        TrimString(line);
+
+        if (line[0] == '\0') {
+            continue; 
+        } 
+
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        ++state->strategies[state->currStratIndex].currJournalId;
+        LedgerEntry assetEntry = {};
+        assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        LedgerEntry liabEntry = {};
+        liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        AccountFromRedeem(&assetEntry, &liabEntry, line);
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 assetEntry.id,
+                 stratId,
+                 LedgerEntryTypeStrings[assetEntry.type], // Converts enum integer index to matching string literal
+                 assetEntry.accountName,
+                 assetEntry.debit,
+                 assetEntry.credit,
+                 assetEntry.memo,
+                 assetEntry.currency == USD ? "USD" : "INR" 
+                 );
+        PGresult *pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = assetEntry;
+        printf("off cashflow entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        snprintf(query, sizeof(query),
+                 "INSERT INTO ledger_entry (journal_id, strategy_id, type, account_name, debit, credit, memo, currency) "
+                 "VALUES (%d, %d, '%s', '%s', %f, %f, '%s', '%s');",
+                 liabEntry.id,
+                 stratId,
+                 LedgerEntryTypeStrings[liabEntry.type], // Converts enum integer index to matching string literal
+                 liabEntry.accountName,
+                 liabEntry.debit,
+                 liabEntry.credit,
+                 liabEntry.memo,
+                 liabEntry.currency == USD ? "USD" : "INR" 
+                 );
+        pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = liabEntry;
+        printf("off cashflow entry name is %s and value is %f\n", liabEntry.accountName,
+               liabEntry.credit);
+        i++;
+    }
+    strcpy(res, "completed");
+}
+
+/* only for accounting, no state changes */
 void
 handleOffCashFlow(State *state, char *res)
 {
@@ -3080,6 +3273,12 @@ handleOffCashFlow(State *state, char *res)
     {
         if (i == 0)
         {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, offcashflowHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
             i++;
             continue; // ignore the top heading row.
         }
@@ -4719,6 +4918,10 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/offboard-cashflow"))
         {
             handleOffCashFlow(state, con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/offboard-redeem"))
+        {
+            handleOffRedeem(state, con_info->answerstring);
         }
 
         return send_page (connection,

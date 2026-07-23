@@ -44,11 +44,6 @@ curl -v -X POST \
     -F "file=@ab_units.csv" \
     $SERVER/allot-units
 
-# # 7. Fund Cashflow
-# curl -v -X POST \
-#     -F "file=@ab_off_cashflow.csv" \
-#     $SERVER/offboard-cashflow
-#
 # 9. Fund Expense
 curl -v -X POST \
     -F "file=@fund_expense.csv" \
@@ -175,3 +170,12 @@ curl -v -X POST \
     -F "strategySymbol=31500012A" \
     -F "date=28/03/2025" \
     $SERVER/process-nav
+
+# OFFboarding test -----------------------------------------------------
+curl -v -X POST \
+    -F "file=@ab_off_cashflow.csv" \
+    $SERVER/offboard-cashflow
+
+curl -v -X POST \
+    -F "file=@ab_off_redeem.csv" \
+    $SERVER/offboard-redeem

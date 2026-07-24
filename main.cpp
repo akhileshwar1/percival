@@ -1191,7 +1191,7 @@ LoadFNOTrade(FNO_trade *trade, char *line)
             ConvertDateSeparator(token, output, sizeof(output));
             if (output[0] != '\0')
             {
-                strcpy(trade->expiry, token);
+                strcpy(trade->expiry, output);
             }
         }
         else if (i == 18)

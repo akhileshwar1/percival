@@ -15,7 +15,7 @@ curl -v -X POST \
 
 # 3. Add Investor
 curl -v -X POST \
-    -F "file=@error.csv" \
+    -F "file=@ab_inv.csv" \
     $SERVER/add-investor
 
 # 4. Subscription UPA
@@ -44,11 +44,11 @@ curl -v -X POST \
     -F "file=@ab_units.csv" \
     $SERVER/allot-units
 
-# 9. Fund Expense
-curl -v -X POST \
-    -F "file=@fund_expense.csv" \
-    $SERVER/fund-expense
-
+# # 9. Fund Expense
+# curl -v -X POST \
+#     -F "file=@fund_expense.csv" \
+#     $SERVER/fund-expense
+#
 # 10. F&O Trades
 curl -v -X POST \
     -F "file=@ab_trades_21.csv" \
@@ -171,11 +171,11 @@ curl -v -X POST \
     -F "date=28/03/2025" \
     $SERVER/process-nav
 
-# OFFboarding test -----------------------------------------------------
-curl -v -X POST \
-    -F "file=@ab_off_cashflow.csv" \
-    $SERVER/offboard-cashflow
-
-curl -v -X POST \
-    -F "file=@ab_off_redeem.csv" \
-    $SERVER/offboard-redeem
+# # OFFboarding test -----------------------------------------------------
+# curl -v -X POST \
+#     -F "file=@ab_off_cashflow.csv" \
+#     $SERVER/offboard-cashflow
+#
+# curl -v -X POST \
+#     -F "file=@ab_off_redeem.csv" \
+#     $SERVER/offboard-redeem

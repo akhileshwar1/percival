@@ -28,6 +28,13 @@ CREATE TABLE strategy
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint
 );
 
+-- Create the custom status ENUM type
+CREATE TYPE investor_status_enum AS ENUM (
+    'PENDING',
+    'ONBOARDED',
+    'OFFBOARDED'
+);
+
 DROP TABLE IF EXISTS investor CASCADE;
 CREATE TABLE investor (
     id SERIAL PRIMARY KEY,
@@ -36,6 +43,7 @@ CREATE TABLE investor (
     name VARCHAR(100) NOT NULL UNIQUE,
     units DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     inception_date DATE,
+    status investor_status_enum NOT NULL DEFAULT 'PENDING', -- Sets 'PENDING' automatically if omitted
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );

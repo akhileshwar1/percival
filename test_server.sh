@@ -171,11 +171,16 @@ curl -v -X POST \
     -F "date=28/03/2025" \
     $SERVER/process-nav
 
-# # OFFboarding test -----------------------------------------------------
-# curl -v -X POST \
-#     -F "file=@ab_off_cashflow.csv" \
-#     $SERVER/offboard-cashflow
-#
-# curl -v -X POST \
-#     -F "file=@ab_off_redeem.csv" \
-#     $SERVER/offboard-redeem
+# OFFboarding test -----------------------------------------------------
+curl -v -X POST \
+    -F "file=@ab_off_cashflow.csv" \
+    $SERVER/offboard-cashflow
+
+curl -v -X POST \
+    -F "file=@ab_off_redeem.csv" \
+    $SERVER/offboard-redeem
+
+curl -v -X POST \
+    -F "invName=SSF0004AIFNO" \
+    -F "file=@ab_off_bank.csv" \
+    $SERVER/offboard-bank

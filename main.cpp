@@ -60,6 +60,7 @@ typedef struct
     unsigned int answercode;
 
     char strategySymbol[100];
+    char invName[100];
 
     char date[100];
 } connection_info_struct;
@@ -143,12 +144,22 @@ typedef struct
     char sys_id[100];
 } Security;
 
+typedef enum
+{
+    INVESTOR_PENDING,
+    INVESTOR_ONBOARDED,
+    INVESTOR_OFFBOARDED
+} InvestorStatus;
+
+
+
 typedef struct
 {
     int id;
     char name[100];
     char inceptionDate[100];
     real64 units;
+    InvestorStatus status;
 } Investor;
 
 typedef struct
@@ -379,6 +390,12 @@ const char* InstrumentTypeStrings[] = {
 
 const char* TransTypeStrings[] = {
     "MB", "MS", "LB", "LS", "MOB", "MCB", "MOS", "MCS", "FSO", "FSC", "FBO", "FBC"
+};
+
+const char* InvestorStatusStrings[] = {
+    "PENDING",
+    "ONBOARDED",
+    "OFFBOARDED"
 };
 
 /* yyyy-mm-dd to dd/mm/yyyy */
@@ -747,6 +764,8 @@ allotUnits(State *state, char *line)
                             == 0)
                         {
                             state->strategies[j].investors[k].units = units;
+                            state->strategies[j].investors[k].status =
+                                INVESTOR_ONBOARDED;
                             printf("units are %f\n",
                                    state->strategies[j].investors[k].units);
                         }
@@ -756,8 +775,9 @@ allotUnits(State *state, char *line)
             // persist the units too.
             char query[1024];
             snprintf(query, sizeof(query),
-                     "UPDATE investor SET units = %f WHERE name = '%s'",
+                     "UPDATE investor SET units = %f, status = '%s' WHERE name = '%s'",
                      units,
+                     InvestorStatusStrings[INVESTOR_ONBOARDED],
                      invName
                      );
             PGresult *pgResult = executeQuery(state->db, query);
@@ -944,8 +964,10 @@ AccountFromExpense(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
 }
 
 void
-AccountFromBank(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
-                char *line, Currency_code startCurr)
+AccountFromBank(LedgerEntry *assetEntry,
+                LedgerEntry *liabEntry,
+                char *line,
+                Currency_code startCurr)
 {
     char *token;
     token = strtok(line, ",");
@@ -1080,6 +1102,7 @@ LoadInvestorFromClient(Investor *inv, char *line)
         token = strtok(NULL, ",");
         i++;
     }
+    inv->status = INVESTOR_PENDING;
 }
 
 void
@@ -3132,6 +3155,251 @@ getStratIndex(State *state, char *stratSymbol)
     return stratIndex;
 }
 
+/* state changes on the bank account balance.
+ * Finally marks the completion of offboarding of a client.*/
+void
+handleOffBank(State *state, char *invName, char *res)
+{
+    char line[4096];
+    FILE *bankFile = fopen("tmp.csv", "r");
+    if (bankFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    int i = 0;
+    /* fetch the strat symbol from the file */
+    char stratSymbol[100];
+    FILE *bankFileCopy = fopen("tmp.csv", "r");
+    if (bankFileCopy == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
+    }
+
+    char copyLine[4096];
+    while (fgets(copyLine, sizeof(copyLine), bankFileCopy))
+    {
+        if (i == 0)
+        {
+            TrimString(copyLine);
+            if(ValidateCsvHeader(copyLine, bankHeader) != 0)
+            {
+                strcpy(res, invalidfileformaterror);
+                return;
+            }
+            i++;
+            continue; // ignore the top heading row.
+        }
+        if (i == 1)
+        {
+            LoadStratSymbolFromFile(copyLine, stratSymbol);
+            break;
+        }
+        i++;
+    }
+
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    i = 0;
+    while (fgets(line, sizeof(line), bankFile))
+    {
+        TrimString(line);
+
+        if (line[0] == '\0') {
+            continue; 
+        } 
+
+        if (i == 0)
+        {
+
+            i++;
+            continue; // ignore the top heading row.
+        }
+        ++state->strategies[state->currStratIndex].currJournalId;
+
+        LedgerEntry assetEntry = {};
+        LedgerEntry liabEntry = {};
+        assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
+        if (i == 3)
+        {
+            AccountFromBank(&assetEntry, &liabEntry, line, INR);
+        }
+        else
+        {
+            AccountFromBank(&assetEntry, &liabEntry, line, USD);
+        }
+
+        // insert or update the liabEntry bank acc.
+        char query[1024];
+        sprintf(query,
+                "SELECT * FROM bank_account where symbol = '%s'",
+                liabEntry.accountName);
+
+        PGresult *pgResult = executeQuery(state->db, query);
+        int rows = PQntuples(pgResult);
+        if (rows == 0)
+        {
+            fprintf(stderr, "No bank acc found matching symbol: \n");
+            PQclear(pgResult);
+            // insert the bank account.
+            Bank_account acc = {};
+            strcpy(acc.symbol, liabEntry.accountName);
+            acc.balance = (0 - liabEntry.credit);
+            acc.currency = liabEntry.currency;
+            snprintf(query, sizeof(query),
+                     "INSERT INTO bank_account (strategy_id, symbol, balance, currency) "
+                     "VALUES (%d, '%s', %f, '%s');",
+                     stratId,
+                     acc.symbol,
+                     acc.balance,
+                     acc.currency == USD ? "USD" : "INR" 
+                     );
+            PGresult *pgResult = executeQuery(state->db, query);
+            PQclear(pgResult);
+
+            // insert in memory as well.
+            state->strategies[state->currStratIndex]
+                .accs[++state->strategies[state->currStratIndex].currAccIndex] = acc;
+        }
+        else
+        {
+            //update the bank acc balance.
+            // first, in memory, then in db.
+            for (int i = 0; i <= state->strategies[state->currStratIndex].currAccIndex;
+            i++)
+            {
+                if(strcmp(state->strategies[state->currStratIndex].accs[i].symbol,
+                          liabEntry.accountName) == 0)   
+                {
+                    printf("bal before %f\n", 
+                           state->strategies[state->currStratIndex].accs[i].balance);
+                    state->strategies[state->currStratIndex].accs[i].balance -=
+                        liabEntry.credit;
+                    printf("bal after %f\n", 
+                           state->strategies[state->currStratIndex].accs[i].balance);
+
+                    // db.
+                    snprintf(query, sizeof(query),
+                             "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                             state->strategies[state->currStratIndex].accs[i].balance,
+                             liabEntry.accountName);
+                    PGresult *pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+                }
+            }
+            PQclear(pgResult);
+        }
+        // insert or update the assetEntry bank acc.
+        printf("asset entry accoutnn name is %s\n", assetEntry.accountName);
+        sprintf(query,
+                "SELECT * FROM bank_account where symbol = '%s'",
+                assetEntry.accountName);
+
+        pgResult = executeQuery(state->db, query);
+        rows = PQntuples(pgResult);
+        if (rows == 0)
+        {
+            fprintf(stderr, "No bank acc found matching symbol: \n");
+            PQclear(pgResult);
+            // insert the bank account.
+            Bank_account acc = {};
+            strcpy(acc.symbol, assetEntry.accountName);
+            acc.balance = assetEntry.debit;
+            acc.currency = assetEntry.currency;
+            snprintf(query, sizeof(query),
+                     "INSERT INTO bank_account (strategy_id, symbol, balance, currency) "
+                     "VALUES (%d, '%s', %f, '%s');",
+                     stratId,
+                     acc.symbol,
+                     acc.balance,
+                     acc.currency == USD ? "USD" : "INR" 
+                     );
+            PGresult *pgResult = executeQuery(state->db, query);
+            PQclear(pgResult);
+
+            // insert in memory as well.
+            state->strategies[state->currStratIndex]
+                .accs[++state->strategies[state->currStratIndex].currAccIndex] = acc;
+        }
+        else
+        {
+            //update the bank acc balance.
+            // first, in memory, then in db.
+            for (int i = 0; i <= state->strategies[state->currStratIndex].currAccIndex;
+            i++)
+            {
+                if(strcmp(state->strategies[state->currStratIndex].accs[i].symbol,
+                          assetEntry.accountName) == 0)   
+                {
+                    state->strategies[state->currStratIndex].accs[i].balance +=
+                        assetEntry.debit;
+                    // db.
+                    snprintf(query, sizeof(query),
+                             "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
+                             state->strategies[state->currStratIndex].accs[i].balance,
+                             assetEntry.accountName);
+                    PGresult *pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+                }
+            }
+            PQclear(pgResult);
+        }
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = assetEntry;
+        state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = liabEntry;
+        printf("entry name is %s and value is %f\n", assetEntry.accountName,
+               assetEntry.debit);
+        i++;
+    }
+
+    /* update the investor in memory and db */
+    for (int j = 0; j < state->currStratIndex + 1; j++)
+    {
+        if (strcmp(stratSymbol, state->strategies[j].symbol) == 0)
+        {
+            // find the investor and allot units.
+            for (int k = 0;
+            k < state->strategies[j].currInvestorIndex + 1;
+            k++)
+            {
+                if (strcmp(invName, state->strategies[j].investors[k].name)
+                    == 0)
+                {
+                    state->strategies[j].investors[k].units = 0;
+                    state->strategies[j].investors[k].status =
+                        INVESTOR_OFFBOARDED;
+                    printf("units are %f\n",
+                           state->strategies[j].investors[k].units);
+                }
+            }
+        }
+    }
+    // persist the units too.
+    char query[1024];
+    snprintf(query, sizeof(query),
+             "UPDATE investor SET units = %f, status = '%s' WHERE name = '%s'",
+             0.0,
+             InvestorStatusStrings[INVESTOR_OFFBOARDED],
+             invName
+             );
+    PGresult *pgResult = executeQuery(state->db, query);
+    char *errorMessage = PQresultErrorMessage(pgResult);
+    if (strcmp(errorMessage, "") != 0)
+    {
+        printf("%s", errorMessage);
+    }
+    PQclear(pgResult);
+    strcpy(res, "completed"); 
+}
+
 /* only for accounting, no state changes */
 void
 handleOffRedeem(State *state, char *res)
@@ -4682,6 +4950,12 @@ iterate_post (void *coninfo_cls,
         con_info->strategySymbol[off + size] = '\0';
         return MHD_YES;
     }
+    if (strcmp(key, "invName") == 0)
+    {
+        memcpy(con_info->invName + off, data, size);
+        con_info->invName[off + size] = '\0';
+        return MHD_YES;
+    }
     else if (strcmp(key, "date") == 0)
     {
         memcpy(con_info->date + off, data, size);
@@ -4922,6 +5196,10 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/offboard-redeem"))
         {
             handleOffRedeem(state, con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/offboard-bank"))
+        {
+            handleOffBank(state, con_info->invName, con_info->answerstring);
         }
 
         return send_page (connection,

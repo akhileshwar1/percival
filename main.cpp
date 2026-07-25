@@ -9,6 +9,8 @@
 #include <sys/socket.h>
 #include <microhttpd.h>
 #include <ctype.h>
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 typedef uint32_t uint32;
 typedef uint64_t uint64;
@@ -3628,6 +3630,88 @@ handleOffCashFlow(State *state, char *res)
     strcpy(res, "completed");
 }
 
+/* the snapshot we store here is used when we want to clawback
+ * and recompute a nav, we retrieve the snapshot, apply it to
+ * memory and db, and then do the nav process again for that date */
+void
+saveDailySnapshot(PGconn *conn,
+                  int stratId,
+                  char *date,
+                  Strategy *strat)
+{
+    printf("Saving strategy snapshot....\n");
+    /* 1. Serialize primitive tracker parameters */
+    json meta;
+    meta["cash"] = strat->cash;
+    meta["nav"] = strat->nav;
+    meta["currPosIndex"] = strat->currPosIndex;
+    meta["currFPosIndex"] = strat->currFPosIndex;
+    meta["currAccIndex"] = strat->currAccIndex;
+    meta["currInvestorIndex"] = strat->currInvestorIndex;
+    meta["currJournalId"] = strat->currJournalId;
+    meta["currEntryId"] = strat->currEntryId;
+    meta["feesAccrued"] = strat->feesAccrued;
+    meta["symbol"] = strat->symbol;
+
+    /* 2. Serialize structural arrays up to active boundaries */
+    json eq_pos = json::array();
+    for (int i = 0; i <= strat->currPosIndex; i++) {
+        eq_pos.push_back({
+            {"isin", strat->positions[i].isin},
+            {"symbol", strat->positions[i].symbol},
+            {"qty", strat->positions[i].qty},
+            {"price", strat->positions[i].price},
+            {"ltp", strat->positions[i].ltp},
+            {"sys_id", strat->positions[i].sys_id}
+        });
+    }
+    json fno_pos = json::array();
+    for (int i = 0; i <= strat->currFPosIndex; i++) {
+        fno_pos.push_back({
+            {"symbol", strat->fpositions[i].symbol},
+            {"qty", strat->fpositions[i].qty},
+            {"price", strat->fpositions[i].price},
+            {"ltp", strat->fpositions[i].ltp},
+            {"optType", strat->fpositions[i].optType},
+            {"instType", strat->fpositions[i].instType},
+            {"strike", strat->fpositions[i].strike},
+            {"expiry", strat->fpositions[i].expiry},
+            {"sys_id", strat->fpositions[i].sys_id}
+        });
+    }
+    json bankAccs = json::array();
+    for (int i = 0; i <= strat->currAccIndex; i++) {
+        bankAccs.push_back({
+            {"symbol", strat->accs[i].symbol},
+            {"balance", strat->accs[i].balance},
+            {"currency_code", strat->accs[i].currency},
+        });
+    }
+
+    /* 3. Convert JSON objects to text strings */
+    std::string meta_str = meta.dump();
+    std::string eq_str = eq_pos.dump();
+    std::string fno_str = fno_pos.dump();
+    std::string acc_str = bankAccs.dump();
+
+    /* 4. Save to PostgreSQL using an UPSERT pattern */
+    char query[8192 * 3];
+    snprintf(query, sizeof(query),
+             "INSERT INTO strategy_state_snapshot (strategy_id, snapshot_date, meta_state, equity_positions, fno_positions, banks) "
+             "VALUES (%d, to_date('%s', 'DD/MM/YYYY'), '%s', '%s', '%s', '%s') "
+             "ON CONFLICT (strategy_id, snapshot_date) DO UPDATE SET "
+             "meta_state = EXCLUDED.meta_state, equity_positions = EXCLUDED.equity_positions, fno_positions = EXCLUDED.fno_positions, banks = EXCLUDED.banks;",
+             stratId, date, meta_str.c_str(), eq_str.c_str(), fno_str.c_str(), acc_str.c_str());
+
+    PGresult *res = PQexec(conn, query);
+    char *error = PQresultErrorMessage(res);
+    if (strcmp(error, "") != 0)
+    {
+        printf("%s", error);
+    }
+    PQclear(res);
+}
+
 void
 handleNAV(State *state, char *stratSymbol, char *date, char *res)
 {
@@ -3666,6 +3750,12 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     strcpy(exRate.date, date);
     real64 nav = printNav(state, &exRate, stratIndex, stratId);
     sprintf(res, "nav is %f", nav);
+    
+    /* save the state snapshot for the date */
+    saveDailySnapshot(state->db,
+                      stratId,
+                      date,
+                      &(state->strategies[stratIndex]));
 }
 
 void

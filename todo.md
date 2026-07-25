@@ -7,3 +7,6 @@
 * offboarding.
 * Don't reverse state and reapply instead apply again on the current state.
 * Parse comma seperate nos like 53,327 from csv.
+* saturday sunday fee accrual.
+* publish nav only once for a date.
+* clawback nav.

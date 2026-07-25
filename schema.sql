@@ -264,3 +264,24 @@ CREATE TABLE security (
     name VARCHAR(100) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+DROP TABLE IF EXISTS strategy_state_snapshot CASCADE;
+
+CREATE TABLE strategy_state_snapshot (
+    id SERIAL PRIMARY KEY,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE,
+    snapshot_date DATE NOT NULL,
+    
+    -- Stores the baseline flat variables (cash, nav, tracking indices)
+    meta_state JSONB NOT NULL,
+    
+    -- Stores structural memory array contents
+    equity_positions JSONB NOT NULL,
+    fno_positions JSONB NOT NULL,
+    banks JSONB NOT NULL,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_strategy_snapshot_date UNIQUE (strategy_id, snapshot_date)
+);
+
+CREATE INDEX idx_snapshot_lookup ON strategy_state_snapshot (strategy_id, snapshot_date);

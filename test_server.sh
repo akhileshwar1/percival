@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SERVER=http://localhost:8888
-# SERVER=http://13.53.186.189:8888
+# SERVER=http://13.53.138.234:8888
 
 # 1. Exchange Rate
 curl -v -X POST \
@@ -73,7 +73,8 @@ curl -v -X POST \
     $SERVER/process-nav
 
 
-# 2ND DAY -24th -----------------------------------------------------
+
+# # 2ND DAY -24th -----------------------------------------------------
 # 1. Exchange Rate
 curl -v -X POST \
     -F "file=@exchange_rate_24.csv" \
@@ -100,87 +101,94 @@ curl -v -X POST \
     -F "date=24/03/2025" \
     $SERVER/process-nav
 
-# 4TH DAY - 25th-----------------------------------------------------
-# 1. Exchange Rate
-curl -v -X POST \
-    -F "file=@exchange_rate_25.csv" \
-    $SERVER/exchange-rate
-
+# 14. clawback NAV
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
-    -F "file=@WO250325.CSV" \
-    $SERVER/bhav-fno
+    -F "rollbackDate=24/03/2025" \
+    -F "snapshotDate=21/03/2025" \
+    $SERVER/clawback-nav
 
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "date=25/03/2025" \
-    $SERVER/process-nav
-
-# 5TH DAY - 26th-----------------------------------------------------
-# 1. Exchange Rate
-curl -v -X POST \
-    -F "file=@exchange_rate_26.csv" \
-    $SERVER/exchange-rate
-
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "file=@WO260325.CSV" \
-    $SERVER/bhav-fno
-
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "date=26/03/2025" \
-    $SERVER/process-nav
-
-# 5TH DAY - 27th-----------------------------------------------------
-# 1. Exchange Rate
-curl -v -X POST \
-    -F "file=@exchange_rate_27.csv" \
-    $SERVER/exchange-rate
-
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "file=@WO270325.CSV" \
-    $SERVER/bhav-fno
-
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "date=27/03/2025" \
-    $SERVER/process-nav
-
-
-
-# # 6TH DAY -28th -----------------------------------------------------
-# 1. Exchange Rate
-curl -v -X POST \
-    -F "file=@exchange_rate_28.csv" \
-    $SERVER/exchange-rate
-
-curl -v -X POST \
-    -F "file=@ab_trades_28.csv" \
-    $SERVER/trades-fno
-
-# 12. MTM Process
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    $SERVER/mtm-process
-
-# 13. Process NAV
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "date=28/03/2025" \
-    $SERVER/process-nav
-
-# OFFboarding test -----------------------------------------------------
-curl -v -X POST \
-    -F "file=@ab_off_cashflow.csv" \
-    $SERVER/offboard-cashflow
-
-curl -v -X POST \
-    -F "file=@ab_off_redeem.csv" \
-    $SERVER/offboard-redeem
-
-curl -v -X POST \
-    -F "invName=SSF0004AIFNO" \
-    -F "file=@ab_off_bank.csv" \
-    $SERVER/offboard-bank
+# # 4TH DAY - 25th-----------------------------------------------------
+# # 1. Exchange Rate
+# curl -v -X POST \
+#     -F "file=@exchange_rate_25.csv" \
+#     $SERVER/exchange-rate
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "file=@WO250325.CSV" \
+#     $SERVER/bhav-fno
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=25/03/2025" \
+#     $SERVER/process-nav
+#
+# # 5TH DAY - 26th-----------------------------------------------------
+# # 1. Exchange Rate
+# curl -v -X POST \
+#     -F "file=@exchange_rate_26.csv" \
+#     $SERVER/exchange-rate
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "file=@WO260325.CSV" \
+#     $SERVER/bhav-fno
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=26/03/2025" \
+#     $SERVER/process-nav
+#
+# # 5TH DAY - 27th-----------------------------------------------------
+# # 1. Exchange Rate
+# curl -v -X POST \
+#     -F "file=@exchange_rate_27.csv" \
+#     $SERVER/exchange-rate
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "file=@WO270325.CSV" \
+#     $SERVER/bhav-fno
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=27/03/2025" \
+#     $SERVER/process-nav
+#
+#
+#
+# # # 6TH DAY -28th -----------------------------------------------------
+# # 1. Exchange Rate
+# curl -v -X POST \
+#     -F "file=@exchange_rate_28.csv" \
+#     $SERVER/exchange-rate
+#
+# curl -v -X POST \
+#     -F "file=@ab_trades_28.csv" \
+#     $SERVER/trades-fno
+#
+# # 12. MTM Process
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     $SERVER/mtm-process
+#
+# # 13. Process NAV
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=28/03/2025" \
+#     $SERVER/process-nav
+#
+# # OFFboarding test -----------------------------------------------------
+# curl -v -X POST \
+#     -F "file=@ab_off_cashflow.csv" \
+#     $SERVER/offboard-cashflow
+#
+# curl -v -X POST \
+#     -F "file=@ab_off_redeem.csv" \
+#     $SERVER/offboard-redeem
+#
+# curl -v -X POST \
+#     -F "invName=SSF0004AIFNO" \
+#     -F "file=@ab_off_bank.csv" \
+#     $SERVER/offboard-bank

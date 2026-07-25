@@ -65,6 +65,8 @@ typedef struct
     char invName[100];
 
     char date[100];
+    char rollbackDate[100];
+    char snapshotDate[100];
 } connection_info_struct;
 
 #define ASKPAGE \
@@ -388,6 +390,11 @@ const char* InstrumentTypeStrings[] = {
     "OPTSTK",
     "FUTIDX",
     "FUTSTK"
+};
+
+const char* CurrencyCodeStrings[] = {
+    "USD",
+    "INR",
 };
 
 const char* TransTypeStrings[] = {
@@ -3630,6 +3637,107 @@ handleOffCashFlow(State *state, char *res)
     strcpy(res, "completed");
 }
 
+/* Part of the clawback process, this step restores the previoud day's
+   strategy state --from the stored snapshot-- in the db */
+void
+handleClawNAV(State *state,
+              char *stratSymbol,
+              char *rollbackDate,
+              char *snapshotDate,
+              char *res)
+{
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+    char query[8192];
+
+    snprintf(query, sizeof(query),
+             "BEGIN;"
+
+             // -- 1. Wipe the corrupted records and summaries for this rollback date
+             "DELETE FROM strategy_nav WHERE strategy_id = %d AND nav_date = '%s';"
+             "DELETE FROM fno_trade WHERE strategy_id = %d AND trade_date = '%s';"
+             "DELETE FROM equity_trade WHERE strategy_id = %d AND trade_date = '%s';"
+
+             "DELETE FROM position_equity WHERE strategy_id = %d;"
+             "DELETE FROM fno_position WHERE strategy_id = %d;"
+             "DELETE FROM bank_account WHERE strategy_id = %d;"
+
+             // -- 2. Restore Equity Positions
+             "INSERT INTO position_equity (sys_id, strategy_id, isin, symbol, qty, price, ltp) "
+             "SELECT elem->>'sys_id', %d, elem->>'isin', elem->>'symbol', "
+             "(elem->>'qty')::INTEGER, (elem->>'price')::DOUBLE PRECISION, (elem->>'ltp')::DOUBLE PRECISION "
+             "FROM strategy_state_snapshot, jsonb_array_elements(equity_positions) AS elem "
+             "WHERE strategy_id = %d AND snapshot_date = '%s';"
+
+             // -- 3. Restore FNO Positions
+             "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
+             "SELECT elem->>'sys_id', %d, elem->>'symbol', (elem->>'qty')::INTEGER, "
+             "(elem->>'price')::DOUBLE PRECISION, (elem->>'ltp')::DOUBLE PRECISION, "
+             "to_date(elem->>'expiry', 'DD/MM/YYYY'), (elem->>'strike')::DOUBLE PRECISION, "
+             "(elem->>'optType')::opt_type, (elem->>'instType')::instrument_type "
+             "FROM strategy_state_snapshot, jsonb_array_elements(fno_positions) AS elem "
+             "WHERE strategy_id = %d AND snapshot_date = '%s';"
+
+             // -- 4. Restore Bank Account Balances
+             "INSERT INTO bank_account (strategy_id, symbol, balance, currency) "
+             "SELECT %d, elem->>'symbol', (elem->>'balance')::DOUBLE PRECISION, elem->>'currency_code' "
+             "FROM strategy_state_snapshot, jsonb_array_elements(banks) AS elem "
+             "WHERE strategy_id = %d AND snapshot_date = '%s';"
+
+             // -- 5. Re-sync basic strategy metadata parameters and volatile counter tracking indexes
+             "UPDATE strategy SET "
+             "cash = (SELECT (meta_state->>'cash')::DOUBLE PRECISION FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
+             "nav = (SELECT (meta_state->>'nav')::DOUBLE PRECISION FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
+             "curr_pos_index = (SELECT (meta_state->>'currPosIndex')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
+             "curr_f_pos_index = (SELECT (meta_state->>'currFPosIndex')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
+             "curr_investor_index = (SELECT (meta_state->>'currInvestorIndex')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s') "
+             "WHERE id = %d;"
+
+             "COMMIT;",
+
+             stratId, rollbackDate,                          // delete strategy_nav
+             stratId, rollbackDate,                          // delete fno_trade
+             stratId, rollbackDate,                          // delete equity_trade
+             stratId,                                        // delete position_equity
+             stratId,                                        // delete fno_position
+             stratId,                                        // delete bank_account
+
+             stratId, stratId, snapshotDate,                 // insert position_equity
+             stratId, stratId, snapshotDate,                 // insert fno_position
+             stratId, stratId, snapshotDate,                 // insert bank_account
+
+             stratId, snapshotDate,                          // update strategy cash
+             stratId, snapshotDate,                          // update strategy nav
+             stratId, snapshotDate,                          // update strategy curr_pos_index
+             stratId, snapshotDate,                          // update strategy curr_f_pos_index
+             stratId, snapshotDate,                          // update strategy curr_investor_index
+             stratId                                         // update strategy target identification key
+             );
+
+
+    // Execute everything in a single round-trip over the network connection wire
+    PGresult *pgResult = PQexec(state->db, query);
+
+    // Verify the command execution completed successfully
+    if (PQresultStatus(pgResult) != PGRES_COMMAND_OK)
+    {
+        fprintf(stderr, "[ERROR] Rollback transaction failed: %s\n",
+                PQerrorMessage(state->db));
+    }
+    else
+    {
+        printf("[SUCCESS] Strategy %d safely restored to state snapshot dated %s.\n",
+               stratId, snapshotDate);
+    }
+
+    PQclear(pgResult);
+}
+
 /* the snapshot we store here is used when we want to clawback
  * and recompute a nav, we retrieve the snapshot, apply it to
  * memory and db, and then do the nav process again for that date */
@@ -3672,8 +3780,8 @@ saveDailySnapshot(PGconn *conn,
             {"qty", strat->fpositions[i].qty},
             {"price", strat->fpositions[i].price},
             {"ltp", strat->fpositions[i].ltp},
-            {"optType", strat->fpositions[i].optType},
-            {"instType", strat->fpositions[i].instType},
+            {"optType", OptTypeStrings[strat->fpositions[i].optType]},
+            {"instType", InstrumentTypeStrings[strat->fpositions[i].instType]},
             {"strike", strat->fpositions[i].strike},
             {"expiry", strat->fpositions[i].expiry},
             {"sys_id", strat->fpositions[i].sys_id}
@@ -3684,7 +3792,7 @@ saveDailySnapshot(PGconn *conn,
         bankAccs.push_back({
             {"symbol", strat->accs[i].symbol},
             {"balance", strat->accs[i].balance},
-            {"currency_code", strat->accs[i].currency},
+            {"currency_code", CurrencyCodeStrings[strat->accs[i].currency]},
         });
     }
 
@@ -5052,6 +5160,18 @@ iterate_post (void *coninfo_cls,
         con_info->date[off + size] = '\0';
         return MHD_YES;
     }
+    else if (strcmp(key, "rollbackDate") == 0)
+    {
+        memcpy(con_info->rollbackDate + off, data, size);
+        con_info->rollbackDate[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "snapshotDate") == 0)
+    {
+        memcpy(con_info->snapshotDate + off, data, size);
+        con_info->snapshotDate[off + size] = '\0';
+        return MHD_YES;
+    }
     else if (0 != strcmp (key, "file"))
     {
         con_info->answerstring = servererrorpage;
@@ -5278,6 +5398,14 @@ answer_to_connection (void *cls,
                       con_info->strategySymbol,
                       con_info->date,
                       con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/clawback-nav"))
+        {
+            handleClawNAV(state,
+                          con_info->strategySymbol,
+                          con_info->rollbackDate,
+                          con_info->snapshotDate,
+                          con_info->answerstring);
         }
         else if (0 == strcmp(url, "/offboard-cashflow"))
         {

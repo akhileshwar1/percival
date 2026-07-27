@@ -23,6 +23,7 @@ CREATE TABLE strategy
     curr_investor_index INTEGER DEFAULT -1,
     curr_entry_id INTEGER DEFAULT -1,
     curr_journal_id INTEGER DEFAULT -1,
+    curr_acc_index INTEGER DEFAULT -1,
     
 
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint

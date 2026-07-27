@@ -73,9 +73,8 @@ curl -v -X POST \
     $SERVER/process-nav
 
 
-
 # # 2ND DAY -24th -----------------------------------------------------
-# 1. Exchange Rate
+1. Exchange Rate
 curl -v -X POST \
     -F "file=@exchange_rate_24.csv" \
     $SERVER/exchange-rate
@@ -108,7 +107,33 @@ curl -v -X POST \
     -F "snapshotDate=21/03/2025" \
     $SERVER/clawback-nav
 
-# # 4TH DAY - 25th-----------------------------------------------------
+# recompute nav after clawback
+curl -v -X POST \
+    -F "file=@exchange_rate_24.csv" \
+    $SERVER/exchange-rate
+
+curl -v -X POST \
+    -F "file=@ab_trades_24.csv" \
+    $SERVER/trades-fno
+
+# 11. F&O Bhavcopy
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "file=@ab_bhav_24.csv" \
+    $SERVER/bhav-fno
+
+# 12. MTM Process
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    $SERVER/mtm-process
+
+# 13. Process NAV
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=24/03/2025" \
+    $SERVER/process-nav
+
+# # # 4TH DAY - 25th-----------------------------------------------------
 # # 1. Exchange Rate
 # curl -v -X POST \
 #     -F "file=@exchange_rate_25.csv" \

@@ -2729,6 +2729,7 @@ LoadPriceUpdate(PriceUpdate *update, char *line)
 void
 loadStateFromDB(State *state)
 {
+    /* No need to init, overwrites everything on the existing state */
     PGconn *conn = state->db;
     char query[1024];
     /* Fetch the counters */
@@ -3695,7 +3696,11 @@ handleClawNAV(State *state,
              "nav = (SELECT (meta_state->>'nav')::DOUBLE PRECISION FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
              "curr_pos_index = (SELECT (meta_state->>'currPosIndex')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
              "curr_f_pos_index = (SELECT (meta_state->>'currFPosIndex')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
-             "curr_investor_index = (SELECT (meta_state->>'currInvestorIndex')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s') "
+             "curr_investor_index = (SELECT (meta_state->>'currInvestorIndex')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
+             "curr_acc_index = (SELECT (meta_state->>'currAccIndex')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
+             "curr_entry_id = (SELECT (meta_state->>'currEntryId')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
+             "curr_journal_id = (SELECT (meta_state->>'currJournalId')::INTEGER FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s'), "
+             "fees_accrued = (SELECT (meta_state->>'feesAccrued')::DOUBLE PRECISION FROM strategy_state_snapshot WHERE strategy_id = %d AND snapshot_date = '%s') "
              "WHERE id = %d;"
 
              "COMMIT;",
@@ -3716,6 +3721,10 @@ handleClawNAV(State *state,
              stratId, snapshotDate,                          // update strategy curr_pos_index
              stratId, snapshotDate,                          // update strategy curr_f_pos_index
              stratId, snapshotDate,                          // update strategy curr_investor_index
+             stratId, snapshotDate,                          // update strategy curr_acc_index
+             stratId, snapshotDate,                          // update strategy curr_entry_id
+             stratId, snapshotDate,                          // update strategy curr_journal_id
+             stratId, snapshotDate,                          // update strategy feesAccrued 
              stratId                                         // update strategy target identification key
              );
 
@@ -3736,6 +3745,9 @@ handleClawNAV(State *state,
     }
 
     PQclear(pgResult);
+
+    /* load the state into the memory from the db since it was changed */
+    loadStateFromDB(state);
 }
 
 /* the snapshot we store here is used when we want to clawback
@@ -4664,6 +4676,7 @@ handleBankTransfer(State *state, char *res)
             // insert in memory as well.
             state->strategies[state->currStratIndex]
                 .accs[++state->strategies[state->currStratIndex].currAccIndex] = acc;
+
         }
         else
         {
@@ -4693,6 +4706,7 @@ handleBankTransfer(State *state, char *res)
             }
             PQclear(pgResult);
         }
+
         // insert or update the assetEntry bank acc.
         printf("asset entry accoutnn name is %s\n", assetEntry.accountName);
         sprintf(query,
@@ -4750,6 +4764,15 @@ handleBankTransfer(State *state, char *res)
         }
         state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = assetEntry;
         state->strategies[state->currStratIndex].ledger[++state->strategies[state->currStratIndex].currEntryId] = liabEntry;
+
+        /* update the currAccIndex meta field on strategy; */
+        snprintf(query, sizeof(query),
+                 "UPDATE strategy SET curr_acc_index = %d WHERE id = %d;",
+                 state->strategies[state->currStratIndex].currAccIndex,
+                 stratId
+                 );
+        pgResult = executeQuery(state->db, query);
+        PQclear(pgResult);
         printf("entry name is %s and value is %f\n", assetEntry.accountName,
                assetEntry.debit);
         i++;

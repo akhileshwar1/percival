@@ -2851,12 +2851,29 @@ loadStateFromDB(State *state)
                 {
                     strat.nav = atof(str);
                 }
-                else if (j == 5)
+                else if (j == 7)
+                {
+                    strat.currFPosIndex = atoi(str);
+                }
+                else if (j == 8)
+                {
+                    strat.currInvestorIndex = atoi(str);
+                }
+                else if (j == 9)
+                {
+                    strat.currEntryId = atoi(str);
+                }
+                else if (j == 10)
                 {
                     strat.currJournalId = atoi(str);
                 }
+                else if (j == 11)
+                {
+                    strat.currAccIndex = atoi(str);
+                }
                 else if (j == 6)
                 {
+                    strat.currPosIndex = atoi(str);
                     // go for the investors, accs, and positions now.
                     sprintf(query,
                             "SELECT * FROM investor WHERE strategy_id = %d",

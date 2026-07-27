@@ -3864,12 +3864,31 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     int stratIndex = getStratIndex(state, stratSymbol);
 
     char query[1024];
+
+    /* check if the nav is already published for the date */
+    sprintf(query,
+            "SELECT * FROM strategy_nav where nav_date = TO_DATE('%s', 'DD/MM/YYYY') "
+            "AND strategy_id = %d; ",
+            date,
+            stratId);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    /* TODO(Akhil): the conditioin shouldn't pass here on error */
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "NAV already published for date: %s\n", date);
+        PQclear(pgResult);
+        sprintf(res, "NAV already published for date: %s\n", date);
+        return;
+    }
+
     /* handle exchange_rate for the date from the db */
     sprintf(query,
             "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') LIMIT 1",
             date);
 
-    PGresult *pgResult = executeQuery(state->db, query);
+    pgResult = executeQuery(state->db, query);
 
     if (PQntuples(pgResult) == 0)
     {

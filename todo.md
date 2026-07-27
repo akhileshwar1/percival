@@ -10,3 +10,5 @@
 * saturday sunday fee accrual.
 * publish nav only once for a date.
 * clawback nav.
+* reports.
+* exchange rate table should have strategy_id.

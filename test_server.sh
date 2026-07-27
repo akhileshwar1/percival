@@ -100,34 +100,40 @@ curl -v -X POST \
     -F "date=24/03/2025" \
     $SERVER/process-nav
 
-# 14. clawback NAV
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "rollbackDate=24/03/2025" \
-    -F "snapshotDate=21/03/2025" \
-    $SERVER/clawback-nav
+# # 14. clawback NAV
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "rollbackDate=24/03/2025" \
+#     -F "snapshotDate=21/03/2025" \
+#     $SERVER/clawback-nav
+#
+# # recompute nav after clawback
+# curl -v -X POST \
+#     -F "file=@exchange_rate_24.csv" \
+#     $SERVER/exchange-rate
+#
+# curl -v -X POST \
+#     -F "file=@ab_trades_24.csv" \
+#     $SERVER/trades-fno
+#
+# # 11. F&O Bhavcopy
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "file=@ab_bhav_24.csv" \
+#     $SERVER/bhav-fno
+#
+# # 12. MTM Process
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     $SERVER/mtm-process
+#
+# # 13. Process NAV
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=24/03/2025" \
+#     $SERVER/process-nav
 
-# recompute nav after clawback
-curl -v -X POST \
-    -F "file=@exchange_rate_24.csv" \
-    $SERVER/exchange-rate
-
-curl -v -X POST \
-    -F "file=@ab_trades_24.csv" \
-    $SERVER/trades-fno
-
-# 11. F&O Bhavcopy
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "file=@ab_bhav_24.csv" \
-    $SERVER/bhav-fno
-
-# 12. MTM Process
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    $SERVER/mtm-process
-
-# 13. Process NAV
+# already published shouldn't publish.
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
     -F "date=24/03/2025" \

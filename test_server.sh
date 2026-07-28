@@ -5,6 +5,7 @@ SERVER=http://localhost:8888
 
 # 1. Exchange Rate
 curl -v -X POST \
+    -F "strategySymbol=31500012A" \
     -F "file=@exchange_rate.csv" \
     $SERVER/exchange-rate
 
@@ -76,6 +77,7 @@ curl -v -X POST \
 # # 2ND DAY -24th -----------------------------------------------------
 1. Exchange Rate
 curl -v -X POST \
+    -F "strategySymbol=31500012A" \
     -F "file=@exchange_rate_24.csv" \
     $SERVER/exchange-rate
 
@@ -109,6 +111,7 @@ curl -v -X POST \
 #
 # # recompute nav after clawback
 # curl -v -X POST \
+    # -F "strategySymbol=31500012A" \
 #     -F "file=@exchange_rate_24.csv" \
 #     $SERVER/exchange-rate
 #
@@ -142,6 +145,7 @@ curl -v -X POST \
 # # # 4TH DAY - 25th-----------------------------------------------------
 # # 1. Exchange Rate
 # curl -v -X POST \
+    # -F "strategySymbol=31500012A" \
 #     -F "file=@exchange_rate_25.csv" \
 #     $SERVER/exchange-rate
 #
@@ -158,6 +162,7 @@ curl -v -X POST \
 # # 5TH DAY - 26th-----------------------------------------------------
 # # 1. Exchange Rate
 # curl -v -X POST \
+    # -F "strategySymbol=31500012A" \
 #     -F "file=@exchange_rate_26.csv" \
 #     $SERVER/exchange-rate
 #
@@ -174,6 +179,7 @@ curl -v -X POST \
 # # 5TH DAY - 27th-----------------------------------------------------
 # # 1. Exchange Rate
 # curl -v -X POST \
+    # -F "strategySymbol=31500012A" \
 #     -F "file=@exchange_rate_27.csv" \
 #     $SERVER/exchange-rate
 #
@@ -192,6 +198,7 @@ curl -v -X POST \
 # # # 6TH DAY -28th -----------------------------------------------------
 # # 1. Exchange Rate
 # curl -v -X POST \
+    # -F "strategySymbol=31500012A" \
 #     -F "file=@exchange_rate_28.csv" \
 #     $SERVER/exchange-rate
 #

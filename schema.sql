@@ -6,7 +6,8 @@ CREATE TABLE exchange_rate
     curr TEXT NOT NULL,
     rate DOUBLE PRECISION NOT NULL,
     date DATE NOT NULL,
-    base TEXT NOT NULL
+    base TEXT NOT NULL,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
 
 DROP TABLE IF EXISTS strategy CASCADE;

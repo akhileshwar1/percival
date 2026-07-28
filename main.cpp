@@ -3885,8 +3885,10 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
 
     /* handle exchange_rate for the date from the db */
     sprintf(query,
-            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') LIMIT 1",
-            date);
+            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') LIMIT 1 "
+            "AND strategy_id = %d ",
+            date,
+            stratId);
 
     pgResult = executeQuery(state->db, query);
 
@@ -5094,13 +5096,22 @@ handleCreateStrategy(State *state, char *res)
 }
 
 void
-handleExchangeRate(State *state, char *res)
+handleExchangeRate(State *state, char *stratSymbol, char *res)
 {
     FILE *exchangeRateFile = fopen("tmp.csv", "r");
     if (exchangeRateFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
     }
+
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
     char line[1024];
     int i = 0;
     Exchange_rate exRate = {};
@@ -5131,13 +5142,14 @@ handleExchangeRate(State *state, char *res)
         /* Prevent duplicate entries */
         sprintf(query,
                 "INSERT INTO exchange_rate "
-                "(curr, rate, date, base) "
-                "VALUES ('%s', %f, '%s', '%s') "
+                "(curr, rate, date, base, strategy_id) "
+                "VALUES ('%s', %f, '%s', '%s', %d) "
                 "ON CONFLICT (curr, base, date) DO UPDATE SET rate = EXCLUDED.rate;",
                 exRate.curr == USD ? "USD" : "INR",
                 exRate.rate,
                 exRate.date,
-                exRate.base == USD ? "USD" : "INR");
+                exRate.base == USD ? "USD" : "INR",
+                stratId);
 
         pgResult = executeQuery(state->db, query);
         state->exRates[i - 1] = exRate; // it's a copy here.
@@ -5390,7 +5402,7 @@ answer_to_connection (void *cls,
         /* form data included in con_info struct */
         if (0 == strcmp(url, "/exchange-rate"))
         {
-            handleExchangeRate(state, con_info->answerstring);
+            handleExchangeRate(state, con_info->strategySymbol, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/create-strategy"))
         {

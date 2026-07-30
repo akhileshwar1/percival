@@ -628,19 +628,15 @@ LoadSecurity(Security *sec, State *state, char *line)
     {
         if (i == 0)
         {
-            strcpy(sec->isin , token);
-        }
-        else if (i == 1)
-        {
             strcpy(sec->symbol, token);
         }
-        else if (i ==  2)
-        {
-            strcpy(sec->date, token);
-        }
-        else if (i ==  3)
+        else if (i ==  1)
         {
             strcpy(sec->name, token);
+        }
+        else if (i == 5)
+        {
+            strcpy(sec->isin , token);
         }
         token = strtok(NULL, ",");
         i++;
@@ -2645,8 +2641,13 @@ uploadSecurities(FILE *secFile, State *state)
     int i = 0;
     while (fgets(line, sizeof(line), secFile))
     {
+        TrimString(line);
+        if (line[0] == '\0') {
+            continue; 
+        }
         if (i == 0)
         {
+            //TODO(Akhil): validate header in a way that res doesn't come here.
             i++;
             continue; // ignore the top heading row.
         }
@@ -2683,23 +2684,72 @@ LoadOldPosition(PositionEquity *pos, char *line)
     int i = 0;
     while (token != NULL)
     {
-        if (i == 0)
+        if (i == 2)
         {
             strcpy(pos->isin , token);
         }
-        else if (i == 1)
+        else if (i ==  4)
+        {
+            pos->qty = (real64)atof(token);
+        }
+        else if (i == 6)
         {
             pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
             pos->ltp = (real64)atof(token);
-        }
-        else if (i ==  2)
-        {
-            pos->qty = (real64)atof(token);
         }
         token = strtok(NULL, ",");
         i++;
     }
 }
+
+void
+uploadPositions(FILE *secFile, State *state, int stratId)
+{
+    char line[1024];
+    int i = 0;
+    while (fgets(line, sizeof(line), secFile))
+    {
+        TrimString(line);
+        if (line[0] == '\0') {
+            continue; 
+        }
+        if (i == 0)
+        {
+            //TODO(Akhil): validate header in a way that res doesn't come here.
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        PositionEquity pos = {};
+        LoadOldPosition(&pos, line);
+        /* copy the sys_id to the position */
+        for (int i = 0; i < state->currSecIndex; i++)
+        {
+            if (0 == strcmp(pos.isin, state->secs[i].isin))
+            {
+                strcpy(pos.sys_id, state->secs[i].sys_id);
+            }
+        }
+
+        /* Persist the security and the counters */
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "INSERT INTO position_equity (sys_id, isin, symbol, qty, price, ltp, strategy_id) "
+                 "VALUES ('%s', '%s', '%s', %d, %f, %f, %d);",
+                 pos.sys_id,
+                 pos.isin,
+                 pos.symbol,
+                 pos.qty,
+                 pos.price,
+                 pos.ltp,
+                 stratId);
+        PGresult *res = PQexec(state->db, query);
+        PQclear(res);
+        // printf("security is %s\n", state->secs[i - 1].name);
+    }
+}
+
 
 void
 LoadPriceUpdate(PriceUpdate *update, char *line)
@@ -3180,6 +3230,43 @@ getStratIndex(State *state, char *stratSymbol)
     }
     printf("strat index is %d\n", stratIndex);
     return stratIndex;
+}
+
+/* upload old positions into the db!
+ * Usually done when importing a new strategy from
+ * another platform */
+void
+handleUploadPositions(State *state, char *stratSymbol, char *res)
+{
+    FILE *upFile = fopen("tmp.csv", "r");
+    if (upFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    /* get strat id from db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    uploadPositions(upFile, state, stratId);
+    strcpy(res, "completed");
+}
+
+void
+handleUploadSecurities(State *state, char *res)
+{
+    FILE *upFile = fopen("tmp.csv", "r");
+    if (upFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    uploadSecurities(upFile, state);
+    strcpy(res, "completed");
 }
 
 /* state changes on the bank account balance.
@@ -5489,6 +5576,14 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/offboard-bank"))
         {
             handleOffBank(state, con_info->invName, con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/upload-securities"))
+        {
+            handleUploadSecurities(state, con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/upload-positions"))
+        {
+            handleUploadPositions(state, con_info->strategySymbol, con_info->answerstring);
         }
 
         return send_page (connection,

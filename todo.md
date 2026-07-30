@@ -12,3 +12,27 @@
 * clawback nav.
 * reports.
 * exchange rate table should have strategy_id.
+* track currency gain. 
+* historical dump processing.
+* reconciliation of nav. -not nav(ledger) == nav(state) because you can't do nav(ledger)
+  without positions. instead recon can be for smaller things like --
+Cash from strategy state
+==
+Cash account balance in ledger
+
+Total futures MTM
+==
+Sum of MTM ledger entries
+
+Total management fees accrued
+==
+Management Fee Payable account
+
+Total investor units
+==
+Outstanding units register
+
+Position quantities
+==
+Net quantities implied by trade history
+* max hardcoded stuff.

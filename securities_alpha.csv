@@ -1,0 +1,25 @@
+Symbol Code,Symbol Name,Upper(SymbolName),Security type,Security type Detail,ISIN,Classify,Face Value,Paid up capital,Lot size,Refrence Symbol 5,Sector,Sector Name,Reference Symbol,Reference Symbol 1,NSE Symbol,BSE Symbol,Custodian / FA Symbol,Reference Symbol 7,Dimension Code 1,Dimension Name 1,Dimension Code 2,Dimension Name 2,Dimension Code 3,Dimension Name 3,Dimension Code 4,Dimension Name 4,Dimension Code 5,Dimension Name 5,Dimension Code 6,Dimension Name 6,Dimension Code 7,Dimension Name 7,Dimension Code 8,Dimension Name 8,Dimension Code 9,Dimension Name 9,Dimension Code 10,Dimension Name 10,Reference Symbol 6,Reference Symbol 8,Reference Symbol 9,Reference Symbol 10,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Free float shares,Filler,NSE Series,Issuer,Issuername,currencyCode,countryCode
+ADANIGREEN,Adani Green Energy Ltd.,ADANI GREEN ENERGY LTD.,s,s_LISTED,INE364U01010,EQ,,,,,S_BLANK,,,,ADANIGREEN,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+APARINDS,Apar Industries Ltd.,APAR INDUSTRIES LTD.,s,s_LISTED,INE372A01015,EQ,,,,,S_BLANK,,,,APARINDS,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+CUMMINSIND,Cummins India Ltd.,CUMMINS INDIA LTD.,s,s_LISTED,INE298A01020,EQ,,,,,S_BLANK,,,,CUMMINSIND,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+DATAPATTNS,Data Patterns (India) Ltd.,DATA PATTERNS (INDIA) LTD.,s,s_LISTED,INE0IX101010,EQ,,,,,S_BLANK,,,,DATAPATTNS,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+GRANULES,Granules India Ltd.,GRANULES INDIA LTD.,s,s_LISTED,INE101D01020,EQ,,,,,S_BLANK,,,,GRANULES,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+HFCL,HFCL Ltd.,HFCL LTD.,s,s_LISTED,INE548A01028,EQ,,,,,S_BLANK,,,,HFCL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+POWERINDIA,Hitachi Energy India Ltd.,HITACHI ENERGY INDIA LTD.,s,s_LISTED,INE07Y701011,EQ,,,,,S_BLANK,,,,POWERINDIA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+LAURUSLABS,Laurus Labs Ltd.,LAURUS LABS LTD.,s,s_LISTED,INE947Q01028,EQ,,,,,S_BLANK,,,,LAURUSLABS,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+NAVINFLUOR,Navin Fluorine International Ltd.,NAVIN FLUORINE INTERNATIONAL LTD.,s,s_LISTED,INE048G01026,EQ,,,,,S_BLANK,,,,NAVINFLUOR,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+POLYCAB,Polycab India Ltd.,POLYCAB INDIA LTD.,s,s_LISTED,INE455K01017,EQ,,,,,S_BLANK,,,,POLYCAB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+RRKABEL,R R Kabel Ltd.,R R KABEL LTD.,s,s_LISTED,INE777K01022,EQ,,,,,S_BLANK,,,,RRKABEL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+RBLBANK,RBL Bank Ltd.,RBL BANK LTD.,s,s_LISTED,INE976G01028,EQ,,,,,S_BLANK,,,,RBLBANK,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+TRITURBINE,Triveni Turbine Ltd.,TRIVENI TURBINE LTD.,s,s_LISTED,INE152M01016,EQ,,,,,S_BLANK,,,,TRITURBINE,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+USHAMART,Usha Martin Ltd.,USHA MARTIN LTD.,s,s_LISTED,INE228A01035,EQ,,,,,S_BLANK,,,,USHAMART,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+VEDL,Vedanta Ltd.,VEDANTA LTD.,s,s_LISTED,INE205A01025,EQ,,,,,S_BLANK,,,,VEDL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+ATHERENERG,Ather Energy Limited,ATHER ENERGY LIMITED,s,s_LISTED,INE0LEZ01016,EQ,,,,,S_BLANK,,,,ATHERENERG,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+BELRISE ,Belrise Industries Limited,BELRISE INDUSTRIES LIMITED,s,s_LISTED,INE894V01022,EQ,,,,,S_BLANK,,,,BELRISE ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+GVT&D,GE Vernova T&D India Ltd,GE VERNOVA T&D INDIA LTD,s,s_LISTED,INE200A01026,EQ,,,,,S_BLANK,,,,GVT&D,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+ACUTAAS,Acutaas Chemicals Limited,CUTAAS CHEMICALS LIMITED,s,s_LISTED,INE00FF01025,EQ,,,,,S_BLANK,,,,ACUTAAS,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+KOEL,Kirloskar Oil Engines Ltd,KIRLOSKAR OIL ENGINES LTD,s,s_LISTED,INE146L01010,EQ,,,,,S_BLANK,,,,KOEL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+VAML,Vedanta Aluminium Metal Limited,VEDANTA ALUMINIUM METAL LIMITED,s,s_LISTED,INE1CDF01017,EQ,,,,,S_BLANK,,,,VAML,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+VEDPOWER,Vedanta Power Limited,VEDANTA POWER LIMITED,s,s_LISTED,INE694L01019,EQ,,,,,S_BLANK,,,,VEDPOWER,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+VISL,Vedanta Iron And Steel Limited,VEDANTA IRON AND STEEL LIMITED,s,s_LISTED,INE1CLE01013,EQ,,,,,S_BLANK,,,,VISL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN
+VOGL,Vedanta Oil and Gas Limited,VEDANTA OIL AND GAS LIMITED,s,s_LISTED,INE704J01044,EQ,,,,,S_BLANK,,,,VOGL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,INR,IN

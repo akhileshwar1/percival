@@ -263,12 +263,21 @@ typedef struct
     char sys_id[100];
 } PositionEquity;
 
+typedef enum
+{
+    PENDING,
+    DONE
+} Div_status;
+
 typedef struct
 {
     char isin[100];
     char exDate[100];
-    char type[100];
+    char type[100]; //TODO(Akhil) : change to enum later.
     real64 div;
+    char externalId[100]; // corp action id.
+    Div_status status;
+    char paymentDate[100]; // TODO(Akhil): Need to figure out where this will come from.
 } Dividend;
 
 typedef struct
@@ -377,6 +386,11 @@ const char* LedgerEntryTypeStrings[] = {
     "LIABILITY",
     "EQUITY",
     "REVENUE"
+};
+
+const char* DivStatusStrings[] = {
+    "PENDING",
+    "DONE"
 };
 
 const char* OptTypeStrings[] = {
@@ -777,7 +791,8 @@ allotUnits(State *state, char *line)
                     }
                 }
             }
-            // persist the units too.
+            /* persist the units too.
+             * NOTE(Akhil) : Assumes no same name investor in diff strategies.*/
             char query[1024];
             snprintf(query, sizeof(query),
                      "UPDATE investor SET units = %f, status = '%s' WHERE name = '%s'",
@@ -1375,28 +1390,29 @@ processBhavEq(FILE *bhavFile, int stratIndex, State *state)
                         need to update the posns in all of them. */
         for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
         {
-            if (strcmp(bhav.symbol, state->strategies[stratIndex].positions[i].isin) == 0)
+            if (strcmp(bhav.symbol,
+                       state->strategies[stratIndex].positions[i].symbol) == 0)
             {
                 state->strategies[stratIndex].positions[i].ltp = bhav.ltp;
-            }
-            char query[512];
-            snprintf(query, sizeof(query),
-                     "INSERT INTO equity_bhav (symbol, ltp) VALUES ('%s', %f) "
-                     "ON CONFLICT (symbol) DO UPDATE SET "
-                     "ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
-                     bhav.symbol,
-                     bhav.ltp
-                     ); 
-            PGresult *pgResult = executeQuery(state->db, query);
-            PQclear(pgResult);
+                char query[512];
+                snprintf(query, sizeof(query),
+                         "INSERT INTO equity_bhav (symbol, ltp) VALUES ('%s', %f) "
+                         "ON CONFLICT (symbol) DO UPDATE SET "
+                         "ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
+                         bhav.symbol,
+                         bhav.ltp
+                         ); 
+                PGresult *pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
 
-            snprintf(query, sizeof(query),
-                     "UPDATE position SET ltp = %f WHERE sys_id = '%s'",
-                     bhav.ltp,
-                     state->strategies[stratIndex].positions[i].sys_id
-                     );
-            pgResult = executeQuery(state->db, query);
-            PQclear(pgResult);
+                snprintf(query, sizeof(query),
+                         "UPDATE position_equity SET ltp = %f WHERE sys_id = '%s'",
+                         bhav.ltp,
+                         state->strategies[stratIndex].positions[i].sys_id
+                         );
+                pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+            }
         }
         // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
     }
@@ -2383,7 +2399,7 @@ printPositions(State *state, int stratIndex)
     {
         PositionEquity pos = state->strategies[stratIndex].positions[i];
         printf("name: %s, qty : %d, price: %f, ltp : %f, \
-value : %f\n",
+                value : %f\n",
                pos.symbol,
                pos.qty,
                pos.price,
@@ -2601,7 +2617,7 @@ printNav(State *state, Exchange_rate *exRate,
 
     // total value of fno positions.
     real64 totalValue = getTotalPositionValue(state, stratIndex); 
-
+    printPositions(state, stratIndex);
     real64 cashUSD = getTotalCashUSD(state, stratIndex, exRate);
     printf("closing cash balance in usd is %f\n", cashUSD);
     real64 totalValueUSD = totalValue / exRate->rate;
@@ -2703,7 +2719,7 @@ LoadOldPosition(PositionEquity *pos, char *line)
 }
 
 void
-uploadPositions(FILE *secFile, State *state, int stratId)
+uploadPositions(FILE *secFile, State *state, int stratIndex, int stratId)
 {
     char line[1024];
     int i = 0;
@@ -2724,13 +2740,18 @@ uploadPositions(FILE *secFile, State *state, int stratId)
         PositionEquity pos = {};
         LoadOldPosition(&pos, line);
         /* copy the sys_id to the position */
-        for (int i = 0; i < state->currSecIndex; i++)
+        for (int i = 0; i < state->currSecIndex + 1; i++)
         {
             if (0 == strcmp(pos.isin, state->secs[i].isin))
             {
                 strcpy(pos.sys_id, state->secs[i].sys_id);
+                strcpy(pos.symbol, state->secs[i].symbol);
             }
         }
+
+        /* modify the in memory state */
+        state->strategies[stratIndex]
+            .positions[++state->strategies[stratIndex].currPosIndex] = pos;
 
         /* Persist the security and the counters */
         char query[1024];
@@ -3116,7 +3137,11 @@ LoadDividend(Dividend *div, char *line)
     int i = 0;
     while (token != NULL)
     {
-        if (i == 6)
+        if (i == 1)
+        {
+            strcpy(div->externalId, token);
+        }
+        else if (i == 6)
         {
             strcpy(div->isin, token);
         }
@@ -3252,7 +3277,9 @@ handleUploadPositions(State *state, char *stratSymbol, char *res)
         return;
     }
 
-    uploadPositions(upFile, state, stratId);
+    int stratIndex = getStratIndex(state, stratSymbol);
+
+    uploadPositions(upFile, state, stratIndex, stratId);
     strcpy(res, "completed");
 }
 
@@ -3962,7 +3989,7 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     PGresult *pgResult = executeQuery(state->db, query);
 
     /* TODO(Akhil): the conditioin shouldn't pass here on error */
-    if (PQntuples(pgResult) == 0)
+    if (PQntuples(pgResult) != 0)
     {
         fprintf(stderr, "NAV already published for date: %s\n", date);
         PQclear(pgResult);
@@ -3972,7 +3999,7 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
 
     /* handle exchange_rate for the date from the db */
     sprintf(query,
-            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') LIMIT 1 "
+            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') "
             "AND strategy_id = %d ",
             date,
             stratId);
@@ -4010,7 +4037,7 @@ handleCorpAction(State *state,
                  char *res)
 {
     /* process dividend file, just the code for now */
-    char line[1024];
+    char line[4096];
     FILE *DivFile = fopen("tmp.csv", "r");
     if (DivFile == NULL)
     {
@@ -4041,16 +4068,42 @@ handleCorpAction(State *state,
 
         Dividend div = {};
         LoadDividend(&div, line);
-        // only process if the ex date is today.
+        /* persist the corp action entry */
+        char query[4096];
+
+        snprintf(query, sizeof(query),
+                 "INSERT INTO corporate_action (strategy_id, external_id, isin, ex_date, payment_date, action_type, dividend_value, status) "
+                 "VALUES (%d, '%s', '%s', to_date('%s', 'DD/MM/YYYY'), to_date('%s', 'DD/MM/YYYY'), '%s', %f, '%s') "
+                 "ON CONFLICT (external_id) DO UPDATE SET "
+                 "status = EXCLUDED.status, "
+                 "payment_date = EXCLUDED.payment_date, "
+                 "dividend_value = EXCLUDED.dividend_value, "
+                 "updated_at = CURRENT_TIMESTAMP;",
+                 stratId,
+                 div.externalId,
+                 div.isin,
+                 div.exDate,      
+                 div.paymentDate,
+                 div.type,
+                 div.div,
+                 DivStatusStrings[div.status]
+                 );
+
+        PGresult *res = PQexec(state->db, query);
+        PQclear(res);
+        /* only process if the ex date is today. */
         if (strcmp(div.exDate, date) == 0)
         {
+            printf("date matched\n");
             for (int j = 0;
-            j <= state->strategies[stratIndex].currPosIndex;
-            j++)
+                 j <= state->strategies[stratIndex].currPosIndex;
+                 j++)
             {
                 PositionEquity pos = state->strategies[stratIndex].positions[j];
+                printf("processing pos %s...\n", pos.isin);
                 if (strcmp(pos.isin, div.isin) == 0)
                 {
+                    printf("processing dividend %s...\n", div.isin);
                     // make the dividend income.
                     // NOTE(Akhil): 2 stands for the equites bank acc.
                     state->strategies[stratIndex].accs[2].balance += div.div * pos.qty;
@@ -4062,7 +4115,21 @@ handleCorpAction(State *state,
                              );
                     PGresult *pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
-                    // make the ledger entries and persist them as well.
+                    div.status = DONE;
+
+                    /* mark the corporate actioin as processed */
+                    snprintf(query, sizeof(query),
+                             "UPDATE corporate_action SET div_status = '%s' "
+                             "WHERE external_id = '%s' AND strategy_id = %d;",
+                             DivStatusStrings[div.status],
+                             div.externalId,
+                             stratId
+                             );
+
+                    PGresult *res = PQexec(state->db, query);
+                    PQclear(res);
+
+                    /* make the ledger entries and persist them as well. */
                     LedgerEntry assetEntry = {};
                     LedgerEntry liabEntry = {};
                     ++state->strategies[state->currStratIndex].currJournalId;
@@ -5061,7 +5128,7 @@ handleSubsUPA(State *state, char *res, char *stratSymbol)
 }
 
 void
-handleAddInvestor(State *state, char *res)
+handleAddInvestor(State *state, char *stratSymbol, char *res)
 {
     char line[4096];
     Investor inv = {};
@@ -5071,6 +5138,14 @@ handleAddInvestor(State *state, char *res)
         printf("sorry, couldn't upload file!\n");
     }
 
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    int stratIndex = getStratIndex(state, stratSymbol);
     int i = 0;
     PGresult *pgResult;
     while (fgets(line, sizeof(line), clientFile))
@@ -5093,13 +5168,19 @@ handleAddInvestor(State *state, char *res)
             continue; // ignore the top heading row.
         }
         LoadInvestorFromClient(&inv, line);
+
+        /* put it in memory */
+        state->strategies[stratIndex].investors
+            [++state->strategies[stratIndex].currInvestorIndex] = inv;
+
+        /* persist it in db */
         char query[512];
         sprintf(query,
                 "INSERT INTO investor"
-                "(name) "
-                "VALUES ('%s') "
+                "(name, strategy_id) "
+                "VALUES ('%s', %d) "
                 "ON CONFLICT (name) DO UPDATE SET units = EXCLUDED.units, cash = EXCLUDED.cash;",
-                inv.name);
+                inv.name, stratId);
 
         pgResult = executeQuery(state->db, query);
     }
@@ -5497,7 +5578,7 @@ answer_to_connection (void *cls,
         }
         else if (0 == strcmp(url, "/add-investor"))
         {
-            handleAddInvestor(state, con_info->answerstring);
+            handleAddInvestor(state, con_info->strategySymbol, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/subs-upa"))
         {

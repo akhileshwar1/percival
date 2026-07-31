@@ -1,25 +1,25 @@
 Account Name,Security,ISIN Code,Security Type Detail,Holding Quantity,Market Value,rate
 alpha,cutaas Chemicals Limited,INE00FF01025,Shares - Listed,89,"275,606.30",3096.7
-alpha,Adani Green Energy Ltd.,INE00FF01026,Shares - Listed,183,"271,315.80",1482.6
-alpha,Apar Industries Ltd.,INE00FF01027,Shares - Listed,18,"287,748.00",15986
-alpha,Ather Energy Limited,INE00FF01028,Shares - Listed,230,"236,302.00",1027.4
-alpha,Belrise Industries Limited,INE00FF01029,Shares - Listed,892,"212,527.92",238.26
-alpha,Cummins India Ltd.,INE00FF01030,Shares - Listed,43,"247,422.00",5754
-alpha,Data Patterns India Ltd.,INE00FF01031,Shares - Listed,49,"216,849.50",4425.5
-alpha,Granules India Ltd.,INE00FF01032,Shares - Listed,302,"226,047.00",748.5
-alpha,GE Vernova T&D India Ltd,INE00FF01033,Shares - Listed,62,"297,941.00",4805.5
-alpha,HFCL Ltd.,INE00FF01034,Shares - Listed,"1,871","337,621.95",180.45
-alpha,Kirloskar Oil Engines Ltd,INE00FF01035,Shares - Listed,139,"268,798.20",1933.8
-alpha,Laurus Labs Ltd.,INE00FF01036,Shares - Listed,229,"318,103.90",1389.1
-alpha,Navin Fluorine International Ltd.,INE00FF01037,Shares - Listed,38,"276,906.00",7287
-alpha,Polycab India Ltd.,INE00FF01038,Shares - Listed,22,"210,232.00",9556
-alpha,Hitachi Energy India Ltd.,INE00FF01039,Shares - Listed,11,"381,645.00",34695
-alpha,RBL Bank Ltd.,INE00FF01040,Shares - Listed,571,"212,783.15",372.65
-alpha,R R Kabel Ltd.,INE00FF01041,Shares - Listed,105,"229,677.00",2187.4
-alpha,Triveni Turbine Ltd.,INE00FF01042,Shares - Listed,329,"218,176.35",663.15
-alpha,Usha Martin Ltd.,INE00FF01043,Shares - Listed,447,"221,242.65",494.95
-alpha,Vedanta Aluminium Metal Limited,INE00FF01044,Shares - Listed,259,"128,438.10",495.9
-alpha,Vedanta Ltd.,INE00FF01045,Shares - Listed,322,"97,405.00",302.5
-alpha,Vedanta Power Limited,INE00FF01046,Shares - Listed,259,"10,603.46",40.94
-alpha,Vedanta Iron And Steel Limited,INE00FF01047,Shares - Listed,259,"5,454.54",21.06
-alpha,Vedanta Oil and Gas Limited,INE00FF01048,Shares - Listed,259,"9,349.90",36.1
+alpha,Adani Green Energy Ltd.,INE364U01010,Shares - Listed,183,"271,315.80",1482.6
+alpha,Apar Industries Ltd.,INE372A01015,Shares - Listed,18,"287,748.00",15986
+alpha,Ather Energy Limited,INE0LEZ01016,Shares - Listed,230,"236,302.00",1027.4
+alpha,Belrise Industries Limited,INE894V01022,Shares - Listed,892,"212,527.92",238.26
+alpha,Cummins India Ltd.,INE298A01020,Shares - Listed,43,"247,422.00",5754
+alpha,Data Patterns India Ltd.,INE0IX101010,Shares - Listed,49,"216,849.50",4425.5
+alpha,Granules India Ltd.,INE101D01020,Shares - Listed,302,"226,047.00",748.5
+alpha,GE Vernova T&D India Ltd,INE200A01026,Shares - Listed,62,"297,941.00",4805.5
+alpha,HFCL Ltd.,INE548A01028,Shares - Listed,1871,"337,621.95",180.45
+alpha,Kirloskar Oil Engines Ltd,INE146L01010,Shares - Listed,139,"268,798.20",1933.8
+alpha,Laurus Labs Ltd.,INE947Q01028,Shares - Listed,229,"318,103.90",1389.1
+alpha,Navin Fluorine International Ltd.,INE048G01026,Shares - Listed,38,"276,906.00",7287
+alpha,Polycab India Ltd.,INE455K01017,Shares - Listed,22,"210,232.00",9556
+alpha,Hitachi Energy India Ltd.,INE07Y701011,Shares - Listed,11,"381,645.00",34695
+alpha,RBL Bank Ltd.,INE976G01028,Shares - Listed,571,"212,783.15",372.65
+alpha,R R Kabel Ltd.,INE777K01022,Shares - Listed,105,"229,677.00",2187.4
+alpha,Triveni Turbine Ltd.,INE152M01016,Shares - Listed,329,"218,176.35",663.15
+alpha,Usha Martin Ltd.,INE228A01035,Shares - Listed,447,"221,242.65",494.95
+alpha,Vedanta Aluminium Metal Limited,INE1CDF01017,Shares - Listed,259,"128,438.10",495.9
+alpha,Vedanta Ltd.,INE205A01025,Shares - Listed,322,"97,405.00",302.5
+alpha,Vedanta Power Limited,INE694L01019,Shares - Listed,259,"10,603.46",40.94
+alpha,Vedanta Iron And Steel Limited,INE1CLE01013,Shares - Listed,259,"5,454.54",21.06
+alpha,Vedanta Oil and Gas Limited,INE704J01044,Shares - Listed,259,"9,349.90",36.1

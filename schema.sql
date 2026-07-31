@@ -287,3 +287,31 @@ CREATE TABLE strategy_state_snapshot (
 );
 
 CREATE INDEX idx_snapshot_lookup ON strategy_state_snapshot (strategy_id, snapshot_date);
+
+DROP TABLE IF EXISTS corporate_action CASCADE;
+DROP TYPE IF EXISTS div_status CASCADE;
+
+-- 1. Create the Dividend Status ENUM
+CREATE TYPE div_status AS ENUM (
+    'PENDING',
+    'DONE'
+);
+
+-- 2. Create the Corporate Action / Dividend Table
+CREATE TABLE corporate_action (
+    id SERIAL PRIMARY KEY,
+    external_id VARCHAR(100) UNIQUE,
+    isin VARCHAR(100) NOT NULL,
+    ex_date DATE NOT NULL,
+    payment_date DATE,
+    action_type VARCHAR(100) NOT NULL,
+    dividend_value DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    status div_status NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
+);
+
+-- 3. Create Performance Indexes for rapid pipeline lookups
+CREATE INDEX idx_corp_action_lookup ON corporate_action (isin, ex_date);
+CREATE INDEX idx_corp_action_status ON corporate_action (status);

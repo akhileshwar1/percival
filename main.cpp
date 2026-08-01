@@ -4234,14 +4234,33 @@ handleCorpAction(State *state,
                     printf("processing dividend %s...\n", div.isin);
                     // make the dividend income.
                     // NOTE(Akhil): 2 stands for the equites bank acc.
-                    state->strategies[stratIndex].receivable += div.div * pos.qty;
+                    sprintf(query,
+                            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') "
+                            "AND strategy_id = %d ",
+                            date,
+                            stratId);
+
+                    PGresult *pgResult = executeQuery(state->db, query);
+
+                    if (PQntuples(pgResult) == 0)
+                    {
+                        fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+                        PQclear(pgResult);
+                        return; /* TODO(Akhil) : handle error */
+                    }
+
+                    char *rate_str = PQgetvalue(pgResult, 0, 2);
+                    real64 rate = atof(rate_str);
+                    PQclear(pgResult);
+                    real64 receivableUSD = (div.div * pos.qty) / rate; 
+                    state->strategies[stratIndex].receivable += receivableUSD;
                     char query[1024];
                     snprintf(query, sizeof(query),
                              "UPDATE strategy SET receivable = %f WHERE id = %d; ",
-                             state->strategies[stratIndex].receivable,
+                             state->strategies[stratIndex].receivable, /* In INR */
                              stratId
                              );
-                    PGresult *pgResult = executeQuery(state->db, query);
+                    pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
                     div.status = DONE;
 

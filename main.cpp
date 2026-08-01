@@ -518,6 +518,31 @@ void ConvertDateSeparator(const char *input_date, char *output, size_t output_si
     }
 }
 
+/* --------------- DB helpers ------------------------------------------------*/
+PGresult *
+executeQuery(PGconn *conn, char *query)
+{
+    PGresult *pgResult = PQexec(conn, query);
+    char *errorMessage = PQresultErrorMessage(pgResult);
+    if (strcmp(errorMessage, "") != 0)
+    {
+        printf("%s", errorMessage);
+    }
+    return pgResult;
+}
+
+void
+DBUpdateFee(PGconn *conn, real64 balance, int stratId)
+{
+    char query[1024];
+    snprintf(query, sizeof(query),
+             "UPDATE strategy SET fees_accrued = %f WHERE id = %d;",
+             balance,
+             stratId);
+    PGresult *res = executeQuery(conn, query);
+    PQclear(res);
+}
+
 void
 LoadFNOBhav(FNO_bhav *bhav, char *line)
 {
@@ -742,18 +767,6 @@ getDollarValue(char *line)
         i++;
     }
     return -1;
-}
-
-PGresult *
-executeQuery(PGconn *conn, char *query)
-{
-    PGresult *pgResult = PQexec(conn, query);
-    char *errorMessage = PQresultErrorMessage(pgResult);
-    if (strcmp(errorMessage, "") != 0)
-    {
-        printf("%s", errorMessage);
-    }
-    return pgResult;
 }
 
 void
@@ -2640,14 +2653,10 @@ printNav(State *state, Exchange_rate *exRate,
     real64 fee = netAssets * (0.01 / 365); // 1% p.a
     state->strategies[stratIndex].feesAccrued += fee;
     real64 feesAccrued = state->strategies[stratIndex].feesAccrued; 
+    DBUpdateFee(state->db, feesAccrued, dbStratId); 
     char query[1024];
-    snprintf(query, sizeof(query),
-             "UPDATE strategy SET fees_accrued = %f WHERE id = %d",
-             feesAccrued, 
-             dbStratId);
-    PGresult *pgResult = executeQuery(state->db, query);
-    PQclear(pgResult);
     printf("fee accrued %f, %f\n", fee, feesAccrued);
+    printf("net %f\n", (netAssets - feesAccrued));
     real64 nav = (netAssets - feesAccrued) / totalUnits;
     /* persist nav in its own seperate table. */
     snprintf(query, sizeof(query),
@@ -2657,7 +2666,7 @@ printNav(State *state, Exchange_rate *exRate,
              dbStratId,
              exRate->date,
              nav);
-    pgResult = executeQuery(state->db, query);
+    PGresult *pgResult = executeQuery(state->db, query);
     PQclear(pgResult);
     return nav;
 }
@@ -3335,13 +3344,7 @@ handleBalances(State *state, char *stratSymbol, char *res)
             state->strategies[stratIndex].feesAccrued = bal.balance;
 
             /* Persist the security and the counters */
-            char query[1024];
-            snprintf(query, sizeof(query),
-                     "UPDATE strategy SET fees_accrued = %f WHERE id = %d;",
-                     bal.balance,
-                     stratId);
-            PGresult *res = PQexec(state->db, query);
-            PQclear(res);
+            DBUpdateFee(state->db, bal.balance, stratId); 
         }
         else if(0 == strcmp(bal.symbol, "receivable"))
         {

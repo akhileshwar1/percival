@@ -133,6 +133,14 @@ typedef struct
     Currency_code base;
 } Exchange_rate;
 
+/* struct used to upload db balances
+   from another platform */
+typedef struct
+{
+    char symbol[100];
+    real64 balance;
+} Balance;
+
 typedef struct
 {
     char symbol[100];
@@ -319,6 +327,7 @@ typedef struct
     real64 cash;
     real64 nav;
     real64 feesAccrued;
+    real64 receivable;
     Investor investors[MAX_INVESTORS];
     PositionEquity positions[MAX_POSITIONS];
     FNO_position fpositions[MAX_POSITIONS];
@@ -2598,6 +2607,9 @@ getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
             totalCashUSD += state->strategies[stratIndex].accs[i].balance;
         }
     }
+
+    /* add the receivables now */
+    totalCashUSD += state->strategies[stratIndex].receivable;
     totalCashUSD += (totalCashINR / exRate->rate);
     return totalCashUSD;
 }
@@ -2619,7 +2631,7 @@ printNav(State *state, Exchange_rate *exRate,
     real64 totalValue = getTotalPositionValue(state, stratIndex); 
     printPositions(state, stratIndex);
     real64 cashUSD = getTotalCashUSD(state, stratIndex, exRate);
-    printf("closing cash balance in usd is %f\n", cashUSD);
+    printf("closing cash balance with receivables in usd is %f\n", cashUSD);
     real64 totalValueUSD = totalValue / exRate->rate;
     printf("total position value in usd is %f\n", totalValueUSD);
     printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
@@ -2689,6 +2701,27 @@ uploadSecurities(FILE *secFile, State *state)
         PQclear(res);
         state->secs[++state->currSecIndex] = sec;
         // printf("security is %s\n", state->secs[i - 1].name);
+    }
+}
+
+void
+LoadBalance(Balance *bal, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 0)
+        {
+            strcpy(bal->symbol, token);
+        }
+        else if (i ==  1)
+        {
+            bal->balance = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
     }
 }
 
@@ -3255,6 +3288,101 @@ getStratIndex(State *state, char *stratSymbol)
     }
     printf("strat index is %d\n", stratIndex);
     return stratIndex;
+}
+
+/* Platform switch work 
+ * balances as of a date, includes banks as well as
+ * fees, receivables etc */
+void
+handleBalances(State *state, char *stratSymbol, char *res)
+{
+    FILE *upFile = fopen("tmp.csv", "r");
+    if (upFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    int stratIndex = getStratIndex(state, stratSymbol);
+    /* get strat id from db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    char line[1024];
+    int i = 0;
+    while (fgets(line, sizeof(line), upFile))
+    {
+        TrimString(line);
+        if (line[0] == '\0') {
+            continue; 
+        }
+        if (i == 0)
+        {
+            //TODO(Akhil): validate header in a way that res doesn't come here.
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        Balance bal = {};
+        LoadBalance(&bal, line);
+        if(0 == strcmp(bal.symbol, "feesAccrued"))
+        {
+            /* modify the in memory state */
+            state->strategies[stratIndex].feesAccrued = bal.balance;
+
+            /* Persist the security and the counters */
+            char query[1024];
+            snprintf(query, sizeof(query),
+                     "UPDATE strategy SET fees_accrued = %f WHERE id = %d;",
+                     bal.balance,
+                     stratId);
+            PGresult *res = PQexec(state->db, query);
+            PQclear(res);
+        }
+        else if(0 == strcmp(bal.symbol, "receivable"))
+        {
+            /* modify the in memory state */
+            state->strategies[stratIndex].receivable = bal.balance;
+
+            /* Persist the security and the counters */
+            char query[1024];
+            snprintf(query, sizeof(query),
+                     "UPDATE strategy SET receivable = %f WHERE id = %d;",
+                     bal.balance,
+                     stratId);
+            PGresult *res = PQexec(state->db, query);
+            PQclear(res);
+        }
+        else /* else its a bank account symbol */
+        {
+            for (int i = 0;
+                 state->strategies[stratIndex].currAccIndex + 1;
+                 i++)
+            {
+                if (0 == strcmp(bal.symbol,
+                                state->strategies[stratIndex].accs[i].symbol))
+                {
+                    /* modify the in memory state */
+                    state->strategies[stratIndex].accs[i].balance = bal.balance;
+
+                    /* Persist the security and the counters */
+                    char query[1024];
+                    snprintf(query, sizeof(query),
+                             "UPDATE bank_account SET balance = %f "
+                             "WHERE symbol = '%s'; ",
+                             bal.balance,
+                             bal.symbol);
+                    PGresult *res = PQexec(state->db, query);
+                    PQclear(res);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /* upload old positions into the db!
@@ -4106,12 +4234,12 @@ handleCorpAction(State *state,
                     printf("processing dividend %s...\n", div.isin);
                     // make the dividend income.
                     // NOTE(Akhil): 2 stands for the equites bank acc.
-                    state->strategies[stratIndex].accs[2].balance += div.div * pos.qty;
+                    state->strategies[stratIndex].receivable += div.div * pos.qty;
                     char query[1024];
                     snprintf(query, sizeof(query),
-                             "UPDATE bank_account SET balance = %f WHERE symbol = '%s'",
-                             state->strategies[stratIndex].accs[2].balance,
-                             state->strategies[stratIndex].accs[2].symbol
+                             "UPDATE strategy SET receivable = %f WHERE id = %d; ",
+                             state->strategies[stratIndex].receivable,
+                             stratId
                              );
                     PGresult *pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
@@ -5664,7 +5792,15 @@ answer_to_connection (void *cls,
         }
         else if (0 == strcmp(url, "/upload-positions"))
         {
-            handleUploadPositions(state, con_info->strategySymbol, con_info->answerstring);
+            handleUploadPositions(state,
+                                  con_info->strategySymbol,
+                                  con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/upload-balances"))
+        {
+            handleBalances(state,
+                           con_info->strategySymbol,
+                           con_info->answerstring);
         }
 
         return send_page (connection,

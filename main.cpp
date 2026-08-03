@@ -2778,7 +2778,6 @@ loadStateFromDB(State *state)
     {
         fprintf(stderr, "No state found: \n");
         PQclear(pgResult);
-        PQfinish(conn);
         return;
     }
     char *secIdStr = PQgetvalue(pgResult, 0, 1);
@@ -2787,7 +2786,7 @@ loadStateFromDB(State *state)
     int optIdCount = atoi(optIdStr);
     state->currSecIDCount = secIdCount;
     state->currOptIDCount = optIdCount;
-
+    PQclear(pgResult);
     /* Load the securities */
     sprintf(query,
             "SELECT * FROM security");
@@ -2839,6 +2838,7 @@ loadStateFromDB(State *state)
             state->secs[i] = sec;
             ++state->currSecIndex;
         }
+        PQclear(pgResult);
     }
 
     /* Load the strategies */
@@ -5514,10 +5514,9 @@ main()
                                NULL,
                                MHD_OPTION_END); 
     if (NULL == daemon) return 1;
-    while (1)
-    {}
     getchar ();
     MHD_stop_daemon (daemon);
+    PQfinish(conn);
     free(state);
     return 0;
 }

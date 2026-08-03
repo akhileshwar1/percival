@@ -6,6 +6,7 @@ g++ \
     -g -O0 \
     -Wall -Wextra \
     -fsanitize=address \
+    -I/usr/include/postgresql \
     main.cpp \
     -lpq \
     -lmicrohttpd \

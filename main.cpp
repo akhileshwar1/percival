@@ -5484,7 +5484,13 @@ answer_to_connection (void *cls,
 int
 main()
 {
-    PGconn *conn = PQconnectdb("host=127.0.0.1 port=5432 user=akhil password=akhileshwar dbname=percival");
+    const char *connStr = getenv("PG_CONN");
+    if (connStr == NULL)
+    {
+        fprintf(stderr, "Provide the db connection string\n");
+        return -2;
+    }
+    PGconn *conn = PQconnectdb(connStr);
     PGresult* res = PQexec(conn, "SET DateStyle TO 'ISO, DMY';");
     char *error = PQresultErrorMessage(res);
     if (strcmp(error, "") != 0)

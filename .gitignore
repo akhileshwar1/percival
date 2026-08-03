@@ -4,3 +4,4 @@
 *.env
 *.pem
 tmp.csv
+env.sh

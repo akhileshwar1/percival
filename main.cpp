@@ -10,6 +10,9 @@
 #include <microhttpd.h>
 #include <ctype.h>
 #include <nlohmann/json.hpp>
+#include <csignal>
+#include <atomic>
+
 using json = nlohmann::json;
 
 typedef uint32_t uint32;
@@ -5480,9 +5483,20 @@ answer_to_connection (void *cls,
                       MHD_HTTP_BAD_REQUEST);
 }
 
+static std::atomic<bool> g_running{true};
+
+static void handle_signal(int sig) {
+    (void)sig;
+    g_running = false;
+}
+
 int
 main()
 {
+    // Register systemd stop signal (SIGTERM) and Ctrl+C (SIGINT)
+    signal(SIGTERM, handle_signal);
+    signal(SIGINT, handle_signal);
+
     PGconn *conn = PQconnectdb("dbname=percival");
     PGresult* res = PQexec(conn, "SET DateStyle TO 'ISO, DMY';");
     char *error = PQresultErrorMessage(res);
@@ -5513,8 +5527,19 @@ main()
                                MHD_OPTION_NOTIFY_COMPLETED, &request_completed,
                                NULL,
                                MHD_OPTION_END); 
-    if (NULL == daemon) return 1;
-    getchar ();
+    if (NULL == daemon) {
+        fprintf(stderr, "Failed to start MHD daemon\n");
+        PQfinish(conn);
+        free(state);
+        return 1;
+    } 
+
+    // Keep running until systemd sends SIGTERM (systemctl stop)
+    while (g_running) {
+        usleep(100000); // 100ms yield loop
+    }
+    
+    // Graceful cleanup on systemctl stop
     MHD_stop_daemon (daemon);
     PQfinish(conn);
     free(state);

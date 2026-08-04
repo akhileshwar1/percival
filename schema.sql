@@ -112,6 +112,7 @@ CREATE TABLE fno_position (
     qty INTEGER NOT NULL,
     price DOUBLE PRECISION NOT NULL,
     ltp DOUBLE PRECISION NOT NULL,
+    pnl DOUBLE PRECISION NOT NULL,
     expiry DATE NOT NULL,                                              
     strike DOUBLE PRECISION NOT NULL,
     opt_type opt_type NOT NULL,
@@ -202,12 +203,13 @@ DROP TABLE IF EXISTS position_equity CASCADE;
 
 CREATE TABLE position_equity (
     id SERIAL PRIMARY KEY,                                             
-    sys_id VARCHAR(100),
+    sys_id VARCHAR(100) UNIQUE,
     isin VARCHAR(100) NOT NULL,
     symbol VARCHAR(100) NOT NULL,
     qty INTEGER NOT NULL,
     price DOUBLE PRECISION NOT NULL,                                   
     ltp DOUBLE PRECISION NOT NULL,                                     
+    pnl DOUBLE PRECISION NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,      
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE     
 );

@@ -269,6 +269,7 @@ typedef struct
     int qty;
     real64 price;
     real64 ltp;
+    real64 pnl;
     char sys_id[100];
 } PositionEquity;
 
@@ -295,6 +296,7 @@ typedef struct
     int qty;
     real64 price;
     real64 ltp;
+    real64 pnl;
     char expiry[100];
     real64 strike;
     Opt_type optType;
@@ -632,10 +634,10 @@ DBInsertSecurity(PGconn *conn, Security *sec, int currSecIDCount)
 void
 DBInsertPosition(PGconn *conn, PositionEquity *pos, int stratId)
 {
-    char query[1024];
+    char query[2096];
     snprintf(query, sizeof(query),
-             "INSERT INTO position_equity (sys_id, isin, symbol, qty, price, ltp, strategy_id) "
-             "VALUES ('%s', '%s', '%s', %d, %f, %f, %d) "
+             "INSERT INTO position_equity (sys_id, isin, symbol, qty, price, ltp, pnl, strategy_id) "
+             "VALUES ('%s', '%s', '%s', %d, %f, %f, %f, %d) "
              "ON CONFLICT (sys_id) DO UPDATE SET "
              "qty = EXCLUDED.qty, price = EXCLUDED.price, ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
              pos->sys_id,
@@ -644,8 +646,9 @@ DBInsertPosition(PGconn *conn, PositionEquity *pos, int stratId)
              pos->qty,
              pos->price,
              pos->ltp,
+             0.0,
              stratId);
-    PGresult *res = PQexec(conn, query);
+    PGresult *res = executeQuery(conn, query);
     PQclear(res);   
 }
 
@@ -1742,6 +1745,10 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             if (state->strategies[stratIndex].positions[i].qty + 
                                 trade.qty == 0)
                             {
+                                state->strategies[stratIndex].positions[i].pnl =
+                                    trade.qty * priceAfterFee +
+                                    state->strategies[stratIndex].positions[i].price *
+                                    state->strategies[stratIndex].positions[i].qty;
                                 state->strategies[stratIndex].positions[i].price = 0.0;
                             }
                             else
@@ -1808,6 +1815,10 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             if (state->strategies[stratIndex].positions[i].qty + 
                                 trade.qty == 0)
                             {
+                                state->strategies[stratIndex].positions[i].pnl =
+                                    trade.qty * priceAfterFee +
+                                    state->strategies[stratIndex].positions[i].price *
+                                    state->strategies[stratIndex].positions[i].qty;
                                 state->strategies[stratIndex].positions[i].price = 0.0;
                             }
                             else
@@ -1848,10 +1859,11 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                 } 
                 /* persist the updates to price and qty. */
                 snprintf(query, sizeof(query),
-                         "UPDATE position_equity SET price = %f, qty = %d "
+                         "UPDATE position_equity SET price = %f, qty = %d , pnl = %f"
                          " WHERE sys_id = '%s'",
                          state->strategies[stratIndex].positions[i].price,
                          state->strategies[stratIndex].positions[i].qty,
+                         state->strategies[stratIndex].positions[i].pnl,
                          state->strategies[stratIndex].positions[i].sys_id
                          );
                 pgResult = executeQuery(state->db, query);
@@ -1908,6 +1920,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                         PQclear(pgResult);
                         pos.price = priceAfterFee;
                         pos.qty = trade.qty;
+                        pos.pnl = 0.0;
                         ++state->strategies[state->currStratIndex].currJournalId;
                         strcat(assetEntry.accountName, stratSymbol);
                         strcat(assetEntry.accountName, "_POSN");
@@ -1954,6 +1967,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                         PQclear(pgResult);
                         pos.price = priceAfterFee;
                         pos.qty = trade.qty;
+                        pos.pnl = 0.0;
                         ++state->strategies[state->currStratIndex].currJournalId;
                         LedgerEntry assetEntry = {};
                         strcat(assetEntry.accountName, stratSymbol);
@@ -2103,6 +2117,11 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
                             {
+                                state->strategies[stratIndex].fpositions[i].pnl =
+                                    trade.qty * priceAfterFee +
+                                    state->strategies[stratIndex].fpositions[i].price *
+                                    state->strategies[stratIndex].fpositions[i].qty;
+
                                 state->strategies[stratIndex].fpositions[i].price = 0.0;
                             }
                             else
@@ -2167,6 +2186,10 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
                             {
+                                state->strategies[stratIndex].fpositions[i].pnl =
+                                    trade.qty * priceAfterFee +
+                                    state->strategies[stratIndex].fpositions[i].price *
+                                    state->strategies[stratIndex].fpositions[i].qty;
                                 state->strategies[stratIndex].fpositions[i].price = 0.0;
                             }
                             else
@@ -2204,10 +2227,11 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                 } 
                 // persist the updates to price and qty.
                 snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET price = %f, qty = %d "
+                         "UPDATE fno_position SET price = %f, qty = %d, pnl = %f "
                          " WHERE sys_id = '%s'",
                          state->strategies[stratIndex].fpositions[i].price,
                          state->strategies[stratIndex].fpositions[i].qty,
+                         state->strategies[stratIndex].fpositions[i].pnl,
                          state->strategies[stratIndex].fpositions[i].sys_id
                          );
                 pgResult = executeQuery(state->db, query);
@@ -2231,6 +2255,7 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             strcpy(pos.expiry,trade.expiry);
             pos.optType = trade.optType;
             pos.instType = trade.instType;
+            pos.pnl = 0.0;
             sprintf(pos.sys_id, "OPT%d", ++state->currOptIDCount);
             /* Persist the opt counter */
             char query[1024];
@@ -2348,14 +2373,15 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             state->strategies[stratIndex].fpositions[++state->strategies[stratIndex].currFPosIndex] = pos;
             // persist the updates to price and qty.
             snprintf(query, sizeof(query),
-                     "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, ltp, expiry, strike, opt_type, inst_type) "
-                     "VALUES ('%s', %d, '%s', %d, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+                     "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, ltp, pnl, expiry, strike, opt_type, inst_type) "
+                     "VALUES ('%s', %d, '%s', %d, %f, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
                      pos.sys_id,
                      dbStratId,
                      pos.symbol,
                      pos.qty,
                      pos.price,
                      pos.ltp,
+                     pos.pnl,
                      pos.expiry,
                      pos.strike,
                      OptTypeStrings[pos.optType],
@@ -2690,6 +2716,7 @@ LoadOldPosition(PositionEquity *pos, char *line)
         {
             pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
             pos->ltp = (real64)atof(token);
+            pos->pnl = 0.0;
         }
         token = strtok(NULL, ",");
         i++;

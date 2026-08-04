@@ -33,43 +33,6 @@ typedef uint16_t uint16;
 #define MAX_ACCS 10 
 #define MAX_LEDGER_ENTRIES 1000 
 
-typedef enum
-{
-    GET = 0,
-    POST = 1
-} ConnectionType;
-
-/**
-* Information we keep per connection.
-*/
-typedef struct
-{
-    ConnectionType connectiontype;
-    /**
-     * Handle to the POST processing state.
-     */
-    struct MHD_PostProcessor *postprocessor;
-    /**
-     * File handle where we write uploaded data.
-     */
-    FILE *fp;
-    /**
-     * HTTP response body we will return, NULL if not yet known.
-     */
-    char *answerstring;
-    /**
-     * HTTP status code we will return, 0 for undecided.
-     */
-    unsigned int answercode;
-
-    char strategySymbol[100];
-    char invName[100];
-
-    char date[100];
-    char rollbackDate[100];
-    char snapshotDate[100];
-} connection_info_struct;
-
 #define ASKPAGE \
 "<html><body>\n" \
 "Upload a file, please!<br>\n" \
@@ -120,6 +83,45 @@ char offcashflowHeader [] =
 char offredeemHeader [] =
     "BROKERCODE,BROKERACID,SYMBOLCODE,EXCHG,TRANTYPE,DATEPUR_ACQUI,SETDATE,QUANTITY,RATE,BROKERAGEPERSHARE,SERVICETAX,SETDATEFLAG,MKTRATE,CASHSYMBOLCODE,TRANEXPENSE,ACCRUEDINTEREST,BLOCKID,TRANSREF,DESCMEMO,CHEQUENO,CHEQUEDTL,MULTICURRENCYTRANFLAG,SETTLEMENTCASHSYMBOLCODE,EXCHGRATE,EXCHGRATEFLAG,TRFEXCHGRATE,CASHFLAG,BANKREF,CASHSETDATE";
 
+
+/* --------------- Structs ------------------------------------------------*/
+typedef enum
+{
+    GET = 0,
+    POST = 1
+} ConnectionType;
+
+/**
+* Information we keep per connection.
+*/
+typedef struct
+{
+    ConnectionType connectiontype;
+    /**
+     * Handle to the POST processing state.
+     */
+    struct MHD_PostProcessor *postprocessor;
+    /**
+     * File handle where we write uploaded data.
+     */
+    FILE *fp;
+    /**
+     * HTTP response body we will return, NULL if not yet known.
+     */
+    char *answerstring;
+    /**
+     * HTTP status code we will return, 0 for undecided.
+     */
+    unsigned int answercode;
+
+    char strategySymbol[100];
+    char invName[100];
+
+    char date[100];
+    char rollbackDate[100];
+    char snapshotDate[100];
+} connection_info_struct;
+
 typedef enum
 {
     USD,
@@ -163,8 +165,6 @@ typedef enum
     INVESTOR_ONBOARDED,
     INVESTOR_OFFBOARDED
 } InvestorStatus;
-
-
 
 typedef struct
 {
@@ -357,6 +357,7 @@ typedef struct
     PGconn *db;
 } State;
 
+/* --------------- Utils ------------------------------------------------*/
 int ValidateCsvHeader(char *firstLine, char *expectedHeader)
 {
     if (strcmp(firstLine, expectedHeader) == 0) {
@@ -689,6 +690,7 @@ DBUpdateFee(PGconn *conn, real64 balance, int stratId)
     PQclear(res);
 }
 
+/* --------------- Loaders/Parsers ------------------------------------------------*/
 void
 LoadFNOBhav(FNO_bhav *bhav, char *line)
 {
@@ -1509,6 +1511,497 @@ LoadTrade(Trade *trade, char *line)
 }
 
 void
+LoadBalance(Balance *bal, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 0)
+        {
+            strcpy(bal->symbol, token);
+        }
+        else if (i ==  1)
+        {
+            bal->balance = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
+LoadOldPosition(PositionEquity *pos, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 2)
+        {
+            strcpy(pos->isin , token);
+        }
+        else if (i ==  4)
+        {
+            pos->qty = (real64)atof(token);
+        }
+        else if (i == 6)
+        {
+            pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
+            pos->ltp = (real64)atof(token);
+            pos->pnl = 0.0;
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
+LoadPriceUpdate(PriceUpdate *update, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 0)
+        {
+            strcpy(update->symbol, token);
+        }
+        else if (i == 1)
+        {
+            strcpy(update->date, token);
+        }
+        else if (i ==  2)
+        {
+            update->price = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
+loadStateFromDB(State *state)
+{
+    /* No need to init, overwrites everything on the existing state */
+    PGconn *conn = state->db;
+    char query[1024];
+    /* Fetch the counters */
+    sprintf(query,
+            "SELECT * FROM global_state");
+
+    PGresult *pgResult = executeQuery(conn, query);
+    int rows = PQntuples(pgResult);
+    int cols = PQnfields(pgResult);
+    if (rows == 0)
+    {
+        fprintf(stderr, "No state found: \n");
+        PQclear(pgResult);
+        return;
+    }
+    char *secIdStr = PQgetvalue(pgResult, 0, 1);
+    int secIdCount = atoi(secIdStr);
+    char *optIdStr = PQgetvalue(pgResult, 0, 2);
+    int optIdCount = atoi(optIdStr);
+    state->currSecIDCount = secIdCount;
+    state->currOptIDCount = optIdCount;
+    PQclear(pgResult);
+    /* Load the securities */
+    sprintf(query,
+            "SELECT * FROM security");
+
+    pgResult = executeQuery(conn, query);
+    rows = PQntuples(pgResult);
+    cols = PQnfields(pgResult);
+    if (rows == 0)
+    {
+        fprintf(stderr, "No securities found: \n");
+        PQclear(pgResult);
+    }
+    else
+    {
+        state->currSecIndex = -1;
+        for (int i = 0; i < rows; i++)
+        {
+            Security sec = {};
+            for (int j = 0; j < cols; j++)
+            {
+                if (j == 1)
+                {
+                    char *str = PQgetvalue(pgResult, i, j);
+                    strcpy(sec.sys_id, str);
+                }
+                else if (j == 2)
+                {
+                    char *str = PQgetvalue(pgResult, i, j);
+                    strcpy(sec.isin , str);
+                }
+                else if (j == 3)
+                {
+                    char *str = PQgetvalue(pgResult, i, j);
+                    strcpy(sec.symbol, str);
+                }
+                else if (j == 4)
+                {
+                    char *str = PQgetvalue(pgResult, i, j);
+                    char output[11];
+                    convert_date_format(str, output);
+                    strcpy(sec.date, output);
+                }
+                else if (j == 5)
+                {
+                    char *str = PQgetvalue(pgResult, i, j);
+                    strcpy(sec.name, str);
+                }
+            }
+            state->secs[i] = sec;
+            ++state->currSecIndex;
+        }
+        PQclear(pgResult);
+    }
+
+    /* Load the strategies */
+    state->currStratIndex = -1;
+    sprintf(query,
+            "SELECT * FROM strategy");
+
+    pgResult = executeQuery(conn, query);
+    rows = PQntuples(pgResult);
+    cols = PQnfields(pgResult);
+    if (rows == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: \n");
+        PQclear(pgResult);
+    }
+    else
+    {
+        // Load the strategies for each symbol.
+        for (int i = 0; i < rows; i++)
+        {
+            Strategy strat = {};
+            strat.currInvestorIndex = -1;
+            strat.currFPosIndex = -1;
+            strat.currAccIndex = -1;
+            for (int j = 0; j < cols; j++)
+            {
+                char *str = PQgetvalue(pgResult, i, j);
+                if (j == 0)
+                {
+                    strat.id = atoi(str);
+                }
+                else if (j == 2)
+                {
+                    strcpy(strat.symbol, str);
+                }
+                else if (j == 3)
+                {
+                    strat.cash = atof(str);
+                }
+                else if (j == 4)
+                {
+                    strat.feesAccrued = atof(str);
+                }
+                else if (j == 5)
+                {
+                    strat.nav = atof(str);
+                }
+                else if (j == 7)
+                {
+                    strat.currFPosIndex = atoi(str);
+                }
+                else if (j == 8)
+                {
+                    strat.currInvestorIndex = atoi(str);
+                }
+                else if (j == 9)
+                {
+                    strat.currEntryId = atoi(str);
+                }
+                else if (j == 10)
+                {
+                    strat.currJournalId = atoi(str);
+                }
+                else if (j == 11)
+                {
+                    strat.currAccIndex = atoi(str);
+                }
+                else if (j == 6)
+                {
+                    strat.currPosIndex = atoi(str);
+                    // go for the investors, accs, and positions now.
+                    sprintf(query,
+                            "SELECT * FROM investor WHERE strategy_id = %d",
+                            strat.id);
+
+                    PGresult *pgResultInv = executeQuery(conn, query);
+                    int ir = PQntuples(pgResultInv);
+                    int ic = PQnfields(pgResultInv);
+                    if (ir == 0)
+                    {
+                        fprintf(stderr, "No investor found matching symbol: \n");
+                        PQclear(pgResultInv);
+                    }
+                    else
+                    {
+                        for (int a = 0; a < ir; a++)
+                        {
+                            Investor inv = {};
+                            for (int b = 0; b < ic; b++)
+                            {
+                                char *str = PQgetvalue(pgResultInv, a, b);
+                                if (b == 3)
+                                {
+                                    strcpy(inv.name, str);
+                                }
+                                else if (b == 4)
+                                {
+                                    inv.units = atof(str);
+                                }
+                            }
+                            strat.investors[++strat.currInvestorIndex] = inv; 
+                        }
+                        PQclear(pgResultInv);
+                    }
+
+                    // go for bank accounts now.
+                    sprintf(query,
+                            "SELECT * FROM bank_account WHERE strategy_id = %d",
+                            strat.id);
+                    PGresult *pgResultAcc = executeQuery(conn, query);
+                    ir = PQntuples(pgResultAcc);
+                    ic = PQnfields(pgResultAcc);
+                    if (ir == 0)
+                    {
+                        fprintf(stderr, "No fno_position found matching symbol: \n");
+                        PQclear(pgResultAcc);
+                    }
+                    else
+                    {
+                        for (int i = 0; i < ir; i++)
+                        {
+                            Bank_account acc = {};
+                            for (int j = 0; j < ic; j++)
+                            {
+                                char *str = PQgetvalue(pgResultAcc, i, j);
+                                if (j == 1)
+                                {
+                                    strcpy(acc.symbol, str);
+                                }
+                                else if (j == 2)
+                                {
+                                    acc.balance = atof(str);
+                                }
+                                else if (j == 3)
+                                {
+                                    acc.currency = strcmp(str, "USD") == 0 ? USD : INR;
+                                }
+                            }
+                            strat.accs[++strat.currAccIndex] = acc; 
+                        }
+                        PQclear(pgResultAcc);
+                    }
+
+
+                    // now, add the fno_positions to the strat.
+                    sprintf(query,
+                            "SELECT * FROM fno_position WHERE strategy_id = %d",
+                            strat.id);
+
+                    PGresult *pgResultPos = executeQuery(conn, query);
+                    ir = PQntuples(pgResultPos);
+                    ic = PQnfields(pgResultPos);
+                    if (ir == 0)
+                    {
+                        fprintf(stderr, "No fno_position found matching symbol: \n");
+                        PQclear(pgResultPos);
+                    }
+                    else
+                    {
+                        for (int a = 0; a < ir; a++)
+                        {
+                            FNO_position pos = {};
+                            for (int b = 0; b < ic; b++)
+                            {
+                                char *str = PQgetvalue(pgResultPos, a, b);
+                                if (b == 1)
+                                {
+                                    strcpy(pos.sys_id, str);
+                                }
+                                else if (b == 2)
+                                {
+                                    strcpy(pos.symbol, str);
+                                }
+                                else if (b == 3)
+                                {
+                                    pos.qty = atoi(str);
+                                }
+                                else if (b == 4)
+                                {
+                                    pos.price = atof(str);
+                                }
+                                else if (b == 5)
+                                {
+                                    pos.ltp = atof(str);
+                                }
+                                else if (b == 6)
+                                {
+                                    printf("expiry is %s\n", str);
+
+                                    char formattedExpiry[100];
+                                    ConvertDbDateToCFormat(str, formattedExpiry,
+                                                           sizeof(formattedExpiry));
+                                    strcpy(pos.expiry, formattedExpiry);
+                                }
+                                else if (b == 7)
+                                {
+                                    pos.strike = atof(str);
+                                }
+                                else if (b == 8)
+                                {
+                                    if (strcmp(str, "PE") == 0)
+                                    {
+                                        pos.optType = PE;
+                                    }
+                                    else if (strcmp(str, "CE") == 0)
+                                    {
+                                        pos.optType = CE;
+                                    }
+                                    else
+                                {
+                                        pos.optType = NA;
+                                    }
+                                }
+                                else if (b == 9)
+                                {
+                                    if (strcmp(str, "OPTIDX") == 0)
+                                    {
+                                        pos.instType = OPTIDX;
+                                    }
+                                    else if (strcmp(str, "OPTSTK") == 0)
+                                    {
+                                        pos.instType = OPTSTK;
+                                    }
+                                    else if (strcmp(str, "FUTIDX") == 0)
+                                    {
+                                        pos.instType = FUTIDX;
+                                    }
+                                    else if (strcmp (str, "FUTSTK") == 0)
+                                    {
+                                        pos.instType = FUTSTK;
+                                    }
+                                }
+                            }
+                            strat.fpositions[++strat.currFPosIndex] = pos; 
+                        }
+                        PQclear(pgResultPos);
+                    }
+                }
+            }
+            state->strategies[++state->currStratIndex] = strat;
+        }
+
+        PQclear(pgResult);
+    }
+}
+
+void formatDateForDiv(const char *in, char *out)
+{
+    sprintf(out, "%.2s/%.2s/%.4s",
+            in + 6,   // DD
+            in + 4,   // MM
+            in);      // YYYY
+}
+
+void
+LoadDividend(Dividend *div, char *line)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i == 1)
+        {
+            strcpy(div->externalId, token);
+        }
+        else if (i == 6)
+        {
+            strcpy(div->isin, token);
+        }
+        else if (i == 9)
+        {
+            char formattedDate[11];  // "DD/MM/YYYY" + '\0'
+            formatDateForDiv(token, formattedDate);
+            strcpy(div->exDate, formattedDate);
+        }
+        else if (i ==  13)
+        {
+            strcpy(div->type, token);
+        }
+        else if (i ==  16)
+        {
+            div->div = (real64)atof(token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
+LoadInvNameFromFile(char *line, char *invName)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i ==  1)
+        {
+            strcpy(invName, token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+void
+LoadStratSymbolFromFile(char *line, char *stratSymbol)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i ==  1)
+        {
+            strcpy(stratSymbol, token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+
+/* Present at the 2nd column */
+void
+LoadStratSymbolFromFileSecond(char *line, char *stratSymbol)
+{
+    char *token;
+    token = strtok(line, ",");
+    int i = 0;
+    while (token != NULL)
+    {
+        if (i ==  2)
+        {
+            strcpy(stratSymbol, token);
+        }
+        token = strtok(NULL, ",");
+        i++;
+    }
+}
+void
 printFundLedger(State *state)
 {
     // print the ledger.
@@ -1524,6 +2017,7 @@ printFundLedger(State *state)
     }
 }
 
+/* --------------- File Processors ------------------------------------------------*/
 void
 processBhavEq(FILE *bhavFile, int stratIndex, State *state)
 {
@@ -2676,54 +3170,6 @@ uploadSecurities(FILE *secFile, State *state)
 }
 
 void
-LoadBalance(Balance *bal, char *line)
-{
-    char *token;
-    token = strtok(line, ",");
-    int i = 0;
-    while (token != NULL)
-    {
-        if (i == 0)
-        {
-            strcpy(bal->symbol, token);
-        }
-        else if (i ==  1)
-        {
-            bal->balance = (real64)atof(token);
-        }
-        token = strtok(NULL, ",");
-        i++;
-    }
-}
-
-void
-LoadOldPosition(PositionEquity *pos, char *line)
-{
-    char *token;
-    token = strtok(line, ",");
-    int i = 0;
-    while (token != NULL)
-    {
-        if (i == 2)
-        {
-            strcpy(pos->isin , token);
-        }
-        else if (i ==  4)
-        {
-            pos->qty = (real64)atof(token);
-        }
-        else if (i == 6)
-        {
-            pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
-            pos->ltp = (real64)atof(token);
-            pos->pnl = 0.0;
-        }
-        token = strtok(NULL, ",");
-        i++;
-    }
-}
-
-void
 uploadPositions(FILE *secFile, State *state, int stratIndex, int stratId)
 {
     char line[1024];
@@ -2760,451 +3206,6 @@ uploadPositions(FILE *secFile, State *state, int stratIndex, int stratId)
 
         DBInsertPosition(state->db, &pos, stratId);
         // printf("security is %s\n", state->secs[i - 1].name);
-    }
-}
-
-
-void
-LoadPriceUpdate(PriceUpdate *update, char *line)
-{
-    char *token;
-    token = strtok(line, ",");
-    int i = 0;
-    while (token != NULL)
-    {
-        if (i == 0)
-        {
-            strcpy(update->symbol, token);
-        }
-        else if (i == 1)
-        {
-            strcpy(update->date, token);
-        }
-        else if (i ==  2)
-        {
-            update->price = (real64)atof(token);
-        }
-        token = strtok(NULL, ",");
-        i++;
-    }
-}
-
-void
-loadStateFromDB(State *state)
-{
-    /* No need to init, overwrites everything on the existing state */
-    PGconn *conn = state->db;
-    char query[1024];
-    /* Fetch the counters */
-    sprintf(query,
-            "SELECT * FROM global_state");
-
-    PGresult *pgResult = executeQuery(conn, query);
-    int rows = PQntuples(pgResult);
-    int cols = PQnfields(pgResult);
-    if (rows == 0)
-    {
-        fprintf(stderr, "No state found: \n");
-        PQclear(pgResult);
-        return;
-    }
-    char *secIdStr = PQgetvalue(pgResult, 0, 1);
-    int secIdCount = atoi(secIdStr);
-    char *optIdStr = PQgetvalue(pgResult, 0, 2);
-    int optIdCount = atoi(optIdStr);
-    state->currSecIDCount = secIdCount;
-    state->currOptIDCount = optIdCount;
-    PQclear(pgResult);
-    /* Load the securities */
-    sprintf(query,
-            "SELECT * FROM security");
-
-    pgResult = executeQuery(conn, query);
-    rows = PQntuples(pgResult);
-    cols = PQnfields(pgResult);
-    if (rows == 0)
-    {
-        fprintf(stderr, "No securities found: \n");
-        PQclear(pgResult);
-    }
-    else
-    {
-        state->currSecIndex = -1;
-        for (int i = 0; i < rows; i++)
-        {
-            Security sec = {};
-            for (int j = 0; j < cols; j++)
-            {
-                if (j == 1)
-                {
-                    char *str = PQgetvalue(pgResult, i, j);
-                    strcpy(sec.sys_id, str);
-                }
-                else if (j == 2)
-                {
-                    char *str = PQgetvalue(pgResult, i, j);
-                    strcpy(sec.isin , str);
-                }
-                else if (j == 3)
-                {
-                    char *str = PQgetvalue(pgResult, i, j);
-                    strcpy(sec.symbol, str);
-                }
-                else if (j == 4)
-                {
-                    char *str = PQgetvalue(pgResult, i, j);
-                    char output[11];
-                    convert_date_format(str, output);
-                    strcpy(sec.date, output);
-                }
-                else if (j == 5)
-                {
-                    char *str = PQgetvalue(pgResult, i, j);
-                    strcpy(sec.name, str);
-                }
-            }
-            state->secs[i] = sec;
-            ++state->currSecIndex;
-        }
-        PQclear(pgResult);
-    }
-
-    /* Load the strategies */
-    state->currStratIndex = -1;
-    sprintf(query,
-            "SELECT * FROM strategy");
-
-    pgResult = executeQuery(conn, query);
-    rows = PQntuples(pgResult);
-    cols = PQnfields(pgResult);
-    if (rows == 0)
-    {
-        fprintf(stderr, "No strategy found matching symbol: \n");
-        PQclear(pgResult);
-    }
-    else
-    {
-        // Load the strategies for each symbol.
-        for (int i = 0; i < rows; i++)
-        {
-            Strategy strat = {};
-            strat.currInvestorIndex = -1;
-            strat.currFPosIndex = -1;
-            strat.currAccIndex = -1;
-            for (int j = 0; j < cols; j++)
-            {
-                char *str = PQgetvalue(pgResult, i, j);
-                if (j == 0)
-                {
-                    strat.id = atoi(str);
-                }
-                else if (j == 2)
-                {
-                    strcpy(strat.symbol, str);
-                }
-                else if (j == 3)
-                {
-                    strat.cash = atof(str);
-                }
-                else if (j == 4)
-                {
-                    strat.feesAccrued = atof(str);
-                }
-                else if (j == 5)
-                {
-                    strat.nav = atof(str);
-                }
-                else if (j == 7)
-                {
-                    strat.currFPosIndex = atoi(str);
-                }
-                else if (j == 8)
-                {
-                    strat.currInvestorIndex = atoi(str);
-                }
-                else if (j == 9)
-                {
-                    strat.currEntryId = atoi(str);
-                }
-                else if (j == 10)
-                {
-                    strat.currJournalId = atoi(str);
-                }
-                else if (j == 11)
-                {
-                    strat.currAccIndex = atoi(str);
-                }
-                else if (j == 6)
-                {
-                    strat.currPosIndex = atoi(str);
-                    // go for the investors, accs, and positions now.
-                    sprintf(query,
-                            "SELECT * FROM investor WHERE strategy_id = %d",
-                            strat.id);
-
-                    PGresult *pgResultInv = executeQuery(conn, query);
-                    int ir = PQntuples(pgResultInv);
-                    int ic = PQnfields(pgResultInv);
-                    if (ir == 0)
-                    {
-                        fprintf(stderr, "No investor found matching symbol: \n");
-                        PQclear(pgResultInv);
-                    }
-                    else
-                    {
-                        for (int a = 0; a < ir; a++)
-                        {
-                            Investor inv = {};
-                            for (int b = 0; b < ic; b++)
-                            {
-                                char *str = PQgetvalue(pgResultInv, a, b);
-                                if (b == 3)
-                                {
-                                    strcpy(inv.name, str);
-                                }
-                                else if (b == 4)
-                                {
-                                    inv.units = atof(str);
-                                }
-                            }
-                            strat.investors[++strat.currInvestorIndex] = inv; 
-                        }
-                        PQclear(pgResultInv);
-                    }
-
-                    // go for bank accounts now.
-                    sprintf(query,
-                            "SELECT * FROM bank_account WHERE strategy_id = %d",
-                            strat.id);
-                    PGresult *pgResultAcc = executeQuery(conn, query);
-                    ir = PQntuples(pgResultAcc);
-                    ic = PQnfields(pgResultAcc);
-                    if (ir == 0)
-                    {
-                        fprintf(stderr, "No fno_position found matching symbol: \n");
-                        PQclear(pgResultAcc);
-                    }
-                    else
-                    {
-                        for (int i = 0; i < ir; i++)
-                        {
-                            Bank_account acc = {};
-                            for (int j = 0; j < ic; j++)
-                            {
-                                char *str = PQgetvalue(pgResultAcc, i, j);
-                                if (j == 1)
-                                {
-                                    strcpy(acc.symbol, str);
-                                }
-                                else if (j == 2)
-                                {
-                                    acc.balance = atof(str);
-                                }
-                                else if (j == 3)
-                                {
-                                    acc.currency = strcmp(str, "USD") == 0 ? USD : INR;
-                                }
-                            }
-                            strat.accs[++strat.currAccIndex] = acc; 
-                        }
-                        PQclear(pgResultAcc);
-                    }
-
-
-                    // now, add the fno_positions to the strat.
-                    sprintf(query,
-                            "SELECT * FROM fno_position WHERE strategy_id = %d",
-                            strat.id);
-
-                    PGresult *pgResultPos = executeQuery(conn, query);
-                    ir = PQntuples(pgResultPos);
-                    ic = PQnfields(pgResultPos);
-                    if (ir == 0)
-                    {
-                        fprintf(stderr, "No fno_position found matching symbol: \n");
-                        PQclear(pgResultPos);
-                    }
-                    else
-                    {
-                        for (int a = 0; a < ir; a++)
-                        {
-                            FNO_position pos = {};
-                            for (int b = 0; b < ic; b++)
-                            {
-                                char *str = PQgetvalue(pgResultPos, a, b);
-                                if (b == 1)
-                                {
-                                    strcpy(pos.sys_id, str);
-                                }
-                                else if (b == 2)
-                                {
-                                    strcpy(pos.symbol, str);
-                                }
-                                else if (b == 3)
-                                {
-                                    pos.qty = atoi(str);
-                                }
-                                else if (b == 4)
-                                {
-                                    pos.price = atof(str);
-                                }
-                                else if (b == 5)
-                                {
-                                    pos.ltp = atof(str);
-                                }
-                                else if (b == 6)
-                                {
-                                    printf("expiry is %s\n", str);
-
-                                    char formattedExpiry[100];
-                                    ConvertDbDateToCFormat(str, formattedExpiry,
-                                                           sizeof(formattedExpiry));
-                                    strcpy(pos.expiry, formattedExpiry);
-                                }
-                                else if (b == 7)
-                                {
-                                    pos.strike = atof(str);
-                                }
-                                else if (b == 8)
-                                {
-                                    if (strcmp(str, "PE") == 0)
-                                    {
-                                        pos.optType = PE;
-                                    }
-                                    else if (strcmp(str, "CE") == 0)
-                                    {
-                                        pos.optType = CE;
-                                    }
-                                    else
-                                {
-                                        pos.optType = NA;
-                                    }
-                                }
-                                else if (b == 9)
-                                {
-                                    if (strcmp(str, "OPTIDX") == 0)
-                                    {
-                                        pos.instType = OPTIDX;
-                                    }
-                                    else if (strcmp(str, "OPTSTK") == 0)
-                                    {
-                                        pos.instType = OPTSTK;
-                                    }
-                                    else if (strcmp(str, "FUTIDX") == 0)
-                                    {
-                                        pos.instType = FUTIDX;
-                                    }
-                                    else if (strcmp (str, "FUTSTK") == 0)
-                                    {
-                                        pos.instType = FUTSTK;
-                                    }
-                                }
-                            }
-                            strat.fpositions[++strat.currFPosIndex] = pos; 
-                        }
-                        PQclear(pgResultPos);
-                    }
-                }
-            }
-            state->strategies[++state->currStratIndex] = strat;
-        }
-
-        PQclear(pgResult);
-    }
-}
-
-void formatDateForDiv(const char *in, char *out)
-{
-    sprintf(out, "%.2s/%.2s/%.4s",
-            in + 6,   // DD
-            in + 4,   // MM
-            in);      // YYYY
-}
-
-void
-LoadDividend(Dividend *div, char *line)
-{
-    char *token;
-    token = strtok(line, ",");
-    int i = 0;
-    while (token != NULL)
-    {
-        if (i == 1)
-        {
-            strcpy(div->externalId, token);
-        }
-        else if (i == 6)
-        {
-            strcpy(div->isin, token);
-        }
-        else if (i == 9)
-        {
-            char formattedDate[11];  // "DD/MM/YYYY" + '\0'
-            formatDateForDiv(token, formattedDate);
-            strcpy(div->exDate, formattedDate);
-        }
-        else if (i ==  13)
-        {
-            strcpy(div->type, token);
-        }
-        else if (i ==  16)
-        {
-            div->div = (real64)atof(token);
-        }
-        token = strtok(NULL, ",");
-        i++;
-    }
-}
-
-void
-LoadInvNameFromFile(char *line, char *invName)
-{
-    char *token;
-    token = strtok(line, ",");
-    int i = 0;
-    while (token != NULL)
-    {
-        if (i ==  1)
-        {
-            strcpy(invName, token);
-        }
-        token = strtok(NULL, ",");
-        i++;
-    }
-}
-
-void
-LoadStratSymbolFromFile(char *line, char *stratSymbol)
-{
-    char *token;
-    token = strtok(line, ",");
-    int i = 0;
-    while (token != NULL)
-    {
-        if (i ==  1)
-        {
-            strcpy(stratSymbol, token);
-        }
-        token = strtok(NULL, ",");
-        i++;
-    }
-}
-
-/* Present at the 2nd column */
-void
-LoadStratSymbolFromFileSecond(char *line, char *stratSymbol)
-{
-    char *token;
-    token = strtok(line, ",");
-    int i = 0;
-    while (token != NULL)
-    {
-        if (i ==  2)
-        {
-            strcpy(stratSymbol, token);
-        }
-        token = strtok(NULL, ",");
-        i++;
     }
 }
 
@@ -3249,6 +3250,7 @@ getStratIndex(State *state, char *stratSymbol)
     return stratIndex;
 }
 
+/* --------------- Api Handlers ------------------------------------------------*/
 /* Platform switch work 
  * balances as of a date, includes banks as well as
  * fees, receivables etc */
@@ -5160,6 +5162,7 @@ handleExchangeRate(State *state, char *stratSymbol, char *res)
     PQclear(pgResult);
 }
 
+/* --------------- Http server------------------------------------------------*/
 static enum MHD_Result
 send_page (struct MHD_Connection *connection,
            const char *page,
@@ -5508,6 +5511,7 @@ answer_to_connection (void *cls,
                       MHD_HTTP_BAD_REQUEST);
 }
 
+/* --------------- Main ------------------------------------------------*/
 int
 main()
 {

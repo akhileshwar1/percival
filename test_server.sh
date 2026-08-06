@@ -3,16 +3,16 @@
 SERVER=http://localhost:8888
 # SERVER=http://13.53.138.234:8888
 
+# 2. Create Strategy
+curl -v -X POST \
+    -F "file=@ab_strat.csv" \
+    $SERVER/create-strategy
+
 # 1. Exchange Rate
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
     -F "file=@exchange_rate.csv" \
     $SERVER/exchange-rate
-
-# 2. Create Strategy
-curl -v -X POST \
-    -F "file=@ab_strat.csv" \
-    $SERVER/create-strategy
 
 # 3. Add Investor
 curl -v -X POST \
@@ -183,7 +183,7 @@ curl -v -X POST \
 
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
-    -F "fromDate=25/03/2025" \
+    -F "fromDate=21/03/2025" \
     -F "toDate=26/03/2025" \
     $SERVER/nav-report
 

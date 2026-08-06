@@ -3376,21 +3376,25 @@ handleNAVReport(State *state,
 
         PGresult *pgResult = executeQuery(state->db, query);
 
+        real64 nav;
         if (PQntuples(pgResult) == 0)
         {
             fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
             PQclear(pgResult);
-            return;
+            nav = 0;
+        }
+        else
+        {
+            nav = atof(PQgetvalue(pgResult, 0, 0));
         }
 
-        real64 nav = atof(PQgetvalue(pgResult, 0, 0));
         printf("nav is %f\n", nav);
         cJSON *cjsonNAV= cJSON_CreateNumber(nav);
         if (cjsonNAV == NULL) return;
         cJSON_AddItemToObject(report, "nav", cjsonNAV);
 
         /* iterate through the positions and get the 
-     * gains for the day both realized and unrealized (curr and price) */
+         * gains for the day both realized and unrealized (curr and price) */
         sprintf(query,
                 "SELECT * FROM position_equity "
                 "WHERE strategy_id = %d;",
@@ -3437,6 +3441,7 @@ handleNAVReport(State *state,
             // get the total gain in usd.
             // then keep curr same and get price gain.
             // currency gain = total gain - price gain.
+            if (prevLtp < 0) continue;
             if (pnl != 0)
             {
                 totalGain = pnl / currExRate; 
@@ -3502,7 +3507,7 @@ handleNAVReport(State *state,
                     optType = PE;
                 }
                 else
-            {
+                {
                     optType = NA;
                 }
             }
@@ -3520,6 +3525,8 @@ handleNAVReport(State *state,
             // get the total gain in usd.
             // then keep curr same and get price gain.
             // currency gain = total gain - price gain.
+            if (prevLtp < 0) continue;
+            printf("computing....\n");
             if (pnl != 0)
             {
                 totalGain = pnl / currExRate; 

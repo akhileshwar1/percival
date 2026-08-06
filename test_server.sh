@@ -187,6 +187,11 @@ curl -v -X POST \
     -F "toDate=26/03/2025" \
     $SERVER/nav-report
 
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    $SERVER/positions-report
+
+
 # # 5TH DAY - 27th-----------------------------------------------------
 # # 1. Exchange Rate
 # curl -v -X POST \

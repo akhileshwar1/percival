@@ -3344,6 +3344,92 @@ getStratIndex(State *state, char *stratSymbol)
 
 /* --------------- Api Handlers ------------------------------------------------*/
 void
+handlePosReport(State *state,
+                char *stratSymbol,
+                char *res)
+{
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    cJSON *json = cJSON_CreateObject();
+    if (json == NULL) return;
+    cJSON *cJPositions = cJSON_CreateArray();
+    char query[4096];
+    sprintf(query,
+            "SELECT * FROM position_equity "
+            "WHERE strategy_id = %d;",
+            stratId);
+
+    PGresult *pgResult = executeQuery(state->db, query);
+
+    int rows = PQntuples(pgResult);
+    int cols = PQnfields(pgResult);
+    if (rows == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+    
+    /* iterate through the positions */
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < cols; j++)
+        {
+            char *symbol = PQgetvalue(pgResult, i, 3);    
+            int qty = atoi(PQgetvalue(pgResult, i, 4));    
+            real64 ltp = atof(PQgetvalue(pgResult, i, 6));    
+            real64 pnl = atof(PQgetvalue(pgResult, i, 7));    
+            cJSON *position = cJSON_CreateObject();
+            cJSON_AddItemToObject(position, "symbol", cJSON_CreateString(symbol));
+            cJSON_AddItemToObject(position, "qty", cJSON_CreateNumber(qty));
+            cJSON_AddItemToObject(position, "ltp", cJSON_CreateNumber(ltp));
+            cJSON_AddItemToObject(position, "pnl", cJSON_CreateNumber(pnl));
+            cJSON_AddItemToArray(cJPositions, position);
+        }
+    }
+    sprintf(query,
+            "SELECT * FROM fno_position "
+            "WHERE strategy_id = %d;",
+            stratId);
+
+    pgResult = executeQuery(state->db, query);
+
+    rows = PQntuples(pgResult);
+    cols = PQnfields(pgResult);
+    if (rows == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+    }
+
+    /* iterate through the fno positions */
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < cols; j++)
+        {
+            char *symbol = PQgetvalue(pgResult, i, 2);    
+            int qty = atoi(PQgetvalue(pgResult, i, 3));    
+            real64 ltp = atof(PQgetvalue(pgResult, i, 5));    
+            real64 pnl = atof(PQgetvalue(pgResult, i, 6));    
+            cJSON *position = cJSON_CreateObject();
+            cJSON_AddItemToObject(position, "symbol", cJSON_CreateString(symbol));
+            cJSON_AddItemToObject(position, "qty", cJSON_CreateNumber(qty));
+            cJSON_AddItemToObject(position, "ltp", cJSON_CreateNumber(ltp));
+            cJSON_AddItemToObject(position, "pnl", cJSON_CreateNumber(pnl));
+            cJSON_AddItemToArray(cJPositions, position);
+        }
+    }
+
+    cJSON_AddItemToObject(json, "positions", cJPositions);
+    char *jsonStr = cJSON_Print(json);
+    strcpy(res, jsonStr);
+}
+
+void
 handleNAVReport(State *state,
                 char *stratSymbol,
                 char *fromDate,
@@ -5845,6 +5931,12 @@ answer_to_connection (void *cls,
                             con_info->strategySymbol,
                             con_info->fromDate,
                             con_info->toDate,
+                            con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/positions-report"))
+        {
+            handlePosReport(state,
+                            con_info->strategySymbol,
                             con_info->answerstring);
         }
 

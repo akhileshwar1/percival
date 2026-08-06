@@ -169,6 +169,7 @@ CREATE TABLE fno_bhav (
     symbol VARCHAR(100) NOT NULL,
     ltp DOUBLE PRECISION NOT NULL,
     expiry DATE NOT NULL,
+    date DATE NOT NULL,                                          
     strike DOUBLE PRECISION NOT NULL,
     opt_type opt_type NOT NULL,
     inst_type instrument_type NOT NULL,
@@ -222,6 +223,7 @@ DROP TABLE IF EXISTS equity_bhav CASCADE;
 CREATE TABLE equity_bhav (
     symbol VARCHAR(100) PRIMARY KEY,
     ltp DOUBLE PRECISION NOT NULL,
+    date DATE NOT NULL,                                          
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

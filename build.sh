@@ -15,5 +15,6 @@ g++ \
     -I/usr/include/postgresql \
     main.cpp \
     -lpq \
+    -lcjson \
     -lmicrohttpd \
     -o percival.out \

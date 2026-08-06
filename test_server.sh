@@ -16,6 +16,7 @@ curl -v -X POST \
 
 # 3. Add Investor
 curl -v -X POST \
+    -F "strategySymbol=31500012A" \
     -F "file=@ab_inv.csv" \
     $SERVER/add-investor
 
@@ -59,6 +60,7 @@ curl -v -X POST \
 # 11. F&O Bhavcopy
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
+    -F "date=21/03/2025" \
     -F "file=@ab_bhav_21.csv" \
     $SERVER/bhav-fno
 
@@ -88,6 +90,7 @@ curl -v -X POST \
 # 11. F&O Bhavcopy
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
+    -F "date=24/03/2025" \
     -F "file=@ab_bhav_24.csv" \
     $SERVER/bhav-fno
 
@@ -137,45 +140,53 @@ curl -v -X POST \
 #     $SERVER/process-nav
 
 # already published shouldn't publish.
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=24/03/2025" \
+#     $SERVER/process-nav
+#
+# # 4TH DAY - 25th-----------------------------------------------------
+# 1. Exchange Rate
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
-    -F "date=24/03/2025" \
+    -F "file=@exchange_rate_25.csv" \
+    $SERVER/exchange-rate
+
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=25/03/2025" \
+    -F "file=@WO250325.CSV" \
+    $SERVER/bhav-fno
+
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=25/03/2025" \
     $SERVER/process-nav
 
-# # # 4TH DAY - 25th-----------------------------------------------------
-# # 1. Exchange Rate
-# curl -v -X POST \
-    # -F "strategySymbol=31500012A" \
-#     -F "file=@exchange_rate_25.csv" \
-#     $SERVER/exchange-rate
-#
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "file=@WO250325.CSV" \
-#     $SERVER/bhav-fno
-#
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "date=25/03/2025" \
-#     $SERVER/process-nav
-#
 # # 5TH DAY - 26th-----------------------------------------------------
-# # 1. Exchange Rate
-# curl -v -X POST \
-    # -F "strategySymbol=31500012A" \
-#     -F "file=@exchange_rate_26.csv" \
-#     $SERVER/exchange-rate
-#
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "file=@WO260325.CSV" \
-#     $SERVER/bhav-fno
-#
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "date=26/03/2025" \
-#     $SERVER/process-nav
-#
+# 1. Exchange Rate
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "file=@exchange_rate_26.csv" \
+    $SERVER/exchange-rate
+
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=26/03/2025" \
+    -F "file=@WO260325.CSV" \
+    $SERVER/bhav-fno
+
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=26/03/2025" \
+    $SERVER/process-nav
+
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "fromDate=25/03/2025" \
+    -F "toDate=26/03/2025" \
+    $SERVER/nav-report
+
 # # 5TH DAY - 27th-----------------------------------------------------
 # # 1. Exchange Rate
 # curl -v -X POST \

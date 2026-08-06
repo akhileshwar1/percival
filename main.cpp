@@ -9,7 +9,9 @@
 #include <sys/socket.h>
 #include <microhttpd.h>
 #include <ctype.h>
+#include <time.h>
 #include <nlohmann/json.hpp>
+#include <cjson/cJSON.h>
 
 using json = nlohmann::json;
 
@@ -118,6 +120,8 @@ typedef struct
     char invName[100];
 
     char date[100];
+    char fromDate[100];
+    char toDate[100];
     char rollbackDate[100];
     char snapshotDate[100];
 } connection_info_struct;
@@ -148,6 +152,7 @@ typedef struct
 {
     char symbol[100];
     real64 ltp;
+    char date[100];
 } Bhav;
 
 typedef struct
@@ -234,6 +239,7 @@ typedef struct
 typedef struct
 {
     char symbol[100];
+    char date[100];
     real64 ltp;
     char expiry[100];
     real64 strike;
@@ -358,6 +364,34 @@ typedef struct
 } State;
 
 /* --------------- Utils ------------------------------------------------*/
+static void shiftDate(const char *input_date, char *output_date, int days) {
+    struct tm time_str = {};
+    int day, month, year;
+
+    if (sscanf(input_date, "%d/%d/%d", &day, &month, &year) != 3) {
+        strcpy(output_date, input_date); // Return original if parsing fails
+        return;
+    }
+
+    time_str.tm_mday = day;
+    time_str.tm_mon = month - 1;
+    time_str.tm_year = year - 1900;
+
+    time_str.tm_mday += days;
+
+    mktime(&time_str);
+
+    strftime(output_date, 11, "%d/%m/%Y", &time_str);
+}
+
+void incrementDate(const char *input_date, char *output_date) {
+    shiftDate(input_date, output_date, 1);
+}
+
+void decrementDate(const char *input_date, char *output_date) {
+    shiftDate(input_date, output_date, -1);
+}
+
 int ValidateCsvHeader(char *firstLine, char *expectedHeader)
 {
     if (strcmp(firstLine, expectedHeader) == 0) {
@@ -533,6 +567,59 @@ executeQuery(PGconn *conn, char *query)
         printf("%s", errorMessage);
     }
     return pgResult;
+}
+
+real64
+DBGetLtpFNO(PGconn *conn,
+            char *symbol,
+            Opt_type optType,
+            real64 strike,
+            char *expiry,
+            char *date,
+            int stratId)
+{
+    char query[1024];
+    sprintf(query,
+            "SELECT * FROM fno_bhav where date = TO_DATE('%s', 'DD/MM/YYYY') "
+            "AND opt_type = '%s' AND strike = %f AND expiry = TO_DATE('%s', 'DD/MM/YYYY') AND strategy_id = %d AND symbol = '%s'; ",
+            date,
+            OptTypeStrings[optType],
+            strike,
+            expiry,
+            stratId,
+            symbol);
+
+    PGresult *pgResult = executeQuery(conn, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        PQclear(pgResult);
+        return -1;
+    }
+
+    return atof(PQgetvalue(pgResult, 0, 2));
+}
+
+real64
+DBGetLtpEQ(PGconn *conn, char *symbol, char *date, int stratId)
+{
+    char query[1024];
+    sprintf(query,
+            "SELECT * FROM equity_bhav where date = TO_DATE('%s', 'DD/MM/YYYY') "
+            "AND strategy_id = %d AND symbol = '%s'; ",
+            date,
+            stratId,
+            symbol);
+
+    PGresult *pgResult = executeQuery(conn, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        PQclear(pgResult);
+        return -1;
+    }
+
+    return atof(PQgetvalue(pgResult, 0, 1));
 }
 
 real64
@@ -2019,7 +2106,7 @@ printFundLedger(State *state)
 
 /* --------------- File Processors ------------------------------------------------*/
 void
-processBhavEq(FILE *bhavFile, int stratIndex, State *state)
+processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
 {
     char line[1024];
     int i = 0;
@@ -2038,6 +2125,7 @@ processBhavEq(FILE *bhavFile, int stratIndex, State *state)
         }
         Bhav bhav = {};
         LoadBhav(&bhav, line);
+        strcpy(bhav.date, date);
         /* NOTE(Akhil): The symbol may be present in multiple strats,
                         need to update the posns in all of them. */
         for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
@@ -2048,11 +2136,12 @@ processBhavEq(FILE *bhavFile, int stratIndex, State *state)
                 state->strategies[stratIndex].positions[i].ltp = bhav.ltp;
                 char query[512];
                 snprintf(query, sizeof(query),
-                         "INSERT INTO equity_bhav (symbol, ltp) VALUES ('%s', %f) "
+                         "INSERT INTO equity_bhav (symbol, ltp, date) VALUES ('%s', %f, to_date('%s', 'DD/MM/YYYY')) "
                          "ON CONFLICT (symbol) DO UPDATE SET "
                          "ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
                          bhav.symbol,
-                         bhav.ltp
+                         bhav.ltp,
+                         bhav.date
                          ); 
                 PGresult *pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
@@ -2071,7 +2160,7 @@ processBhavEq(FILE *bhavFile, int stratIndex, State *state)
 }
 
 void
-processBhav(FILE *bhavFile, int dbStratId,
+processBhav(FILE *bhavFile, char *date, int dbStratId,
             int stratIndex, State *state)
 {
     char line[4096];
@@ -2091,6 +2180,7 @@ processBhav(FILE *bhavFile, int dbStratId,
         }
         FNO_bhav bhav = {};
         LoadFNOBhav(&bhav, line);
+        strcpy(bhav.date, date);
         /* NOTE(Akhil): The symbol may be present in multiple strats,
                         need to update the posns in all of them. */
         for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
@@ -2105,6 +2195,7 @@ processBhav(FILE *bhavFile, int dbStratId,
                 bhav.instType == state->strategies[stratIndex].fpositions[i].instType)
             {
                 state->strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
+
                 printf("pos after bhav is %s, %d, %f\n",
                        state->strategies[stratIndex].fpositions[i].symbol,
                        state->strategies[stratIndex].fpositions[i].qty,
@@ -2116,15 +2207,16 @@ processBhav(FILE *bhavFile, int dbStratId,
                 // persist the matched bhav and update the position.
                 char query[512];
                 snprintf(query, sizeof(query),
-                         "INSERT INTO fno_bhav (strategy_id, symbol, ltp, expiry, strike, opt_type, inst_type) "
-                         "VALUES (%d, '%s', %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+                         "INSERT INTO fno_bhav (strategy_id, symbol, ltp, expiry, strike, opt_type, inst_type, date) "
+                         "VALUES (%d, '%s', %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s', to_date('%s', 'DD/MM/YYYY'));",
                          dbStratId,
                          bhav.symbol,
                          bhav.ltp,
                          bhav.expiry,
                          bhav.strike,
                          OptTypeStrings[bhav.optType],
-                         InstrumentTypeStrings[bhav.instType]
+                         InstrumentTypeStrings[bhav.instType],
+                         bhav.date
                          );
                 PGresult *pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
@@ -3251,6 +3343,230 @@ getStratIndex(State *state, char *stratSymbol)
 }
 
 /* --------------- Api Handlers ------------------------------------------------*/
+void
+handleNAVReport(State *state,
+                char *stratSymbol,
+                char *fromDate,
+                char *toDate,
+                char *res)
+{
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+    cJSON *json = cJSON_CreateObject();
+    if (json == NULL) return;
+    /* loop for all the dates starting from fromDate till toDate */
+    while (0 != strcmp(toDate, ""))
+    {
+        cJSON *report = cJSON_CreateObject();
+        if (report == NULL) return;
+        if (0 == strcmp(fromDate, toDate))
+        {
+            strcpy(toDate, ""); // ensures the exit condition.
+        }
+        char query[4096];
+        sprintf(query,
+                "SELECT nav FROM strategy_nav where nav_date = '%s' "
+                "AND strategy_id = %d;",
+                fromDate,
+                stratId);
+
+        PGresult *pgResult = executeQuery(state->db, query);
+
+        if (PQntuples(pgResult) == 0)
+        {
+            fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+            PQclear(pgResult);
+            return;
+        }
+
+        real64 nav = atof(PQgetvalue(pgResult, 0, 0));
+        printf("nav is %f\n", nav);
+        cJSON *cjsonNAV= cJSON_CreateNumber(nav);
+        if (cjsonNAV == NULL) return;
+        cJSON_AddItemToObject(report, "nav", cjsonNAV);
+
+        /* iterate through the positions and get the 
+     * gains for the day both realized and unrealized (curr and price) */
+        sprintf(query,
+                "SELECT * FROM position_equity "
+                "WHERE strategy_id = %d;",
+                stratId);
+
+        pgResult = executeQuery(state->db, query);
+
+        int rows = PQntuples(pgResult);
+        int cols = PQnfields(pgResult);
+        if (rows == 0)
+        {
+            fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+            PQclear(pgResult);
+        }
+
+        real64 totalPriceGain = 0;
+        real64 totalCurrencyGain = 0;
+        real64 totalUPriceGain = 0;
+        real64 totalUCurrencyGain = 0;
+        for (int i = 0; i < rows; i++)
+        {
+            /* fetch isin, qty, price, ltp */
+            char symbol[100];
+            int qty;
+            real64 ltp;
+            real64 pnl;
+            for (int j = 0; j < cols; j++)
+            {
+                strcpy(symbol, PQgetvalue(pgResult, i, 3));
+                qty = atoi(PQgetvalue(pgResult, i, 4));
+                ltp = atof(PQgetvalue(pgResult, i, 6));
+                pnl = atof(PQgetvalue(pgResult, i, 7));
+            }
+            /* get current date exchange rate */
+            real64 currExRate = DBGetExchangeRate(state->db, fromDate, stratId);
+            char prevDate[100];
+            decrementDate(fromDate, prevDate);
+            /* TODO(Akhil): what if there is no prev exchange rate? */
+            real64 prevExRate = DBGetExchangeRate(state->db, prevDate, stratId);
+            real64 prevLtp = DBGetLtpEQ(state->db, symbol, prevDate, stratId);
+            real64 totalGain;
+            real64 priceGain;
+            real64 currencyGain;
+            // get the total gain in usd.
+            // then keep curr same and get price gain.
+            // currency gain = total gain - price gain.
+            if (pnl != 0)
+            {
+                totalGain = pnl / currExRate; 
+                priceGain = pnl / prevExRate;
+                currencyGain = totalGain - priceGain;
+                totalPriceGain += priceGain;
+                totalCurrencyGain += currencyGain;
+            }
+            else
+            {
+                totalGain = ((qty * ltp)/ currExRate) - ((qty * prevLtp)/ prevExRate);
+                priceGain = ((qty * ltp)/ prevExRate) - ((qty * prevLtp)/ prevExRate);
+                currencyGain = totalGain - priceGain;
+                totalUPriceGain += priceGain;
+                totalUCurrencyGain += currencyGain;
+            }
+        }
+
+        /* iterate through the fno positions now, doing the same thing */
+        sprintf(query,
+                "SELECT * FROM fno_position "
+                "WHERE strategy_id = %d;",
+                stratId);
+
+        pgResult = executeQuery(state->db, query);
+
+        rows = PQntuples(pgResult);
+        cols = PQnfields(pgResult);
+        if (rows == 0)
+        {
+            fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+            PQclear(pgResult);
+            return;
+        }
+        printf("computing for fno...\n");
+        for (int i = 0; i < rows; i++)
+        {
+            /* fetch isin, qty, price, ltp */
+            char symbol[100];
+            int qty;
+            real64 ltp;
+            real64 pnl;
+            real64 strike;
+            Opt_type optType;
+            char expiry[100];
+            for (int j = 0; j < cols; j++)
+            {
+                strcpy(symbol, PQgetvalue(pgResult, i, 2));
+                qty = atoi(PQgetvalue(pgResult, i, 3));
+                ltp = atof(PQgetvalue(pgResult, i, 5));
+                pnl = atof(PQgetvalue(pgResult, i, 6));
+                char outputExpiry[11];
+                ConvertDbDateToCFormat(PQgetvalue(pgResult, i, 7), outputExpiry, sizeof(outputExpiry));
+                strcpy(expiry, outputExpiry);
+                strike = atof(PQgetvalue(pgResult, i, 8));
+                char *type = (PQgetvalue(pgResult, i, 9));
+                if (0 == strcmp(type, "CE"))
+                {
+                    optType = CE;
+                }
+                else if (0 == strcmp(type, "PE"))
+                {
+                    optType = PE;
+                }
+                else
+            {
+                    optType = NA;
+                }
+            }
+            /* get current date exchange rate */
+            real64 currExRate = DBGetExchangeRate(state->db, fromDate, stratId);
+            char prevDate[100];
+            decrementDate(fromDate, prevDate);
+            /* TODO(Akhil): what if there is no prev exchange rate? */
+            real64 prevExRate = DBGetExchangeRate(state->db, prevDate, stratId);
+            real64 prevLtp = DBGetLtpFNO(state->db, symbol, optType, strike, expiry, prevDate, stratId);
+            printf("prevs are %f , %f\n", prevExRate, prevLtp);
+            real64 totalGain;
+            real64 priceGain;
+            real64 currencyGain;
+            // get the total gain in usd.
+            // then keep curr same and get price gain.
+            // currency gain = total gain - price gain.
+            if (pnl != 0)
+            {
+                totalGain = pnl / currExRate; 
+                priceGain = pnl / prevExRate;
+                currencyGain = totalGain - priceGain;
+                totalPriceGain += priceGain;
+                totalCurrencyGain += currencyGain;
+            }
+            else
+            {
+                totalGain = ((qty * ltp)/ currExRate) - ((qty * prevLtp)/ prevExRate);
+                priceGain = ((qty * ltp)/ prevExRate) - ((qty * prevLtp)/ prevExRate);
+                currencyGain = totalGain - priceGain;
+                totalUPriceGain += priceGain;
+                totalUCurrencyGain += currencyGain;
+            }
+        }
+
+        printf("price gain is %f\n", totalPriceGain);
+        printf("price ugain is %f\n", totalUPriceGain);
+        printf("currency gain is %f\n", totalCurrencyGain);
+        printf("currency ugain is %f\n", totalUCurrencyGain);
+
+        cJSON *cjsonTPriceGain = cJSON_CreateNumber(totalPriceGain);
+        if (cjsonTPriceGain == NULL) return;
+        cJSON_AddItemToObject(report, "total_price_gain", cjsonTPriceGain);
+        cJSON *cjsonTUPriceGain = cJSON_CreateNumber(totalUPriceGain);
+        if (cjsonTUPriceGain == NULL) return;
+        cJSON_AddItemToObject(report, "total_unrealized_price_gain", cjsonTUPriceGain);
+        cJSON *cjsonTCurrGain = cJSON_CreateNumber(totalCurrencyGain);
+        if (cjsonTCurrGain == NULL) return;
+        cJSON_AddItemToObject(report, "total_currency_gain", cjsonTCurrGain);
+        cJSON *cjsonTUCurrGain = cJSON_CreateNumber(totalUCurrencyGain);
+        if (cjsonTUCurrGain == NULL) return;
+        cJSON_AddItemToObject(report, "total_unrealized_currency_gain", cjsonTUCurrGain);
+        cJSON_AddItemToObject(json, fromDate, report);
+
+        /* move the date forward by 1 day */
+        incrementDate(fromDate, fromDate);
+    }
+   
+    char *jsonStr = cJSON_Print(json);
+    // put the values in the json array.
+    strcpy(res, jsonStr);
+    free(jsonStr);
+}
+
 /* Platform switch work 
  * balances as of a date, includes banks as well as
  * fees, receivables etc */
@@ -4154,7 +4470,7 @@ handleMTM(State *state, char *stratSymbol, char *res)
 }
 
 void
-handleBhavEq(State *state, char *stratSymbol, char *res)
+handleBhavEq(State *state, char *date, char *stratSymbol, char *res)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
     if (FBhavFile == NULL)
@@ -4167,12 +4483,12 @@ handleBhavEq(State *state, char *stratSymbol, char *res)
     /* get the stratIndex from the memory */
     int stratIndex = getStratIndex(state, stratSymbol);
 
-    processBhavEq(FBhavFile, stratIndex, state);
+    processBhavEq(FBhavFile, date, stratIndex, state);
     strcpy(res, "completed");
 }
 
 void
-handleBhavFNO(State *state, char *stratSymbol, char *res)
+handleBhavFNO(State *state, char *date, char *stratSymbol, char *res)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
     if (FBhavFile == NULL)
@@ -4194,7 +4510,7 @@ handleBhavFNO(State *state, char *stratSymbol, char *res)
     printf("strat index is %d\n", stratIndex);
 
     /* TODO(Akhil) : format error for bhav file */
-    processBhav(FBhavFile, stratId, stratIndex, state);
+    processBhav(FBhavFile, date, stratId, stratIndex, state);
     strcpy(res, "completed");
 }
 
@@ -5178,7 +5494,7 @@ send_page (struct MHD_Connection *connection,
     if (MHD_YES !=
         MHD_add_response_header (response,
                                  MHD_HTTP_HEADER_CONTENT_TYPE,
-                                 "text/html"))
+                                 "application/json"))
     {
         fprintf (stderr,
                  "Failed to set content type header!\n");
@@ -5223,6 +5539,18 @@ iterate_post (void *coninfo_cls,
     {
         memcpy(con_info->date + off, data, size);
         con_info->date[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "fromDate") == 0)
+    {
+        memcpy(con_info->fromDate + off, data, size);
+        con_info->fromDate[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "toDate") == 0)
+    {
+        memcpy(con_info->toDate + off, data, size);
+        con_info->toDate[off + size] = '\0';
         return MHD_YES;
     }
     else if (strcmp(key, "rollbackDate") == 0)
@@ -5393,6 +5721,10 @@ answer_to_connection (void *cls,
             con_info->answerstring = completepage;
             con_info->answercode = MHD_HTTP_OK;
         }
+
+        /* json are copied here */
+        char buffer[4096];
+        con_info->answerstring = buffer;
         /* form data included in con_info struct */
         if (0 == strcmp(url, "/exchange-rate"))
         {
@@ -5440,11 +5772,11 @@ answer_to_connection (void *cls,
         }
         else if (0 == strcmp(url, "/bhav-fno"))
         {
-            handleBhavFNO(state, con_info->strategySymbol, con_info->answerstring);
+            handleBhavFNO(state, con_info->date, con_info->strategySymbol, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/bhav-eq"))
         {
-            handleBhavEq(state, con_info->strategySymbol, con_info->answerstring);
+            handleBhavEq(state, con_info->date, con_info->strategySymbol, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/mtm-process"))
         {
@@ -5499,6 +5831,14 @@ answer_to_connection (void *cls,
             handleBalances(state,
                            con_info->strategySymbol,
                            con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/nav-report"))
+        {
+            handleNAVReport(state,
+                            con_info->strategySymbol,
+                            con_info->fromDate,
+                            con_info->toDate,
+                            con_info->answerstring);
         }
 
         return send_page (connection,

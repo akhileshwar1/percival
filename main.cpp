@@ -10,10 +10,7 @@
 #include <microhttpd.h>
 #include <ctype.h>
 #include <time.h>
-#include <nlohmann/json.hpp>
 #include <cjson/cJSON.h>
-
-using json = nlohmann::json;
 
 typedef uint32_t uint32;
 typedef uint64_t uint64;
@@ -4265,58 +4262,104 @@ saveDailySnapshot(PGconn *conn,
 {
     printf("Saving strategy snapshot....\n");
     /* 1. Serialize primitive tracker parameters */
-    json meta;
-    meta["cash"] = strat->cash;
-    meta["nav"] = strat->nav;
-    meta["currPosIndex"] = strat->currPosIndex;
-    meta["currFPosIndex"] = strat->currFPosIndex;
-    meta["currAccIndex"] = strat->currAccIndex;
-    meta["currInvestorIndex"] = strat->currInvestorIndex;
-    meta["currJournalId"] = strat->currJournalId;
-    meta["currEntryId"] = strat->currEntryId;
-    meta["feesAccrued"] = strat->feesAccrued;
-    meta["symbol"] = strat->symbol;
+    cJSON *meta = cJSON_CreateObject();
+    cJSON_AddItemToObject(meta, "cash", cJSON_CreateNumber(strat->cash));
+    cJSON_AddItemToObject(meta, "nav", cJSON_CreateNumber(strat->nav));
+    cJSON_AddItemToObject(meta, "currPosIndex", cJSON_CreateNumber(strat->currPosIndex));
+    cJSON_AddItemToObject(meta, "currFPosIndex", cJSON_CreateNumber(strat->currFPosIndex));
+    cJSON_AddItemToObject(meta, "currAccIndex", cJSON_CreateNumber(strat->currAccIndex));
+    cJSON_AddItemToObject(meta, "currInvestorIndex", cJSON_CreateNumber(strat->currInvestorIndex));
+    cJSON_AddItemToObject(meta, "currJournalId", cJSON_CreateNumber(strat->currJournalId));
+    cJSON_AddItemToObject(meta, "currEntryId", cJSON_CreateNumber(strat->currEntryId));
+    cJSON_AddItemToObject(meta, "feesAccrued", cJSON_CreateNumber(strat->feesAccrued));
+    cJSON_AddItemToObject(meta, "symbol", cJSON_CreateString(strat->symbol));
 
     /* 2. Serialize structural arrays up to active boundaries */
-    json eq_pos = json::array();
+    cJSON *eq_pos = cJSON_CreateArray();
     for (int i = 0; i <= strat->currPosIndex; i++) {
-        eq_pos.push_back({
-            {"isin", strat->positions[i].isin},
-            {"symbol", strat->positions[i].symbol},
-            {"qty", strat->positions[i].qty},
-            {"price", strat->positions[i].price},
-            {"ltp", strat->positions[i].ltp},
-            {"sys_id", strat->positions[i].sys_id}
-        });
+        cJSON *position = cJSON_CreateObject();
+        cJSON_AddItemToObject(position,
+                              "symbol",
+                              cJSON_CreateString(strat->positions[i].symbol));
+        cJSON_AddItemToObject(position,
+                              "qty",
+                              cJSON_CreateNumber(strat->positions[i].qty));
+        cJSON_AddItemToObject(position,
+                              "ltp",
+                              cJSON_CreateNumber(strat->positions[i].ltp));
+        cJSON_AddItemToObject(position,
+                              "pnl",
+                              cJSON_CreateNumber(strat->positions[i].pnl));
+        cJSON_AddItemToObject(position,
+                              "price",
+                              cJSON_CreateNumber(strat->positions[i].price));
+        cJSON_AddItemToObject(position,
+                              "isin",
+                              cJSON_CreateString(strat->positions[i].isin));
+        cJSON_AddItemToObject(position,
+                              "sys_id",
+                              cJSON_CreateString(strat->positions[i].sys_id));
+
+        cJSON_AddItemToArray(eq_pos, position);
     }
-    json fno_pos = json::array();
+
+    cJSON *fno_pos = cJSON_CreateArray();
     for (int i = 0; i <= strat->currFPosIndex; i++) {
-        fno_pos.push_back({
-            {"symbol", strat->fpositions[i].symbol},
-            {"qty", strat->fpositions[i].qty},
-            {"price", strat->fpositions[i].price},
-            {"ltp", strat->fpositions[i].ltp},
-            {"optType", OptTypeStrings[strat->fpositions[i].optType]},
-            {"instType", InstrumentTypeStrings[strat->fpositions[i].instType]},
-            {"strike", strat->fpositions[i].strike},
-            {"expiry", strat->fpositions[i].expiry},
-            {"sys_id", strat->fpositions[i].sys_id}
-        });
+        cJSON *position = cJSON_CreateObject();
+        cJSON_AddItemToObject(position,
+                              "symbol",
+                              cJSON_CreateString(strat->fpositions[i].symbol));
+        cJSON_AddItemToObject(position,
+                              "expiry",
+                              cJSON_CreateString(strat->fpositions[i].expiry));
+        cJSON_AddItemToObject(position,
+                              "qty",
+                              cJSON_CreateNumber(strat->fpositions[i].qty));
+        cJSON_AddItemToObject(position,
+                              "strike",
+                              cJSON_CreateNumber(strat->fpositions[i].strike));
+        cJSON_AddItemToObject(position,
+                              "ltp",
+                              cJSON_CreateNumber(strat->fpositions[i].ltp));
+        cJSON_AddItemToObject(position,
+                              "pnl",
+                              cJSON_CreateNumber(strat->fpositions[i].pnl));
+        cJSON_AddItemToObject(position,
+                              "price",
+                              cJSON_CreateNumber(strat->fpositions[i].price));
+        cJSON_AddItemToObject(position,
+                              "optType",
+                              cJSON_CreateString(OptTypeStrings[strat->fpositions[i].optType]));
+        cJSON_AddItemToObject(position,
+                              "instType",
+                              cJSON_CreateString(InstrumentTypeStrings[strat->fpositions[i].instType]));
+
+        cJSON_AddItemToObject(position,
+                              "sys_id",
+                              cJSON_CreateString(strat->positions[i].sys_id));
+
+        cJSON_AddItemToArray(fno_pos, position);
     }
-    json bankAccs = json::array();
+
+    cJSON *bankAccs = cJSON_CreateArray();
     for (int i = 0; i <= strat->currAccIndex; i++) {
-        bankAccs.push_back({
-            {"symbol", strat->accs[i].symbol},
-            {"balance", strat->accs[i].balance},
-            {"currency_code", CurrencyCodeStrings[strat->accs[i].currency]},
-        });
+        cJSON *acc = cJSON_CreateObject();
+        cJSON_AddItemToObject(acc,
+                              "symbol",
+                              cJSON_CreateString(strat->accs[i].symbol));
+        cJSON_AddItemToObject(acc,
+                              "balance",
+                              cJSON_CreateNumber(strat->accs[i].balance));
+        cJSON_AddItemToObject(acc,
+                              "currency_code",
+                              cJSON_CreateString(CurrencyCodeStrings[strat->accs[i].currency]));
     }
 
     /* 3. Convert JSON objects to text strings */
-    std::string meta_str = meta.dump();
-    std::string eq_str = eq_pos.dump();
-    std::string fno_str = fno_pos.dump();
-    std::string acc_str = bankAccs.dump();
+    char *meta_str = cJSON_Print(meta);
+    char *eq_str = cJSON_Print(eq_pos);
+    char *fno_str = cJSON_Print(fno_pos);
+    char *acc_str = cJSON_Print(bankAccs);
 
     /* 4. Save to PostgreSQL using an UPSERT pattern */
     char query[8192 * 3];
@@ -4325,7 +4368,7 @@ saveDailySnapshot(PGconn *conn,
              "VALUES (%d, to_date('%s', 'DD/MM/YYYY'), '%s', '%s', '%s', '%s') "
              "ON CONFLICT (strategy_id, snapshot_date) DO UPDATE SET "
              "meta_state = EXCLUDED.meta_state, equity_positions = EXCLUDED.equity_positions, fno_positions = EXCLUDED.fno_positions, banks = EXCLUDED.banks;",
-             stratId, date, meta_str.c_str(), eq_str.c_str(), fno_str.c_str(), acc_str.c_str());
+             stratId, date, meta_str, eq_str, fno_str, acc_str);
 
     PGresult *res = PQexec(conn, query);
     char *error = PQresultErrorMessage(res);

@@ -3367,7 +3367,6 @@ handlePosReport(State *state,
     PGresult *pgResult = executeQuery(state->db, query);
 
     int rows = PQntuples(pgResult);
-    int cols = PQnfields(pgResult);
     if (rows == 0)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
@@ -3377,19 +3376,16 @@ handlePosReport(State *state,
     /* iterate through the positions */
     for (int i = 0; i < rows; i++)
     {
-        for (int j = 0; j < cols; j++)
-        {
-            char *symbol = PQgetvalue(pgResult, i, 3);    
-            int qty = atoi(PQgetvalue(pgResult, i, 4));    
-            real64 ltp = atof(PQgetvalue(pgResult, i, 6));    
-            real64 pnl = atof(PQgetvalue(pgResult, i, 7));    
-            cJSON *position = cJSON_CreateObject();
-            cJSON_AddItemToObject(position, "symbol", cJSON_CreateString(symbol));
-            cJSON_AddItemToObject(position, "qty", cJSON_CreateNumber(qty));
-            cJSON_AddItemToObject(position, "ltp", cJSON_CreateNumber(ltp));
-            cJSON_AddItemToObject(position, "pnl", cJSON_CreateNumber(pnl));
-            cJSON_AddItemToArray(cJPositions, position);
-        }
+        char *symbol = PQgetvalue(pgResult, i, 3);    
+        int qty = atoi(PQgetvalue(pgResult, i, 4));    
+        real64 ltp = atof(PQgetvalue(pgResult, i, 6));    
+        real64 pnl = atof(PQgetvalue(pgResult, i, 7));    
+        cJSON *position = cJSON_CreateObject();
+        cJSON_AddItemToObject(position, "symbol", cJSON_CreateString(symbol));
+        cJSON_AddItemToObject(position, "qty", cJSON_CreateNumber(qty));
+        cJSON_AddItemToObject(position, "ltp", cJSON_CreateNumber(ltp));
+        cJSON_AddItemToObject(position, "pnl", cJSON_CreateNumber(pnl));
+        cJSON_AddItemToArray(cJPositions, position);
     }
     sprintf(query,
             "SELECT * FROM fno_position "
@@ -3399,7 +3395,6 @@ handlePosReport(State *state,
     pgResult = executeQuery(state->db, query);
 
     rows = PQntuples(pgResult);
-    cols = PQnfields(pgResult);
     if (rows == 0)
     {
         fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
@@ -3409,19 +3404,16 @@ handlePosReport(State *state,
     /* iterate through the fno positions */
     for (int i = 0; i < rows; i++)
     {
-        for (int j = 0; j < cols; j++)
-        {
-            char *symbol = PQgetvalue(pgResult, i, 2);    
-            int qty = atoi(PQgetvalue(pgResult, i, 3));    
-            real64 ltp = atof(PQgetvalue(pgResult, i, 5));    
-            real64 pnl = atof(PQgetvalue(pgResult, i, 6));    
-            cJSON *position = cJSON_CreateObject();
-            cJSON_AddItemToObject(position, "symbol", cJSON_CreateString(symbol));
-            cJSON_AddItemToObject(position, "qty", cJSON_CreateNumber(qty));
-            cJSON_AddItemToObject(position, "ltp", cJSON_CreateNumber(ltp));
-            cJSON_AddItemToObject(position, "pnl", cJSON_CreateNumber(pnl));
-            cJSON_AddItemToArray(cJPositions, position);
-        }
+        char *symbol = PQgetvalue(pgResult, i, 2);    
+        int qty = atoi(PQgetvalue(pgResult, i, 3));    
+        real64 ltp = atof(PQgetvalue(pgResult, i, 5));    
+        real64 pnl = atof(PQgetvalue(pgResult, i, 6));    
+        cJSON *position = cJSON_CreateObject();
+        cJSON_AddItemToObject(position, "symbol", cJSON_CreateString(symbol));
+        cJSON_AddItemToObject(position, "qty", cJSON_CreateNumber(qty));
+        cJSON_AddItemToObject(position, "ltp", cJSON_CreateNumber(ltp));
+        cJSON_AddItemToObject(position, "pnl", cJSON_CreateNumber(pnl));
+        cJSON_AddItemToArray(cJPositions, position);
     }
 
     cJSON_AddItemToObject(json, "positions", cJPositions);
@@ -3489,7 +3481,6 @@ handleNAVReport(State *state,
         pgResult = executeQuery(state->db, query);
 
         int rows = PQntuples(pgResult);
-        int cols = PQnfields(pgResult);
         if (rows == 0)
         {
             fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
@@ -3507,13 +3498,10 @@ handleNAVReport(State *state,
             int qty;
             real64 ltp;
             real64 pnl;
-            for (int j = 0; j < cols; j++)
-            {
-                strcpy(symbol, PQgetvalue(pgResult, i, 3));
-                qty = atoi(PQgetvalue(pgResult, i, 4));
-                ltp = atof(PQgetvalue(pgResult, i, 6));
-                pnl = atof(PQgetvalue(pgResult, i, 7));
-            }
+            strcpy(symbol, PQgetvalue(pgResult, i, 3));
+            qty = atoi(PQgetvalue(pgResult, i, 4));
+            ltp = atof(PQgetvalue(pgResult, i, 6));
+            pnl = atof(PQgetvalue(pgResult, i, 7));
             /* get current date exchange rate */
             real64 currExRate = DBGetExchangeRate(state->db, fromDate, stratId);
             char prevDate[100];
@@ -3555,7 +3543,6 @@ handleNAVReport(State *state,
         pgResult = executeQuery(state->db, query);
 
         rows = PQntuples(pgResult);
-        cols = PQnfields(pgResult);
         if (rows == 0)
         {
             fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
@@ -3573,29 +3560,26 @@ handleNAVReport(State *state,
             real64 strike;
             Opt_type optType;
             char expiry[100];
-            for (int j = 0; j < cols; j++)
+            strcpy(symbol, PQgetvalue(pgResult, i, 2));
+            qty = atoi(PQgetvalue(pgResult, i, 3));
+            ltp = atof(PQgetvalue(pgResult, i, 5));
+            pnl = atof(PQgetvalue(pgResult, i, 6));
+            char outputExpiry[11];
+            ConvertDbDateToCFormat(PQgetvalue(pgResult, i, 7), outputExpiry, sizeof(outputExpiry));
+            strcpy(expiry, outputExpiry);
+            strike = atof(PQgetvalue(pgResult, i, 8));
+            char *type = (PQgetvalue(pgResult, i, 9));
+            if (0 == strcmp(type, "CE"))
             {
-                strcpy(symbol, PQgetvalue(pgResult, i, 2));
-                qty = atoi(PQgetvalue(pgResult, i, 3));
-                ltp = atof(PQgetvalue(pgResult, i, 5));
-                pnl = atof(PQgetvalue(pgResult, i, 6));
-                char outputExpiry[11];
-                ConvertDbDateToCFormat(PQgetvalue(pgResult, i, 7), outputExpiry, sizeof(outputExpiry));
-                strcpy(expiry, outputExpiry);
-                strike = atof(PQgetvalue(pgResult, i, 8));
-                char *type = (PQgetvalue(pgResult, i, 9));
-                if (0 == strcmp(type, "CE"))
-                {
-                    optType = CE;
-                }
-                else if (0 == strcmp(type, "PE"))
-                {
-                    optType = PE;
-                }
-                else
-                {
-                    optType = NA;
-                }
+                optType = CE;
+            }
+            else if (0 == strcmp(type, "PE"))
+            {
+                optType = PE;
+            }
+            else
+            {
+                optType = NA;
             }
             /* get current date exchange rate */
             real64 currExRate = DBGetExchangeRate(state->db, fromDate, stratId);

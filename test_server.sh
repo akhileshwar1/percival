@@ -189,6 +189,7 @@ curl -v -X POST \
 
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
+    -F "date=24/03/2025" \
     $SERVER/positions-report
 
 

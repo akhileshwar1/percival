@@ -114,6 +114,10 @@ typedef struct
     unsigned int answercode;
 
     char strategySymbol[100];
+    char hurdlerate[100];
+    char frequency[100];
+    char perfFee[100];
+    char billSymbol[100];
     char invName[100];
 
     char date[100];
@@ -566,6 +570,57 @@ executeQuery(PGconn *conn, char *query)
     return pgResult;
 }
 
+void
+DBLoadInvestor(PGconn *conn, Investor *inv, int stratId)
+{
+    char query[1024];
+    sprintf(query,
+            "SELECT * FROM investor where name = '%s' LIMIT 1",
+            inv->name);
+
+    PGresult *pgResult = executeQuery(conn, query);
+    int rows = PQntuples(pgResult);
+    if (rows == 0)
+    {
+        printf("No investor found matching name: %s\n", inv->name);
+        PQclear(pgResult);
+        return;
+    }
+    else
+    {
+        /* there will only be one row */
+        char *idStr = PQgetvalue(pgResult, 0, 0);
+        int id = atoi(idStr);
+        inv->id = id;
+        char *nameStr = PQgetvalue(pgResult, 0, 3);
+        printf("name str is %s\n", nameStr);
+        strcpy(inv->name, nameStr);
+        char *unitsStr = PQgetvalue(pgResult, 0, 4);
+        real64 units = atof(unitsStr);
+        inv->units = units;
+    }
+}
+
+real64
+DBgetNAV(PGconn *conn, char *date, int stratId)
+{
+    char query[4096];
+    sprintf(query,
+            "SELECT nav FROM strategy_nav where nav_date = '%s' "
+            "AND strategy_id = %d;",
+            date,
+            stratId);
+
+    PGresult *pgResult = executeQuery(conn, query);
+    if (PQntuples(pgResult) == 0)
+    {
+        PQclear(pgResult);
+        return -1;
+    }
+
+    return atof(PQgetvalue(pgResult, 0, 3));
+}
+
 real64
 DBGetLtpFNO(PGconn *conn,
             char *symbol,
@@ -692,7 +747,7 @@ DBInsertBankAcc(PGconn *conn, Bank_account *acc, int stratId)
              acc->balance,
              acc->currency == USD ? "USD" : "INR" 
              ); 
-    PGresult *res = PQexec(conn, query);
+    PGresult *res = executeQuery(conn, query);
     PQclear(res);
 }
 
@@ -3341,6 +3396,151 @@ getStratIndex(State *state, char *stratSymbol)
 
 /* --------------- Api Handlers ------------------------------------------------*/
 void
+handleLinkBillGroup(State *state,
+                    char *invName,
+                    char *stratSymbol,
+                    char *billSymbol,
+                    char *res)
+{
+    char query[4096];
+    snprintf(query, sizeof(query),
+             "SELECT * FROM bill_group WHERE symbol = '%s';",
+             billSymbol); 
+
+    PGresult *pgResult = executeQuery(state->db, query);
+    if (PQntuples(pgResult) == 0)
+    {
+        printf("couldn't find the bill group: %s\n", billSymbol);
+        sprintf(res, "couldn't find the bill group: %s\n", billSymbol);
+        PQclear(pgResult);
+        return;
+    }
+
+    int billId = atoi(PQgetvalue(pgResult, 0, 0)); 
+    PQclear(pgResult);
+
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    snprintf(query, sizeof(query),
+             "UPDATE investor SET bill_group_id = %d WHERE name = '%s' "
+             "AND strategy_id = %d;",
+             billId,
+             invName,
+             stratId); 
+
+    pgResult = executeQuery(state->db, query);
+    PQclear(pgResult);
+}
+
+void
+handleGetBillGroups(State *state,
+                    char *res)
+{
+    char query[4096];
+    snprintf(query, sizeof(query),
+             "SELECT * FROM bill_group;"); 
+
+    PGresult *pgResult = executeQuery(state->db, query);
+    cJSON *json = cJSON_CreateObject();
+    if (json == NULL) return;
+    cJSON *billgrps = cJSON_CreateArray();
+    int rows = PQntuples(pgResult);
+    if (rows == 0)
+    {
+        PQclear(pgResult);
+        cJSON_AddItemToObject(json, "bill-groups", billgrps);
+    }
+
+    for (int i = 0; i < rows; i++)
+    {
+        cJSON *bill = cJSON_CreateObject();
+        cJSON_AddItemToObject(bill,
+                              "id",
+                              cJSON_CreateNumber(atoi(PQgetvalue(pgResult,i,0))));
+        cJSON_AddItemToObject(bill,
+                              "symbol",
+                              cJSON_CreateString(PQgetvalue(pgResult,i,1)));
+        cJSON_AddItemToObject(bill,
+                              "hurdlerate",
+                              cJSON_CreateNumber(atof(PQgetvalue(pgResult,i,2))));
+        cJSON_AddItemToObject(bill,
+                              "perfFee",
+                              cJSON_CreateNumber(atof(PQgetvalue(pgResult,i,3))));
+        cJSON_AddItemToObject(bill,
+                              "frequency",
+                              cJSON_CreateString((PQgetvalue(pgResult,i,3))));
+        cJSON_AddItemToArray(billgrps, bill);
+    }
+
+    cJSON_AddItemToObject(json, "bill-groups", billgrps);
+    char *jsonStr = cJSON_Print(json);
+    strcpy(res, jsonStr);
+    PQclear(pgResult);
+}
+
+void
+handleCreateBillGroup(State *state,
+                      real64 hurdlerate,
+                      real64 frequency,
+                      real64 perfFee,
+                      char *billSymbol,
+                      char *date,
+                      char *res)
+{
+    char query[4096];
+    snprintf(query, sizeof(query),
+             "INSERT INTO bill_group (hurdlerate, perf_fee, frequency, symbol) "
+             "VALUES (%f, '%f', %f, '%s');",
+             hurdlerate,
+             perfFee,
+             frequency,
+             billSymbol); 
+
+    PGresult *pgResult = executeQuery(state->db, query);
+    PQclear(pgResult);
+}
+
+/* perf fee is caculated as % of profit per unit
+ * for instance, inception nav = 100, now = 110,
+ * and units = 1000, then 20% of (10(profit per unit) * 1000(units)) */
+void
+handlePerfFee(State *state,
+              char *invName,
+              char *stratSymbol,
+              char *date,
+              char *res)
+{
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    real64 nav = DBgetNAV(state->db, date, stratId);
+    if (nav == -1)
+    {
+       fprintf(stderr, "NAV nav not available for date %s\n", date);
+        sprintf(res, "NAV nav not available for date %s\n", date);
+        return; 
+    }
+
+    /* get the investor */
+    Investor inv = {};
+    strcpy(inv.name, invName);
+    DBLoadInvestor(state->db, &inv, stratId);
+
+    /* need the initial nav and fee %
+     * there has to be a strp before this where we add these attrs
+     * to the investor */
+}
+
+void
 handlePosReport(State *state,
                 char *stratSymbol,
                 char *date,
@@ -3463,27 +3663,13 @@ handleNAVReport(State *state,
         {
             strcpy(toDate, ""); // ensures the exit condition.
         }
-        char query[4096];
-        sprintf(query,
-                "SELECT nav FROM strategy_nav where nav_date = '%s' "
-                "AND strategy_id = %d;",
-                fromDate,
-                stratId);
-
-        PGresult *pgResult = executeQuery(state->db, query);
-
-        real64 nav;
-        if (PQntuples(pgResult) == 0)
+        real64 nav = DBgetNAV(state->db, fromDate, stratId);
+        if (nav == -1)
         {
             fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-            PQclear(pgResult);
             nav = 0;
         }
-        else
-        {
-            nav = atof(PQgetvalue(pgResult, 0, 0));
-        }
-
+        char query[4096];
         printf("nav is %f\n", nav);
         cJSON *cjsonNAV= cJSON_CreateNumber(nav);
         if (cjsonNAV == NULL) return;
@@ -3496,7 +3682,7 @@ handleNAVReport(State *state,
                 "WHERE strategy_id = %d;",
                 stratId);
 
-        pgResult = executeQuery(state->db, query);
+        PGresult *pgResult = executeQuery(state->db, query);
 
         int rows = PQntuples(pgResult);
         if (rows == 0)
@@ -4417,21 +4603,12 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     char query[1024];
 
     /* check if the nav is already published for the date */
-    sprintf(query,
-            "SELECT * FROM strategy_nav where nav_date = TO_DATE('%s', 'DD/MM/YYYY') "
-            "AND strategy_id = %d; ",
-            date,
-            stratId);
-
-    PGresult *pgResult = executeQuery(state->db, query);
-
-    /* TODO(Akhil): the conditioin shouldn't pass here on error */
-    if (PQntuples(pgResult) != 0)
+    real64 nav = DBgetNAV(state->db, date, stratId);
+    if (nav != -1)
     {
-        fprintf(stderr, "NAV already published for date: %s\n", date);
-        PQclear(pgResult);
+       fprintf(stderr, "NAV already published for date: %s\n", date);
         sprintf(res, "NAV already published for date: %s\n", date);
-        return;
+        return; 
     }
 
     /* handle exchange_rate for the date from the db */
@@ -4446,7 +4623,7 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     Exchange_rate exRate = {};
     exRate.rate = rate;
     strcpy(exRate.date, date);
-    real64 nav = printNav(state, &exRate, stratIndex, stratId);
+    nav = printNav(state, &exRate, stratIndex, stratId);
     sprintf(res, "nav is %f", nav);
     
     /* save the state snapshot for the date */
@@ -5670,7 +5847,31 @@ iterate_post (void *coninfo_cls,
         con_info->strategySymbol[off + size] = '\0';
         return MHD_YES;
     }
-    if (strcmp(key, "invName") == 0)
+    else if (strcmp(key, "hurldlerate") == 0)
+    {
+        memcpy(con_info->hurdlerate + off, data, size);
+        con_info->hurdlerate[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "billSymbol") == 0)
+    {
+        memcpy(con_info->billSymbol + off, data, size);
+        con_info->billSymbol[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "frequency") == 0)
+    {
+        memcpy(con_info->frequency + off, data, size);
+        con_info->frequency[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "perfFee") == 0)
+    {
+        memcpy(con_info->perfFee + off, data, size);
+        con_info->perfFee[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "invName") == 0)
     {
         memcpy(con_info->invName + off, data, size);
         con_info->invName[off + size] = '\0';
@@ -5987,6 +6188,37 @@ answer_to_connection (void *cls,
                             con_info->strategySymbol,
                             con_info->date,
                             con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/performance-fee"))
+        {
+            handlePerfFee(state,
+                          con_info->invName,
+                          con_info->strategySymbol,
+                          con_info->date,
+                          con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/bill-group"))
+        {
+            handleCreateBillGroup(state,
+                                  atof(con_info->hurdlerate),
+                                  atof(con_info->perfFee),
+                                  atof(con_info->frequency),
+                                  con_info->billSymbol,
+                                  con_info->date,
+                                  con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/get-bill-groups"))
+        {
+            handleGetBillGroups(state,
+                                con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/link-bill-investor"))
+        {
+            handleLinkBillGroup(state,
+                                con_info->invName,
+                                con_info->strategySymbol,
+                                con_info->billSymbol,
+                                con_info->answerstring);
         }
 
         return send_page (connection,

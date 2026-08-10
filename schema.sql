@@ -31,6 +31,23 @@ CREATE TABLE strategy
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint
 );
 
+CREATE TYPE frequency_enum AS ENUM (
+'ANNIVERSARY',
+'ANNUAL',
+'FIN'
+);
+
+DROP TABLE IF EXISTS bill_group CASCADE;
+CREATE TABLE bill_group (
+    id SERIAL PRIMARY KEY,
+    symbol VARCHAR(100) NULL UNIQUE,
+    hurdlerate DOUBLE PRECISION NULL,
+    perf_fee DOUBLE PRECISION NULL,
+    frequency frequency_enum NOT NULL DEFAULT 'ANNIVERSARY',
+    date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+);
+
 -- Create the custom status ENUM type
 CREATE TYPE investor_status_enum AS ENUM (
     'PENDING',
@@ -48,8 +65,10 @@ CREATE TABLE investor (
     inception_date DATE,
     status investor_status_enum NOT NULL DEFAULT 'PENDING', -- Sets 'PENDING' automatically if omitted
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    bill_group_id INTEGER REFERENCES bill_group(id) ON DELETE CASCADE,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
+
 
 DROP TABLE IF EXISTS ledger_entry CASCADE;
 DROP TYPE IF EXISTS ledger_entry_type CASCADE;

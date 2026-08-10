@@ -36,3 +36,7 @@ Position quantities
 ==
 Net quantities implied by trade history
 * max hardcoded stuff.
+* create bill group api.
+* get all bill groups api.
+* link investor to billgroup api.
+* apply perf fee api.

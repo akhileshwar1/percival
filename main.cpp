@@ -384,6 +384,33 @@ typedef struct
 } State;
 
 /* --------------- Utils ------------------------------------------------*/
+bool
+isDateValid(char *lastDate, char *currDate, Bill_group_frequency freq)
+{
+    int day, month, year;
+    int lastDay, lastMonth, lastYear;
+    if (sscanf(lastDate, "%d/%d/%d", &lastDay, &lastMonth, &lastYear) != 3) {
+        return false;
+    }
+
+    if (sscanf(currDate, "%d/%d/%d", &day, &month, &year) != 3) {
+        return false;
+    }
+
+    if (freq == ANNIVERSARY)
+    {
+        return (year - lastYear == 1);   /* one year between two dates */
+    }
+    else if (freq == ANNUAL)
+    {
+        return (day == 1 && month == 1); /* 1st jan */
+    }
+    else
+    {
+        return (day == 1 && month == 4); /* 1st april */
+    }
+}
+
 static void shiftDate(const char *input_date, char *output_date, int days) {
     struct tm time_str = {};
     int day, month, year;
@@ -590,6 +617,23 @@ executeQuery(PGconn *conn, char *query)
 }
 
 void
+DBUpdatePerfFeeInvestor(PGconn *conn,
+                        char *invName,
+                        char *lastPerfFeedate,
+                        real64 lastNav)
+{
+    char query[4096];
+    snprintf(query, sizeof(query),
+             "UPDATE investor SET last_perf_fee_date = '%s' "
+             ", last_nav = %f WHERE name = '%s';",
+             lastPerfFeedate,
+             lastNav,
+             invName);
+    PGresult *pgResult = executeQuery(conn, query);
+    PQclear(pgResult);
+}
+
+void
 DBLoadBillGroup(PGconn *conn, Bill_group *bill, char *billSymbol)
 {
     char query[4096];
@@ -648,7 +692,7 @@ DBgetBillId(PGconn *conn, char *billGroupSymbol)
 }
 
 void
-DBLoadInvestor(PGconn *conn, Investor *inv, int stratId)
+DBLoadInvestor(PGconn *conn, Investor *inv)
 {
     char query[1024];
     sprintf(query,
@@ -676,8 +720,12 @@ DBLoadInvestor(PGconn *conn, Investor *inv, int stratId)
         real64 units = atof(unitsStr);
         inv->units = units;
         inv->lastNav = atof(PQgetvalue(pgResult, 0, 5));
-        strcpy(inv->inceptionDate, PQgetvalue(pgResult, 0, 6));
-        strcpy(inv->lastPerfFeeDate, PQgetvalue(pgResult, 0, 7));
+        ConvertDbDateToCFormat(PQgetvalue(pgResult, 0, 6),
+                               inv->inceptionDate,
+                               sizeof(inv->inceptionDate));
+        ConvertDbDateToCFormat(PQgetvalue(pgResult, 0, 7),
+                               inv->inceptionDate,
+                               sizeof(inv->inceptionDate));
         inv->lastNav = atof(PQgetvalue(pgResult, 0, 5));
         char *billIdStr = PQgetvalue(pgResult, 0, 10);
         PQclear(pgResult);
@@ -3593,15 +3641,17 @@ handleCreateBillGroup(State *state,
 {
     char query[4096];
     snprintf(query, sizeof(query),
-             "INSERT INTO bill_group (hurdlerate, perf_fee, frequency, symbol) "
-             "VALUES (%f, '%f', %f, '%s');",
+             "INSERT INTO bill_group (hurdlerate, perf_fee, frequency, symbol, date) "
+             "VALUES (%f, '%f', %f, '%s','%s');",
              hurdlerate,
              perfFee,
              frequency,
-             billSymbol); 
+             billSymbol,
+             date); 
 
     PGresult *pgResult = executeQuery(state->db, query);
     PQclear(pgResult);
+    strcpy(res, "completed");
 }
 
 /* perf fee is caculated as % of profit per unit
@@ -3632,7 +3682,7 @@ handlePerfFee(State *state,
     /* get the investor */
     Investor inv = {};
     strcpy(inv.name, invName);
-    DBLoadInvestor(state->db, &inv, stratId);
+    DBLoadInvestor(state->db, &inv);
 
     /* need the initial nav and fee %
      * there has to be a strp before this where we add these attrs
@@ -3642,7 +3692,7 @@ handlePerfFee(State *state,
     DBLoadBillGroup(state->db, &bill, inv.billGroup);
 
     /* if the date is invalid, don't apply the fees */
-    if (dateNotValid)
+    if (!isDateValid(inv.lastPerfFeeDate, date, bill.frequency))
     {
         sprintf(res, "Today is not the date : %s\n", date);
         return;
@@ -3657,9 +3707,25 @@ handlePerfFee(State *state,
 
     real64 profit = profitPerUnit * inv.units;
     real64 fee = (bill.perfFee / 100) * profit;
+    printf("fee applied is %f\n", fee);
 
     /* update last nav and perf fee date for investor, mem and db */
-    DBUpdatePerfFeeInvestor(state->db, date, nav);
+    int stratIndex = getStratIndex(state, stratSymbol);
+    if(stratIndex >= 0)
+    {
+        for (int i = 0; i < state->strategies[stratIndex].currInvestorIndex; i++)
+        {
+            if (0 == strcmp(state->strategies[stratIndex].investors[i].name,
+                            invName))
+            {
+                state->strategies[stratIndex].investors[i].lastNav = nav;
+                strcpy(state->strategies[stratIndex].investors[i].lastPerfFeeDate,
+                       date);
+            }
+
+        }
+    }
+    DBUpdatePerfFeeInvestor(state->db, invName, date, nav);
 }
 
 void
@@ -4753,8 +4819,6 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     /* get the stratIndex from the memory */
     int stratIndex = getStratIndex(state, stratSymbol);
 
-    char query[1024];
-
     /* check if the nav is already published for the date */
     real64 nav = DBgetNAV(state->db, date, stratId);
     if (nav != -1)
@@ -5788,7 +5852,7 @@ handleAddInvestor(State *state, char *stratSymbol, char *res)
         int billId = DBgetBillId(state->db, inv.billGroup);
 
         /* persist it in db */
-        char query[512];
+        char query[1096];
         sprintf(query,
                 "INSERT INTO investor"
                 "(name, strategy_id, inception_date, bill_group_id, last_nav, last_perf_fee_date) "

@@ -62,7 +62,9 @@ CREATE TABLE investor (
     cash DOUBLE PRECISION NULL,
     name VARCHAR(100) NOT NULL UNIQUE,
     units DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    last_nav DOUBLE PRECISION NOT NULL,
     inception_date DATE,
+    last_perf_fee_date DATE,
     status investor_status_enum NOT NULL DEFAULT 'PENDING', -- Sets 'PENDING' automatically if omitted
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     bill_group_id INTEGER REFERENCES bill_group(id) ON DELETE CASCADE,
@@ -305,6 +307,7 @@ CREATE TABLE strategy_state_snapshot (
     equity_positions JSONB NOT NULL,
     fno_positions JSONB NOT NULL,
     banks JSONB NOT NULL,
+    investors JSONB NOT NULL,
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_strategy_snapshot_date UNIQUE (strategy_id, snapshot_date)

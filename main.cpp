@@ -167,6 +167,22 @@ typedef struct
 
 typedef enum
 {
+    ANNIVERSARY,
+    ANNUAL,
+    FIN, 
+} Bill_group_frequency;
+
+typedef struct
+{
+    char symbol[100];
+    char date[100];
+    real64 hurdlerate;
+    real64 perfFee;
+    Bill_group_frequency frequency;
+} Bill_group;
+
+typedef enum
+{
     INVESTOR_PENDING,
     INVESTOR_ONBOARDED,
     INVESTOR_OFFBOARDED
@@ -177,7 +193,10 @@ typedef struct
     int id;
     char name[100];
     char inceptionDate[100];
+    char lastPerfFeeDate[100];
+    char billGroup[100];
     real64 units;
+    real64 lastNav;
     InvestorStatus status;
 } Investor;
 
@@ -571,6 +590,64 @@ executeQuery(PGconn *conn, char *query)
 }
 
 void
+DBLoadBillGroup(PGconn *conn, Bill_group *bill, char *billSymbol)
+{
+    char query[4096];
+    snprintf(query, sizeof(query),
+             "SELECT * from bill_group WHERE symbol = '%s';",
+             billSymbol); 
+    strcpy(bill->symbol, billSymbol);
+
+    PGresult *pgResult = executeQuery(conn, query);
+    bill->perfFee = atof(PQgetvalue(pgResult, 0, 3));
+    bill->hurdlerate = atof(PQgetvalue(pgResult, 0, 2));
+    char *frequencyStr = PQgetvalue(pgResult, 0, 4);
+    if (0 == strcmp("ANNIVERSARY", frequencyStr)) bill->frequency = ANNIVERSARY;
+    else if (0 == strcmp("ANNUAL", frequencyStr)) bill->frequency = ANNUAL;
+    else if (0 == strcmp("FIN", frequencyStr)) bill->frequency = FIN;
+    PQclear(pgResult);
+}
+
+void
+DBgetBillSymbolFromId(PGconn *conn, int billId, char *billSymbolStr)
+{
+    char query[4096];
+    sprintf(query,
+            "SELECT symbol FROM bill_group where id = %d LIMIT 1",
+            billId);
+    PGresult *pgResult = executeQuery(conn, query);
+    if (PQntuples(pgResult) == 0)
+    {
+        printf("couldn't find the bill id: %d\n", billId);
+        PQclear(pgResult);
+        billSymbolStr[0] = '\0';
+    }
+    strcpy(billSymbolStr, PQgetvalue(pgResult, 0, 0));
+    PQclear(pgResult);
+}
+
+int
+DBgetBillId(PGconn *conn, char *billGroupSymbol)
+{
+    char query[4096];
+    snprintf(query, sizeof(query),
+             "SELECT * FROM bill_group WHERE symbol = '%s';",
+             billGroupSymbol); 
+
+    PGresult *pgResult = executeQuery(conn, query);
+    if (PQntuples(pgResult) == 0)
+    {
+        printf("couldn't find the bill group: %s\n", billGroupSymbol);
+        PQclear(pgResult);
+        return -1;
+    }
+
+    int billId = atoi(PQgetvalue(pgResult, 0, 0)); 
+    PQclear(pgResult);
+    return billId;
+}
+
+void
 DBLoadInvestor(PGconn *conn, Investor *inv, int stratId)
 {
     char query[1024];
@@ -598,6 +675,16 @@ DBLoadInvestor(PGconn *conn, Investor *inv, int stratId)
         char *unitsStr = PQgetvalue(pgResult, 0, 4);
         real64 units = atof(unitsStr);
         inv->units = units;
+        inv->lastNav = atof(PQgetvalue(pgResult, 0, 5));
+        strcpy(inv->inceptionDate, PQgetvalue(pgResult, 0, 6));
+        strcpy(inv->lastPerfFeeDate, PQgetvalue(pgResult, 0, 7));
+        inv->lastNav = atof(PQgetvalue(pgResult, 0, 5));
+        char *billIdStr = PQgetvalue(pgResult, 0, 10);
+        PQclear(pgResult);
+
+        char billSymbol[100];
+        DBgetBillSymbolFromId(conn, atoi(billIdStr), billSymbol);
+        strcpy(inv->billGroup, billSymbol);
     }
 }
 
@@ -1417,10 +1504,16 @@ LoadInvestorFromClient(Investor *inv, char *line)
         else if (i ==  23)
         {
             strcpy(inv->inceptionDate, token);
+            strcpy(inv->lastPerfFeeDate, token);
+        }
+        else if (i ==  32)
+        {
+            strcpy(inv->billGroup, token);
         }
         token = strtok(NULL, ",");
         i++;
     }
+    inv->lastNav = 100;
     inv->status = INVESTOR_PENDING;
 }
 
@@ -1898,6 +1991,26 @@ loadStateFromDB(State *state)
                                 else if (b == 4)
                                 {
                                     inv.units = atof(str);
+                                }
+                                else if (b == 5)
+                                {
+                                    inv.lastNav = atof(str);
+                                }
+                                else if (b == 6)
+                                {
+                                    strcpy(inv.inceptionDate, str);
+                                }
+                                else if (b == 7)
+                                {
+                                    strcpy(inv.lastPerfFeeDate, str);
+                                }
+                                else if (b == 10)
+                                {
+                                    char billSymbol[100];
+                                    DBgetBillSymbolFromId(conn,
+                                                          atoi(str),
+                                                          billSymbol);
+                                    strcpy(inv.billGroup, billSymbol);
                                 }
                             }
                             strat.investors[++strat.currInvestorIndex] = inv; 
@@ -3402,22 +3515,7 @@ handleLinkBillGroup(State *state,
                     char *billSymbol,
                     char *res)
 {
-    char query[4096];
-    snprintf(query, sizeof(query),
-             "SELECT * FROM bill_group WHERE symbol = '%s';",
-             billSymbol); 
-
-    PGresult *pgResult = executeQuery(state->db, query);
-    if (PQntuples(pgResult) == 0)
-    {
-        printf("couldn't find the bill group: %s\n", billSymbol);
-        sprintf(res, "couldn't find the bill group: %s\n", billSymbol);
-        PQclear(pgResult);
-        return;
-    }
-
-    int billId = atoi(PQgetvalue(pgResult, 0, 0)); 
-    PQclear(pgResult);
+    int billId = DBgetBillId(state->db, billSymbol); 
 
     int stratId = getStratId(stratSymbol, state->db); 
     if (stratId < 0)
@@ -3426,6 +3524,7 @@ handleLinkBillGroup(State *state,
         return;
     }
 
+    char query[4096];
     snprintf(query, sizeof(query),
              "UPDATE investor SET bill_group_id = %d WHERE name = '%s' "
              "AND strategy_id = %d;",
@@ -3433,7 +3532,7 @@ handleLinkBillGroup(State *state,
              invName,
              stratId); 
 
-    pgResult = executeQuery(state->db, query);
+    PGresult *pgResult = executeQuery(state->db, query);
     PQclear(pgResult);
 }
 
@@ -3538,6 +3637,29 @@ handlePerfFee(State *state,
     /* need the initial nav and fee %
      * there has to be a strp before this where we add these attrs
      * to the investor */
+
+    Bill_group bill = {};
+    DBLoadBillGroup(state->db, &bill, inv.billGroup);
+
+    /* if the date is invalid, don't apply the fees */
+    if (dateNotValid)
+    {
+        sprintf(res, "Today is not the date : %s\n", date);
+        return;
+    }
+
+    real64 profitPerUnit = nav - inv.lastNav;
+    if (profitPerUnit <= bill.hurdlerate)
+    {
+        sprintf(res, "not past hurdle rate, no fee : %f\n", profitPerUnit);
+        return;
+    }
+
+    real64 profit = profitPerUnit * inv.units;
+    real64 fee = (bill.perfFee / 100) * profit;
+
+    /* update last nav and perf fee date for investor, mem and db */
+    DBUpdatePerfFeeInvestor(state->db, date, nav);
 }
 
 void
@@ -3967,6 +4089,7 @@ handleOffBank(State *state, char *invName, char *res)
 {
     char line[4096];
     FILE *bankFile = fopen("tmp.csv", "r");
+    
     if (bankFile == NULL)
     {
         printf("sorry, couldn't upload file!\n");
@@ -4560,6 +4683,35 @@ saveDailySnapshot(PGconn *conn,
         cJSON_AddItemToObject(acc,
                               "currency_code",
                               cJSON_CreateString(CurrencyCodeStrings[strat->accs[i].currency]));
+        cJSON_AddItemToArray(bankAccs, acc);
+    }
+
+    cJSON *investors = cJSON_CreateArray();
+    for (int i = 0; i <= strat->currInvestorIndex; i++) {
+        cJSON *inv = cJSON_CreateObject();
+        cJSON_AddItemToObject(inv,
+                              "name",
+                              cJSON_CreateString(strat->investors[i].name));
+        cJSON_AddItemToObject(inv,
+                              "inceptionDate",
+                              cJSON_CreateString(strat->investors[i].inceptionDate));
+        cJSON_AddItemToObject(inv,
+                              "lastPerfFeeDate",
+                              cJSON_CreateString(strat->investors[i].lastPerfFeeDate));
+        cJSON_AddItemToObject(inv,
+                              "billGroup",
+                              cJSON_CreateString(strat->investors[i].billGroup));
+        cJSON_AddItemToObject(inv,
+                              "units",
+                              cJSON_CreateNumber(strat->investors[i].units));
+        cJSON_AddItemToObject(inv,
+                              "lastNav",
+                              cJSON_CreateNumber(strat->investors[i].lastNav));
+        cJSON_AddItemToObject(inv,
+                              "status",
+                              cJSON_CreateString(InvestorStatusStrings
+                                                 [strat->investors[i].status]));
+        cJSON_AddItemToArray(investors, inv);
     }
 
     /* 3. Convert JSON objects to text strings */
@@ -4567,15 +4719,16 @@ saveDailySnapshot(PGconn *conn,
     char *eq_str = cJSON_Print(eq_pos);
     char *fno_str = cJSON_Print(fno_pos);
     char *acc_str = cJSON_Print(bankAccs);
+    char *inv_str = cJSON_Print(investors);
 
     /* 4. Save to PostgreSQL using an UPSERT pattern */
     char query[8192 * 3];
     snprintf(query, sizeof(query),
-             "INSERT INTO strategy_state_snapshot (strategy_id, snapshot_date, meta_state, equity_positions, fno_positions, banks) "
-             "VALUES (%d, to_date('%s', 'DD/MM/YYYY'), '%s', '%s', '%s', '%s') "
+             "INSERT INTO strategy_state_snapshot (strategy_id, snapshot_date, meta_state, equity_positions, fno_positions, banks, investors) "
+             "VALUES (%d, to_date('%s', 'DD/MM/YYYY'), '%s', '%s', '%s', '%s', '%s') "
              "ON CONFLICT (strategy_id, snapshot_date) DO UPDATE SET "
              "meta_state = EXCLUDED.meta_state, equity_positions = EXCLUDED.equity_positions, fno_positions = EXCLUDED.fno_positions, banks = EXCLUDED.banks;",
-             stratId, date, meta_str, eq_str, fno_str, acc_str);
+             stratId, date, meta_str, eq_str, fno_str, acc_str, inv_str);
 
     PGresult *res = PQexec(conn, query);
     char *error = PQresultErrorMessage(res);
@@ -5632,14 +5785,16 @@ handleAddInvestor(State *state, char *stratSymbol, char *res)
         state->strategies[stratIndex].investors
             [++state->strategies[stratIndex].currInvestorIndex] = inv;
 
+        int billId = DBgetBillId(state->db, inv.billGroup);
+
         /* persist it in db */
         char query[512];
         sprintf(query,
                 "INSERT INTO investor"
-                "(name, strategy_id) "
-                "VALUES ('%s', %d) "
+                "(name, strategy_id, inception_date, bill_group_id, last_nav, last_perf_fee_date) "
+                "VALUES ('%s', %d, '%s', %d, %f, '%s') "
                 "ON CONFLICT (name) DO UPDATE SET units = EXCLUDED.units, cash = EXCLUDED.cash;",
-                inv.name, stratId);
+                inv.name, stratId, inv.inceptionDate, billId, inv.lastNav, inv.lastPerfFeeDate);
 
         pgResult = executeQuery(state->db, query);
     }

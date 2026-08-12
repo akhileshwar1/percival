@@ -45,7 +45,7 @@ CREATE TABLE bill_group (
     perf_fee DOUBLE PRECISION NULL,
     frequency frequency_enum NOT NULL DEFAULT 'ANNIVERSARY',
     date DATE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create the custom status ENUM type

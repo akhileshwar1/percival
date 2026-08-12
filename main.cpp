@@ -389,6 +389,7 @@ isDateValid(char *lastDate, char *currDate, Bill_group_frequency freq)
 {
     int day, month, year;
     int lastDay, lastMonth, lastYear;
+    printf("last date date %s %s is \n", lastDate, currDate);
     if (sscanf(lastDate, "%d/%d/%d", &lastDay, &lastMonth, &lastYear) != 3) {
         return false;
     }
@@ -643,6 +644,11 @@ DBLoadBillGroup(PGconn *conn, Bill_group *bill, char *billSymbol)
     strcpy(bill->symbol, billSymbol);
 
     PGresult *pgResult = executeQuery(conn, query);
+    if (PQntuples(pgResult) == 0)
+    {
+        printf("no bill group found %s\n", billSymbol);
+        return;
+    }
     bill->perfFee = atof(PQgetvalue(pgResult, 0, 3));
     bill->hurdlerate = atof(PQgetvalue(pgResult, 0, 2));
     char *frequencyStr = PQgetvalue(pgResult, 0, 4);
@@ -724,15 +730,15 @@ DBLoadInvestor(PGconn *conn, Investor *inv)
                                inv->inceptionDate,
                                sizeof(inv->inceptionDate));
         ConvertDbDateToCFormat(PQgetvalue(pgResult, 0, 7),
-                               inv->inceptionDate,
-                               sizeof(inv->inceptionDate));
+                               inv->lastPerfFeeDate,
+                               sizeof(inv->lastPerfFeeDate));
         inv->lastNav = atof(PQgetvalue(pgResult, 0, 5));
         char *billIdStr = PQgetvalue(pgResult, 0, 10);
-        PQclear(pgResult);
 
         char billSymbol[100];
         DBgetBillSymbolFromId(conn, atoi(billIdStr), billSymbol);
         strcpy(inv->billGroup, billSymbol);
+        PQclear(pgResult);
     }
 }
 
@@ -753,7 +759,7 @@ DBgetNAV(PGconn *conn, char *date, int stratId)
         return -1;
     }
 
-    return atof(PQgetvalue(pgResult, 0, 3));
+    return atof(PQgetvalue(pgResult, 0, 0));
 }
 
 real64
@@ -3599,6 +3605,8 @@ handleGetBillGroups(State *state,
     int rows = PQntuples(pgResult);
     if (rows == 0)
     {
+        printf("0 rows\n");
+        strcpy(res, "no bill groups\n");
         PQclear(pgResult);
         cJSON_AddItemToObject(json, "bill-groups", billgrps);
     }
@@ -3625,16 +3633,17 @@ handleGetBillGroups(State *state,
     }
 
     cJSON_AddItemToObject(json, "bill-groups", billgrps);
-    char *jsonStr = cJSON_Print(json);
-    strcpy(res, jsonStr);
+    char jsonStr[40960];
+    strcpy(jsonStr, cJSON_Print(json));
     PQclear(pgResult);
+    strcpy(res, jsonStr);
 }
 
 void
 handleCreateBillGroup(State *state,
                       real64 hurdlerate,
-                      real64 frequency,
                       real64 perfFee,
+                      char *frequency,
                       char *billSymbol,
                       char *date,
                       char *res)
@@ -3642,7 +3651,7 @@ handleCreateBillGroup(State *state,
     char query[4096];
     snprintf(query, sizeof(query),
              "INSERT INTO bill_group (hurdlerate, perf_fee, frequency, symbol, date) "
-             "VALUES (%f, '%f', %f, '%s','%s');",
+             "VALUES (%f, '%f', '%s', '%s','%s');",
              hurdlerate,
              perfFee,
              frequency,
@@ -3694,6 +3703,7 @@ handlePerfFee(State *state,
     /* if the date is invalid, don't apply the fees */
     if (!isDateValid(inv.lastPerfFeeDate, date, bill.frequency))
     {
+        printf("Today is not the date : %s\n", date);
         sprintf(res, "Today is not the date : %s\n", date);
         return;
     }
@@ -3701,6 +3711,7 @@ handlePerfFee(State *state,
     real64 profitPerUnit = nav - inv.lastNav;
     if (profitPerUnit <= bill.hurdlerate)
     {
+        printf("not past hurdle rate, no fee : %f\n", profitPerUnit);
         sprintf(res, "not past hurdle rate, no fee : %f\n", profitPerUnit);
         return;
     }
@@ -6229,7 +6240,7 @@ answer_to_connection (void *cls,
             con_info->connectiontype = POST;
         }
         else
-    {
+        {
             con_info->connectiontype = GET;
         }
         *req_cls = (void *) con_info;
@@ -6237,15 +6248,28 @@ answer_to_connection (void *cls,
     }
     if (0 == strcmp (method, MHD_HTTP_METHOD_GET))
     {
+        connection_info_struct *con_info = (connection_info_struct *)*req_cls;
         /* We just return the standard form for uploads on all GET requests */
-        char buffer[1024];
-        snprintf (buffer,
-                  sizeof (buffer),
-                  ASKPAGE,
-                  0);
-        return send_page (connection,
-                          buffer,
-                          MHD_HTTP_OK);
+        char buffer[40960];
+        con_info->answerstring = buffer;
+        if (0 == strcmp(url, "/get-bill-groups"))
+        {
+            handleGetBillGroups(state,
+                                con_info->answerstring);
+            return send_page (connection,
+                              con_info->answerstring,
+                              MHD_HTTP_OK);
+        }
+        else
+        {
+            snprintf (buffer,
+                      sizeof (buffer),
+                      ASKPAGE,
+                      0);
+            return send_page (connection,
+                              buffer,
+                              MHD_HTTP_OK);
+        }
     }
     if (0 == strcmp (method, MHD_HTTP_METHOD_POST))
     {
@@ -6421,16 +6445,14 @@ answer_to_connection (void *cls,
             handleCreateBillGroup(state,
                                   atof(con_info->hurdlerate),
                                   atof(con_info->perfFee),
-                                  atof(con_info->frequency),
+                                  con_info->frequency,
                                   con_info->billSymbol,
                                   con_info->date,
                                   con_info->answerstring);
         }
-        else if (0 == strcmp(url, "/get-bill-groups"))
-        {
-            handleGetBillGroups(state,
-                                con_info->answerstring);
-        }
+        /* NOTE(AKHIL) : useless, since the linking is being 
+         * done thru addinvestor route, where billgroyp symbol
+         * is passed down thru the file */
         else if (0 == strcmp(url, "/link-bill-investor"))
         {
             handleLinkBillGroup(state,

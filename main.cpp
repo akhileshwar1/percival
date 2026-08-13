@@ -819,11 +819,15 @@ real64
 DBGetExchangeRate(PGconn *conn, char *date, int stratId)
 {
     char query[1024];
+    /* NOTE(Akhil): Assumes the exchange rate is same for all 
+     * strategies on any given day, we still have to upload the
+     * rate with a symbol(not used though as seen here)
+     * This was mainly done for the bulk upload feature across all strategies */
     sprintf(query,
-            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') "
-            "AND strategy_id = %d ",
-            date,
-            stratId);
+            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') ",
+            // "AND strategy_id = %d ",
+            date);
+            // stratId);
 
     PGresult *pgResult = executeQuery(conn, query);
 

@@ -2324,6 +2324,47 @@ printFundLedger(State *state)
 }
 
 /* --------------- File Processors ------------------------------------------------*/
+/* from the db */
+int
+getStratId(char *stratSymbol, PGconn *conn)
+{
+    char query[1024];
+    sprintf(query,
+            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(conn, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+        return -1;
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+    return stratId;
+}
+
+/* from the memory, not the db */
+int
+getStratIndex(State *state, char *stratSymbol)
+{
+    int stratIndex = -1;
+    for (int i = 0; i < state->currStratIndex + 1; i++)
+    {
+        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
+        {
+            stratIndex = i;
+            break;
+        }
+    }
+    printf("strat index is %d\n", stratIndex);
+    return stratIndex;
+}
+
 void
 processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
 {
@@ -2472,6 +2513,17 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
             i++;
             continue; // ignore the top heading row.
         }
+        char stratSymbol[100];
+        /* NOTE(Akhil): this overwriting of stratId here is to 
+         * allow for handling a trade file containing trades for
+         * multiple strategies in the same file */
+        LoadStratSymbolFromFile(line, stratSymbol);
+        int stratId = getStratId(stratSymbol, state->db); 
+        if (stratId < 0)
+        {
+            printf("No strategy found matching symbol: %s\n", stratSymbol);
+            return -1;
+        }
         Trade trade = {};
         LoadTrade(&trade, line);
         /* persist */
@@ -2495,14 +2547,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
         PQclear(pgResult);
 
         // find the strategy index first.
-        for (int i = 0; i < state->currStratIndex + 1; i++)
-        {
-            if (strcmp(trade.strategySymbol, state->strategies[i].symbol) == 0)
-            {
-                stratIndex = i;
-                break;
-            }
-        }
+        int stratIndex = getStratIndex(state, trade.strategySymbol);
 
         if (stratIndex == -1)
         {
@@ -2511,7 +2556,6 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
         }
 
         // apply trade to the positions state.
-        char stratSymbol[100];
         strcpy(stratSymbol, state->strategies[stratIndex].symbol);
         int found = 0;
         for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
@@ -2826,6 +2870,17 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
         }
         char *tmp = strchr(line, '\n');
         if (tmp) *tmp = '\0';
+        char stratSymbol[100];
+        /* NOTE(Akhil): this overwriting of stratId here is to 
+         * allow for handling a trade file containing trades for
+         * multiple strategies in the same file */
+        LoadStratSymbolFromFile(line, stratSymbol);
+        int stratId = getStratId(stratSymbol, state->db); 
+        if (stratId < 0)
+        {
+            printf("No strategy found matching symbol: %s\n", stratSymbol);
+            return -1;
+        }
         FNO_trade trade = {};
         LoadFNOTrade(&trade, line);
         // persist.
@@ -2856,14 +2911,7 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
         PQclear(pgResult);
 
         // find the strategy index first.
-        for (int i = 0; i < state->currStratIndex + 1; i++)
-        {
-            if (strcmp(trade.strategySymbol, state->strategies[i].symbol) == 0)
-            {
-                stratIndex = i;
-                break;
-            }
-        }
+        int stratIndex = getStratIndex(state, trade.strategySymbol);
 
         if (stratIndex == -1)
         {
@@ -2872,7 +2920,6 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
         }
 
         // apply trade to the positions state.
-        char stratSymbol[100];
         strcpy(stratSymbol, state->strategies[stratIndex].symbol);
         int found = 0;
         for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
@@ -3520,46 +3567,6 @@ uploadPositions(FILE *secFile, State *state, int stratIndex, int stratId)
     }
 }
 
-/* from the db */
-int
-getStratId(char *stratSymbol, PGconn *conn)
-{
-    char query[1024];
-    sprintf(query,
-            "SELECT id FROM strategy where symbol = '%s' LIMIT 1",
-            stratSymbol);
-
-    PGresult *pgResult = executeQuery(conn, query);
-
-    if (PQntuples(pgResult) == 0)
-    {
-        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
-        PQclear(pgResult);
-        return -1;
-    }
-
-    char *id_str = PQgetvalue(pgResult, 0, 0);
-    int stratId = atoi(id_str);
-    PQclear(pgResult);
-    return stratId;
-}
-
-/* from the memory, not the db */
-int
-getStratIndex(State *state, char *stratSymbol)
-{
-    int stratIndex = -1;
-    for (int i = 0; i < state->currStratIndex + 1; i++)
-    {
-        if (strcmp(stratSymbol, state->strategies[i].symbol) == 0)
-        {
-            stratIndex = i;
-            break;
-        }
-    }
-    printf("strat index is %d\n", stratIndex);
-    return stratIndex;
-}
 
 /* --------------- Api Handlers ------------------------------------------------*/
 void

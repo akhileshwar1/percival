@@ -145,7 +145,7 @@ typedef struct
    from another platform */
 typedef struct
 {
-    char symbol[100];
+    char symbol[500];
     real64 balance;
 } Balance;
 
@@ -356,6 +356,7 @@ typedef struct
     real64 cash;
     real64 nav;
     real64 feesAccrued;
+    real64 TDS;
     real64 receivable;
     Investor investors[MAX_INVESTORS];
     PositionEquity positions[MAX_POSITIONS];
@@ -548,18 +549,23 @@ int get_month_number(const char *month_str) {
     return -1; // Return -1 if the month is invalid
 }
 
-/* 30-Jun-2026 to 30/06/2026 */
+/* 30-Jun-2026 or 30-Jun-26 to 30/06/2026 */
 int convert_date_format(const char *input_date, char *output_date) {
     int day, year;
     char month_str[4]; // 3 chars + null terminator
 
     // Parse the input string (e.g., "30-Jun-2026")
-    if (sscanf(input_date, "%d-%3[^-]-%d", &day, month_str, &year) != 3) {
+    if (sscanf(input_date, "%d-%3[^-]-%d", &day, month_str, &year) != 3)
+    {
         return -1; // Parsing failed
     }
 
+    /* incase it's 26 */
+    if (year < 2000) year += 2000;
+
     int month = get_month_number(month_str);
-    if (month == -1) {
+    if (month == -1)
+    {
         return -1; // Invalid month string
     }
 
@@ -835,6 +841,7 @@ DBGetExchangeRate(PGconn *conn, char *date, int stratId)
             date);
             // stratId);
 
+    printf("strat id is %d\n", stratId);
     PGresult *pgResult = executeQuery(conn, query);
 
     if (PQntuples(pgResult) == 0)
@@ -980,6 +987,17 @@ DBUpdateFee(PGconn *conn, real64 balance, int stratId)
     PQclear(res);
 }
 
+void
+DBUpdateTDS(PGconn *conn, real64 balance, int stratId)
+{
+    char query[1024];
+    snprintf(query, sizeof(query),
+             "UPDATE strategy SET TDS = %f WHERE id = %d;",
+             balance,
+             stratId);
+    PGresult *res = executeQuery(conn, query);
+    PQclear(res);
+}
 /* --------------- Loaders/Parsers ------------------------------------------------*/
 void
 LoadFNOBhav(FNO_bhav *bhav, char *line)
@@ -1498,7 +1516,7 @@ AccountFromBank(LedgerEntry *assetEntry,
 }
 
 void
-AccountFromSubs(LedgerEntry *entry, State *state, Investor inv,
+AccountFromSubs(LedgerEntry *entry, State *state,
                 char *symbol, char *line)
 {
     char *token;
@@ -1515,8 +1533,6 @@ AccountFromSubs(LedgerEntry *entry, State *state, Investor inv,
                 if (strcmp(token, state->strategies[j].symbol) == 0)
                 {
                     printf("found strategy\n");
-                    state->strategies[j]
-                        .investors[++state->strategies[j].currInvestorIndex] = inv;
                     strcpy(symbol, token);
                 }
             }
@@ -1557,9 +1573,8 @@ void
 LoadInvestorFromClient(Investor *inv, char *line)
 {
     char *token;
-    token = strtok(line, ",");
     int i = 0;
-    while (token != NULL)
+    while ((token = strsep(&line, ",")) != NULL)
     {
         if (i ==  3)
         {
@@ -2002,29 +2017,37 @@ loadStateFromDB(State *state)
                 }
                 else if (j == 5)
                 {
-                    strat.nav = atof(str);
+                    strat.TDS = atof(str);
+                }
+                else if (j == 6)
+                {
+                    strat.receivable = atof(str);
                 }
                 else if (j == 7)
                 {
-                    strat.currFPosIndex = atoi(str);
-                }
-                else if (j == 8)
-                {
-                    strat.currInvestorIndex = atoi(str);
+                    strat.nav = atof(str);
                 }
                 else if (j == 9)
                 {
-                    strat.currEntryId = atoi(str);
+                    strat.currFPosIndex = atoi(str);
                 }
                 else if (j == 10)
                 {
-                    strat.currJournalId = atoi(str);
+                    strat.currInvestorIndex = atoi(str);
                 }
                 else if (j == 11)
                 {
+                    strat.currEntryId = atoi(str);
+                }
+                else if (j == 12)
+                {
+                    strat.currJournalId = atoi(str);
+                }
+                else if (j == 13)
+                {
                     strat.currAccIndex = atoi(str);
                 }
-                else if (j == 6)
+                else if (j == 8)
                 {
                     strat.currPosIndex = atoi(str);
                     // go for the investors, accs, and positions now.
@@ -2186,7 +2209,7 @@ loadStateFromDB(State *state)
                                         pos.optType = CE;
                                     }
                                     else
-                                {
+                                    {
                                         pos.optType = NA;
                                     }
                                 }
@@ -3473,6 +3496,7 @@ printNav(State *state, Exchange_rate *exRate,
     for (int i = 0; i < state->strategies[stratIndex].currInvestorIndex + 1; i++)
     {
         Investor inv = state->strategies[stratIndex].investors[i];
+        printf("units are %f\n", inv.units);
         totalUnits += inv.units;
     }
     printf("total units are %f\n", totalUnits);
@@ -3491,11 +3515,12 @@ printNav(State *state, Exchange_rate *exRate,
     real64 fee = netAssets * (0.01 / 365); // 1% p.a
     state->strategies[stratIndex].feesAccrued += fee;
     real64 feesAccrued = state->strategies[stratIndex].feesAccrued; 
+    real64 TDS = state->strategies[stratIndex].TDS; 
     DBUpdateFee(state->db, feesAccrued, dbStratId); 
     char query[1024];
     printf("fee accrued %f, %f\n", fee, feesAccrued);
-    printf("net %f\n", (netAssets - feesAccrued));
-    real64 nav = (netAssets - feesAccrued) / totalUnits;
+    printf("net %f\n", (netAssets - feesAccrued - TDS));
+    real64 nav = (netAssets - feesAccrued - TDS) / totalUnits;
     /* persist nav in its own seperate table. */
     snprintf(query, sizeof(query),
              "INSERT INTO strategy_nav (strategy_id, nav_date, nav) "
@@ -4110,6 +4135,13 @@ handleBalances(State *state, char *stratSymbol, char *res)
 
             DBUpdateFee(state->db, bal.balance, stratId); 
         }
+        else if(0 == strcmp(bal.symbol, "TDS"))
+        {
+            /* modify the in memory state */
+            state->strategies[stratIndex].TDS = bal.balance;
+
+            DBUpdateTDS(state->db, bal.balance, stratId); 
+        }
         else if(0 == strcmp(bal.symbol, "receivable"))
         {
             /* modify the in memory state */
@@ -4696,6 +4728,8 @@ saveDailySnapshot(PGconn *conn,
     cJSON_AddItemToObject(meta, "currJournalId", cJSON_CreateNumber(strat->currJournalId));
     cJSON_AddItemToObject(meta, "currEntryId", cJSON_CreateNumber(strat->currEntryId));
     cJSON_AddItemToObject(meta, "feesAccrued", cJSON_CreateNumber(strat->feesAccrued));
+    cJSON_AddItemToObject(meta, "TDS", cJSON_CreateNumber(strat->TDS));
+    cJSON_AddItemToObject(meta, "receivable", cJSON_CreateNumber(strat->receivable));
     cJSON_AddItemToObject(meta, "symbol", cJSON_CreateString(strat->symbol));
 
     /* 2. Serialize structural arrays up to active boundaries */
@@ -5045,7 +5079,7 @@ handleBhavEq(State *state, char *date, char *stratSymbol, char *res)
 
     /* get the stratIndex from the memory */
     int stratIndex = getStratIndex(state, stratSymbol);
-
+    printf("date is %s\n", date);
     processBhavEq(FBhavFile, date, stratIndex, state);
     strcpy(res, "completed");
 }
@@ -5791,7 +5825,7 @@ handleSubsUPA(State *state, char *res, char *stratSymbol)
         entry.id = state->strategies[state->currStratIndex].currJournalId;
         if (i == 1) entry.type = EQUITY;
         else if (i == 2) entry.type = ASSET;
-        AccountFromSubs(&entry, state, inv, stratSymbol, line);
+        AccountFromSubs(&entry, state, stratSymbol, line);
         printf("strat symbol is %s\n", stratSymbol);
         if (i == 2)
         {

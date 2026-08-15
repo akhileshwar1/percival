@@ -125,17 +125,18 @@ curl -v -X POST \
 #     $SERVER/corporate-action
 #
 # 11. eq Bhavcopy
-# curl -v -X POST \
-#     -F "strategySymbol=B105S29D" \
-#     -F "file=@alpha_500/eq_bhav_1_alpha_500.csv" \
-#     $SERVER/bhav-eq
-#
-#  # to use 2nd april's ex rate for fee accrual. Nav is inconsequential
-# curl -v -X POST \
-#     -F "strategySymbol=B105S29D" \
-#     -F "date=02/04/2026" \
-#     $SERVER/process-nav
-#
+curl -v -X POST \
+    -F "strategySymbol=B105S29D" \
+    -F "date=01/04/2026" \
+    -F "file=@alpha_500/eq_bhav_1_alpha_500.CSV" \
+    $SERVER/bhav-eq
+
+ # to use 31st april's ex rate for fee accrual. Nav is also done on holidays. 
+curl -v -X POST \
+    -F "strategySymbol=B105S29D" \
+    -F "date=01/04/2026" \
+    $SERVER/process-nav
+
 # 10. Trades
 curl -v -X POST \
     -F "file=@alpha_500/eq_trades_alpha500.csv" \

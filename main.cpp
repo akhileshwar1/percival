@@ -836,7 +836,10 @@ DBGetExchangeRate(PGconn *conn, char *date, int stratId)
      * rate with a symbol(not used though as seen here)
      * This was mainly done for the bulk upload feature across all strategies */
     sprintf(query,
-            "SELECT * FROM exchange_rate where date = TO_DATE('%s', 'DD/MM/YYYY') ",
+            "SELECT * FROM exchange_rate "
+            "WHERE date <= TO_DATE('%s', 'DD/MM/YYYY') "
+            "ORDER BY date DESC "
+            "LIMIT 1",
             // "AND strategy_id = %d ",
             date);
             // stratId);

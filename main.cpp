@@ -933,6 +933,30 @@ DBInsertSecurity(PGconn *conn, Security *sec, int currSecIDCount)
 }
 
 void
+DBInsertFNOPosition(PGconn *conn, FNO_position *pos, int stratId)
+{
+    char query[2096];
+    snprintf(query, sizeof(query),
+             "INSERT INTO fno_position (sys_id, symbol, qty, price, ltp, pnl, strategy_id, expiry, strike, opt_type, inst_type) "
+             "VALUES ('%s','%s', %d, %f, %f, %f, %d, '%s', %f, '%s', '%s') "
+             "ON CONFLICT (sys_id) DO UPDATE SET "
+             "qty = EXCLUDED.qty, price = EXCLUDED.price, ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
+             pos->sys_id,
+             pos->symbol,
+             pos->qty,
+             pos->price,
+             pos->ltp,
+             0.0,
+             stratId,
+             pos->expiry,
+             pos->strike,
+             OptTypeStrings[pos->optType],
+             InstrumentTypeStrings[pos->instType]);
+    PGresult *res = executeQuery(conn, query);
+    PQclear(res);   
+}
+
+void
 DBInsertPosition(PGconn *conn, PositionEquity *pos, int stratId)
 {
     char query[2096];
@@ -1846,12 +1870,74 @@ LoadBalance(Balance *bal, char *line)
 }
 
 void
+LoadOldFNOPosition(FNO_position *pos, char *line)
+{
+    char *token;
+    int i = 0;
+    while ((token = strsep(&line, ",")) != NULL)
+    {
+        if (i ==  3)
+        {
+            strcpy(pos->expiry, token);
+        }
+        else if (i ==  4)
+        {
+            pos->strike = (real64)atof(token);
+        }
+        else if (i ==  5)
+        {
+            if (0 == strcmp(token, "CE"))
+            {
+                pos->optType = CE;
+            }
+            else if (0 == strcmp(token, "PE"))
+            {
+                pos->optType = PE;
+            }
+            else
+            {
+                pos->optType = NA;
+            }
+        }
+        else if (i ==  6)
+        {
+            if (0 == strcmp(token, "FUTSTK"))
+            {
+                pos->instType = FUTSTK;
+            }
+            else if (0 == strcmp(token, "FUTIDX"))
+            {
+                pos->instType = FUTIDX;
+            }
+            else if (0 == strcmp(token, "OPTSTK"))
+            {
+                pos->instType = OPTSTK;
+            }
+            else if (0 == strcmp(token, "OPTIDX"))
+            {
+                pos->instType = OPTIDX;
+            }
+        }
+        else if (i ==  8)
+        {
+            pos->qty = (real64)atof(token);
+        }
+        else if (i == 10)
+        {
+            pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
+            pos->ltp = (real64)atof(token);
+            pos->pnl = 0.0;
+        }
+        i++;
+    }
+}
+
+void
 LoadOldPosition(PositionEquity *pos, char *line)
 {
     char *token;
-    token = strtok(line, ",");
     int i = 0;
-    while (token != NULL)
+    while ((token = strsep(&line, ",")) != NULL)
     {
         if (i == 2)
         {
@@ -1867,7 +1953,6 @@ LoadOldPosition(PositionEquity *pos, char *line)
             pos->ltp = (real64)atof(token);
             pos->pnl = 0.0;
         }
-        token = strtok(NULL, ",");
         i++;
     }
 }
@@ -3605,6 +3690,36 @@ uploadPositions(FILE *secFile, State *state, int stratIndex, int stratId)
     }
 }
 
+void
+uploadFNOPositions(FILE *secFile, State *state, int stratIndex, int stratId)
+{
+    char line[1024];
+    int i = 0;
+    while (fgets(line, sizeof(line), secFile))
+    {
+        TrimString(line);
+        if (line[0] == '\0') {
+            continue; 
+        }
+        if (i == 0)
+        {
+            //TODO(Akhil): validate header in a way that res doesn't come here.
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        FNO_position pos = {};
+        LoadOldFNOPosition(&pos, line);
+
+        /* modify the in memory state */
+        state->strategies[stratIndex]
+            .fpositions[++state->strategies[stratIndex].currFPosIndex] = pos;
+
+        DBInsertFNOPosition(state->db, &pos, stratId);
+        // printf("security is %s\n", state->secs[i - 1].name);
+    }
+}
 
 /* --------------- Api Handlers ------------------------------------------------*/
 void
@@ -4188,6 +4303,7 @@ handleUploadPositions(State *state, char *stratSymbol, char *res)
     int stratId = getStratId(stratSymbol, state->db); 
     if (stratId < 0)
     {
+        printf("in positions\n");
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
@@ -4195,6 +4311,30 @@ handleUploadPositions(State *state, char *stratSymbol, char *res)
     int stratIndex = getStratIndex(state, stratSymbol);
 
     uploadPositions(upFile, state, stratIndex, stratId);
+    strcpy(res, "completed");
+}
+
+void
+handleUploadFNOPositions(State *state, char *stratSymbol, char *res)
+{
+    FILE *upFile = fopen("tmp.csv", "r");
+    if (upFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    /* get strat id from db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        printf("in positions\n");
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    int stratIndex = getStratIndex(state, stratSymbol);
+
+    uploadFNOPositions(upFile, state, stratIndex, stratId);
     strcpy(res, "completed");
 }
 
@@ -6462,6 +6602,12 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/upload-positions"))
         {
             handleUploadPositions(state,
+                                  con_info->strategySymbol,
+                                  con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/upload-fno-positions"))
+        {
+            handleUploadFNOPositions(state,
                                   con_info->strategySymbol,
                                   con_info->answerstring);
         }

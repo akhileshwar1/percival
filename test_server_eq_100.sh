@@ -124,20 +124,18 @@ curl -v -X POST \
     -F "file=@alpha_100/Eq_units/eq_units _Pawan_N.csv" \
     $SERVER/allot-units
 
-
 # 8. upload securities. 
 curl -v -X POST \
     -F "file=@alpha_100/security_alpha_100.csv" \
     $SERVER/upload-securities
 
-
-# 8. upload old positons. 
+# 8. upload old positions. 
 curl -v -X POST \
     -F "strategySymbol=B105S29B" \
     -F "file=@alpha_100/eq_positions_alpha_100.csv" \
     $SERVER/upload-positions
 
-# 8. upload old positons. 
+# 8. upload old positions. 
 curl -v -X POST \
     -F "strategySymbol=B105S29B" \
     -F "file=@alpha_100/eq_fno_positions_alpha_100.csv" \
@@ -163,6 +161,17 @@ curl -v -X POST \
     -F "file=@alpha_100/eq_bhav_1_alpha_100.CSV" \
     $SERVER/bhav-eq
 
+curl -v -X POST \
+    -F "strategySymbol=B105S29B" \
+    -F "date=01/04/2026" \
+    -F "file=@alpha_500/WO010426.CSV" \
+    $SERVER/bhav-fno
+
+# 12. MTM Process
+curl -v -X POST \
+    -F "strategySymbol=B105S29B" \
+    $SERVER/mtm-process
+
  # to use 31st april's ex rate for fee accrual. Nav is also done on holidays. 
 curl -v -X POST \
     -F "strategySymbol=B105S29B" \
@@ -180,6 +189,17 @@ curl -v -X POST \
     -F "date=02/04/2026" \
     -F "file=@alpha_500/Bhavcopies/WE020426.CSV" \
     $SERVER/bhav-eq
+
+curl -v -X POST \
+    -F "strategySymbol=B105S29B" \
+    -F "date=02/04/2026" \
+    -F "file=@alpha_500/WO020426.CSV" \
+    $SERVER/bhav-fno
+
+# 12. MTM Process
+curl -v -X POST \
+    -F "strategySymbol=B105S29B" \
+    $SERVER/mtm-process
 
 curl -v -X POST \
     -F "strategySymbol=B105S29B" \

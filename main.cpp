@@ -935,12 +935,11 @@ DBInsertSecurity(PGconn *conn, Security *sec, int currSecIDCount)
 void
 DBInsertFNOPosition(PGconn *conn, FNO_position *pos, int stratId)
 {
+    printf("Inserting fno position\n");
     char query[2096];
     snprintf(query, sizeof(query),
              "INSERT INTO fno_position (sys_id, symbol, qty, price, ltp, pnl, strategy_id, expiry, strike, opt_type, inst_type) "
-             "VALUES ('%s','%s', %d, %f, %f, %f, %d, '%s', %f, '%s', '%s') "
-             "ON CONFLICT (sys_id) DO UPDATE SET "
-             "qty = EXCLUDED.qty, price = EXCLUDED.price, ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
+             "VALUES ('%s','%s', %d, %f, %f, %f, %d, '%s', %f, '%s', '%s') ",
              pos->sys_id,
              pos->symbol,
              pos->qty,
@@ -1876,7 +1875,11 @@ LoadOldFNOPosition(FNO_position *pos, char *line)
     int i = 0;
     while ((token = strsep(&line, ",")) != NULL)
     {
-        if (i ==  3)
+        if (i ==  2)
+        {
+            strcpy(pos->symbol, token);
+        }
+        else if (i ==  3)
         {
             strcpy(pos->expiry, token);
         }
@@ -4323,11 +4326,11 @@ handleUploadFNOPositions(State *state, char *stratSymbol, char *res)
         printf("sorry, couldn't upload file!\n");
     }
 
+    printf("in fno positions\n");
     /* get strat id from db */
     int stratId = getStratId(stratSymbol, state->db); 
     if (stratId < 0)
     {
-        printf("in positions\n");
         sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
         return;
     }
@@ -6608,8 +6611,8 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/upload-fno-positions"))
         {
             handleUploadFNOPositions(state,
-                                  con_info->strategySymbol,
-                                  con_info->answerstring);
+                                     con_info->strategySymbol,
+                                     con_info->answerstring);
         }
         else if (0 == strcmp(url, "/upload-balances"))
         {

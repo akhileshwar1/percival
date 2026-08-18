@@ -140,6 +140,7 @@ CREATE TABLE fno_position (
     opt_type opt_type NOT NULL,
     inst_type instrument_type NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
 

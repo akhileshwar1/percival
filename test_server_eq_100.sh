@@ -72,7 +72,6 @@ curl -v -X POST \
     -F "file=@alpha_100/UPA_Alpha_100/eq_subs_upa_Pawan_N.csv" \
     $SERVER/subs-upa
 
-
 # 5. Bank Transfer
 curl -v -X POST \
     -F "file=@alpha_100/eq_bank_alpha_100.csv" \
@@ -141,6 +140,12 @@ curl -v -X POST \
     -F "file=@alpha_100/eq_fno_positions_alpha_100.csv" \
     $SERVER/upload-fno-positions
 
+# 8. upload old positions. 
+curl -v -X POST \
+    -F "strategySymbol=B105S29B" \
+    -F "file=@alpha_100/eq_bond_positions_alpha_100.csv" \
+    $SERVER/upload-bond-positions
+
 # 8. upload balances. 
 curl -v -X POST \
     -F "strategySymbol=B105S29B" \
@@ -205,7 +210,7 @@ curl -v -X POST \
     -F "strategySymbol=B105S29B" \
     -F "date=02/04/2026" \
     $SERVER/process-nav
-
+# ===== here=======
 # # 9. Fund Expense
 # curl -v -X POST \
 #     -F "file=@fund_expense.csv" \

@@ -375,6 +375,7 @@ typedef struct
     real64 feesAccrued;
     real64 TDS;
     real64 receivable;
+    real64 interestAccrued;
     Investor investors[MAX_INVESTORS];
     PositionEquity positions[MAX_POSITIONS];
     FNO_position fpositions[MAX_POSITIONS];
@@ -938,7 +939,7 @@ DBInsertSecurity(PGconn *conn, Security *sec, int currSecIDCount)
     snprintf(query, sizeof(query),
              "BEGIN;"
              "INSERT INTO security (sys_id, isin, symbol, listing_date, name) "
-             "VALUES ('%s', '%s', '%s', to_date('%s', 'DD/MM/YYYY'), '%s');"
+             "VALUES ('%s', '%s', '%s', to_date('%s', 'DD/MM/YYYY'), '%s') ON CONFLICT (isin) DO NOTHING;"
              "UPDATE global_state SET curr_sec_id_count = %d WHERE id = 1;"
              "COMMIT;",
              sec->sys_id,
@@ -947,7 +948,7 @@ DBInsertSecurity(PGconn *conn, Security *sec, int currSecIDCount)
              sec->date,
              sec->name,
              currSecIDCount); 
-    PGresult *res = PQexec(conn, query);
+    PGresult *res = executeQuery(conn, query);
     PQclear(res);   
 }
 
@@ -1012,6 +1013,18 @@ DBInsertPosition(PGconn *conn, PositionEquity *pos, int stratId)
              stratId);
     PGresult *res = executeQuery(conn, query);
     PQclear(res);   
+}
+
+void
+DBUpdateInterest(PGconn *conn, real64 balance, int stratId)
+{
+    char query[1024];
+    snprintf(query, sizeof(query),
+             "UPDATE strategy SET interest_accrued = %f WHERE id = %d;",
+             balance,
+             stratId);
+    PGresult *res = executeQuery(conn, query);
+    PQclear(res);
 }
 
 void
@@ -2187,41 +2200,45 @@ loadStateFromDB(State *state)
                 }
                 else if (j == 5)
                 {
-                    strat.TDS = atof(str);
+                    strat.interestAccrued = atof(str);
                 }
                 else if (j == 6)
                 {
-                    strat.receivable = atof(str);
+                    strat.TDS = atof(str);
                 }
                 else if (j == 7)
                 {
-                    strat.nav = atof(str);
+                    strat.receivable = atof(str);
                 }
-                else if (j == 9)
+                else if (j == 8)
                 {
-                    strat.currFPosIndex = atoi(str);
+                    strat.nav = atof(str);
                 }
                 else if (j == 10)
                 {
-                    strat.currInvestorIndex = atoi(str);
+                    strat.currFPosIndex = atoi(str);
                 }
                 else if (j == 11)
                 {
-                    strat.currEntryId = atoi(str);
+                    strat.currInvestorIndex = atoi(str);
                 }
                 else if (j == 12)
                 {
-                    strat.currJournalId = atoi(str);
+                    strat.currEntryId = atoi(str);
                 }
                 else if (j == 13)
+                {
+                    strat.currJournalId = atoi(str);
+                }
+                else if (j == 14)
                 {
                     strat.currAccIndex = atoi(str);
                 }
-                else if (j == 13)
+                else if (j == 15)
                 {
                     strat.currBondIndex = atoi(str);
                 }
-                else if (j == 8)
+                else if (j == 9)
                 {
                     strat.currPosIndex = atoi(str);
                     // go for the investors, accs, and positions now.
@@ -2720,10 +2737,6 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
                        state->strategies[stratIndex].fpositions[i].symbol,
                        state->strategies[stratIndex].fpositions[i].qty,
                        state->strategies[stratIndex].fpositions[i].ltp);
-                printf("pos after bhav is %s, %d, %f\n",
-                       state->strategies[stratIndex].fpositions[i].symbol,
-                       state->strategies[stratIndex].fpositions[i].qty,
-                       state->strategies[stratIndex].fpositions[i].ltp);
                 // persist the matched bhav and update the position.
                 char query[512];
                 snprintf(query, sizeof(query),
@@ -2742,9 +2755,11 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
                 PQclear(pgResult);
 
                 snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET ltp = %f WHERE sys_id = '%s'",
+                         "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
+                         "AND expiry = '%s'",
                          bhav.ltp,
-                         state->strategies[stratIndex].fpositions[i].sys_id
+                         state->strategies[stratIndex].fpositions[i].symbol,
+                         state->strategies[stratIndex].fpositions[i].expiry
                          );
                 pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
@@ -3674,11 +3689,14 @@ real64
 getTotalPositionValue(State *state, int stratIndex)
 {
     real64 totalValue = 0.0;
+    /* equity positions */
     for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
     {
         PositionEquity pos = state->strategies[stratIndex].positions[i];
         totalValue  += pos.qty * pos.ltp;
     }
+
+    /* fno positions */
     for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
     {
         FNO_position pos = state->strategies[stratIndex].fpositions[i];
@@ -3687,6 +3705,14 @@ getTotalPositionValue(State *state, int stratIndex)
             totalValue  += pos.qty * pos.ltp;
         }
     }
+
+    /* bond positions */
+    for (int i = 0; i < state->strategies[stratIndex].currBondIndex + 1; i++)
+    {
+        Bond_position pos = state->strategies[stratIndex].bondPositions[i];
+        totalValue  += pos.qty * pos.price;
+    }
+
     return totalValue;
 }
 
@@ -3713,6 +3739,22 @@ getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
     totalCashUSD += state->strategies[stratIndex].receivable;
     totalCashUSD += (totalCashINR / exRate->rate);
     return totalCashUSD;
+}
+
+/* accrue interest of the day for all bond positions */
+void
+accrueInterest(State *state, int stratIndex, int stratId, real64 exRate)
+{
+    real64 totalInterestToAccrue = 0;
+    for (int i = 0; i < state->strategies[stratIndex].currBondIndex + 1; i++)
+    {
+        Bond_position pos = state->strategies[stratIndex].bondPositions[i];
+        totalInterestToAccrue += pos.qty * pos.price * (pos.interestRate / (100 * 365));
+    }
+
+    /* update the mem as well as the db, always in USD */
+    state->strategies[stratIndex].interestAccrued += (totalInterestToAccrue / exRate);
+    DBUpdateInterest(state->db, state->strategies[stratIndex].interestAccrued, stratId);
 }
 
 real64
@@ -3746,8 +3788,11 @@ printNav(State *state, Exchange_rate *exRate,
     DBUpdateFee(state->db, feesAccrued, dbStratId); 
     char query[1024];
     printf("fee accrued %f, %f\n", fee, feesAccrued);
-    printf("net %f\n", (netAssets - feesAccrued - TDS));
-    real64 nav = (netAssets - feesAccrued - TDS) / totalUnits;
+    /* accrue interest of the day for all bond positions */
+    accrueInterest(state, stratIndex, dbStratId, exRate->rate);
+    real64 interestAccrued = state->strategies[stratIndex].interestAccrued;
+    printf("net %f\n", (netAssets - feesAccrued - TDS + interestAccrued));
+    real64 nav = (netAssets - feesAccrued - TDS + interestAccrued) / totalUnits;
     /* persist nav in its own seperate table. */
     snprintf(query, sizeof(query),
              "INSERT INTO strategy_nav (strategy_id, nav_date, nav) "
@@ -3764,6 +3809,7 @@ printNav(State *state, Exchange_rate *exRate,
 void
 uploadSecurities(FILE *secFile, State *state)
 {
+    printf("in upload secs\n");
     char line[1024];
     int i = 0;
     while (fgets(line, sizeof(line), secFile))
@@ -3792,6 +3838,7 @@ uploadSecurities(FILE *secFile, State *state)
 void
 uploadPositions(FILE *secFile, State *state, int stratIndex, int stratId)
 {
+    printf("in upload positions\n");
     char line[1024];
     int i = 0;
     while (fgets(line, sizeof(line), secFile))
@@ -4473,12 +4520,21 @@ handleBalances(State *state, char *stratSymbol, char *res)
 
             DBUpdateRecv(state->db, bal.balance, stratId); 
         }
+        else if(0 == strcmp(bal.symbol, "interest"))
+        {
+            /* modify the in memory state */
+            state->strategies[stratIndex].interestAccrued = bal.balance;
+
+            DBUpdateInterest(state->db, bal.balance, stratId); 
+        }
         else /* else its a bank account symbol */
         {
             for (int i = 0;
                  state->strategies[stratIndex].currAccIndex + 1;
                  i++)
             {
+                printf("bal symbol is %s\n", bal.symbol);
+                printf("strat bal symbol is %s\n", state->strategies[stratIndex].accs[i].symbol);
                 if (0 == strcmp(bal.symbol,
                                 state->strategies[stratIndex].accs[i].symbol))
                 {
@@ -5102,6 +5158,7 @@ saveDailySnapshot(PGconn *conn,
     cJSON_AddItemToObject(meta, "currJournalId", cJSON_CreateNumber(strat->currJournalId));
     cJSON_AddItemToObject(meta, "currEntryId", cJSON_CreateNumber(strat->currEntryId));
     cJSON_AddItemToObject(meta, "feesAccrued", cJSON_CreateNumber(strat->feesAccrued));
+    cJSON_AddItemToObject(meta, "interestAccrued", cJSON_CreateNumber(strat->interestAccrued));
     cJSON_AddItemToObject(meta, "TDS", cJSON_CreateNumber(strat->TDS));
     cJSON_AddItemToObject(meta, "receivable", cJSON_CreateNumber(strat->receivable));
     cJSON_AddItemToObject(meta, "symbol", cJSON_CreateString(strat->symbol));
@@ -6019,8 +6076,9 @@ handleBankTransfer(State *state, char *res)
         // insert or update the liabEntry bank acc.
         char query[1024];
         sprintf(query,
-                "SELECT * FROM bank_account where symbol = '%s'",
-                liabEntry.accountName);
+                "SELECT * FROM bank_account where symbol = '%s' AND strategy_id = %d",
+                liabEntry.accountName,
+                stratId);
 
         PGresult *pgResult = executeQuery(state->db, query);
         int rows = PQntuples(pgResult);
@@ -6069,8 +6127,9 @@ handleBankTransfer(State *state, char *res)
         // insert or update the assetEntry bank acc.
         printf("asset entry accoutnn name is %s\n", assetEntry.accountName);
         sprintf(query,
-                "SELECT * FROM bank_account where symbol = '%s'",
-                assetEntry.accountName);
+                "SELECT * FROM bank_account where symbol = '%s' AND strategy_id = %d",
+                assetEntry.accountName,
+                stratId);
 
         pgResult = executeQuery(state->db, query);
         rows = PQntuples(pgResult);

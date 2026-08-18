@@ -18,6 +18,7 @@ CREATE TABLE strategy
     symbol VARCHAR(100) NOT NULL,
     cash DOUBLE PRECISION DEFAULT 0.0,
     fees_accrued DOUBLE PRECISION DEFAULT 0.0,
+    interest_accrued DOUBLE PRECISION DEFAULT 0.0,
     TDS DOUBLE PRECISION DEFAULT 0.0,
     receivable DOUBLE PRECISION DEFAULT 0.0,
     nav DOUBLE PRECISION DEFAULT 100.0,
@@ -323,6 +324,7 @@ CREATE TABLE strategy_state_snapshot (
     -- Stores structural memory array contents
     equity_positions JSONB NOT NULL,
     fno_positions JSONB NOT NULL,
+    bond_positions JSONB NOT NULL,
     banks JSONB NOT NULL,
     investors JSONB NOT NULL,
     

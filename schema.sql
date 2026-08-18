@@ -27,6 +27,7 @@ CREATE TABLE strategy
     curr_entry_id INTEGER DEFAULT -1,
     curr_journal_id INTEGER DEFAULT -1,
     curr_acc_index INTEGER DEFAULT -1,
+    curr_bond_index INTEGER DEFAULT -1,
     
 
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint
@@ -111,6 +112,7 @@ CREATE TABLE bank_account (
 
 
 DROP TABLE IF EXISTS fno_position CASCADE;
+DROP TABLE IF EXISTS bond_position CASCADE;
 DROP TYPE IF EXISTS instrument_type CASCADE;
 DROP TYPE IF EXISTS opt_type CASCADE;
 
@@ -144,6 +146,19 @@ CREATE TABLE fno_position (
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
 );
 
+CREATE TABLE bond_position (
+    id SERIAL PRIMARY KEY,                                      
+    symbol VARCHAR(100),
+    isin VARCHAR(100),
+    date DATE NOT NULL,                                              
+    expiry_date DATE NOT NULL,                                              
+    qty DOUBLE PRECISION NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
+    interest_rate DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE
+);
 
 DROP TABLE IF EXISTS fno_trade CASCADE;
 DROP TYPE IF EXISTS trans_type CASCADE;

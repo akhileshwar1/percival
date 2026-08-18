@@ -115,12 +115,18 @@ typedef struct
 
     char strategySymbol[100];
     char hurdlerate[100];
+    char interestRate[100];
+    char qty[100];
+    char price[100];
+    char symbol[100];
+    char isin[100];
     char frequency[100];
     char perfFee[100];
     char billSymbol[100];
     char invName[100];
 
     char date[100];
+    char expiryDate[100];
     char fromDate[100];
     char toDate[100];
     char rollbackDate[100];
@@ -330,6 +336,17 @@ typedef struct
     char sys_id[100];
 } FNO_position;
 
+typedef struct
+{
+    char symbol[100];
+    char isin[100];
+    real64 qty;
+    real64 price;
+    real64 interestRate;
+    char expiryDate[100];
+    char date[100];
+} Bond_position;
+
 typedef enum
 {
     ASSET,
@@ -361,10 +378,12 @@ typedef struct
     Investor investors[MAX_INVESTORS];
     PositionEquity positions[MAX_POSITIONS];
     FNO_position fpositions[MAX_POSITIONS];
+    Bond_position bondPositions[MAX_POSITIONS];
     Bank_account accs[MAX_ACCS];
     int id;
     int currPosIndex;
     int currFPosIndex;
+    int currBondIndex;
     int currInvestorIndex;
     LedgerEntry ledger[MAX_LEDGER_ENTRIES];
     int currEntryId;
@@ -956,6 +975,25 @@ DBInsertFNOPosition(PGconn *conn, FNO_position *pos, int stratId)
 }
 
 void
+DBInsertBondPosition(PGconn *conn, Bond_position *pos, int stratId)
+{
+    char query[2096];
+    snprintf(query, sizeof(query),
+             "INSERT INTO bond_position (isin, symbol, date, expiry_date, qty, price, interest_rate, strategy_id) "
+             "VALUES ('%s', '%s', '%s', '%s', %f, %f, %f, %d) ",
+             pos->isin,
+             pos->symbol,
+             pos->date,
+             pos->expiryDate,
+             pos->qty,
+             pos->price,
+             pos->interestRate,
+             stratId);
+    PGresult *res = executeQuery(conn, query);
+    PQclear(res);   
+}
+
+void
 DBInsertPosition(PGconn *conn, PositionEquity *pos, int stratId)
 {
     char query[2096];
@@ -1230,6 +1268,7 @@ LoadStrategyFromFile(Strategy *strat, char *line)
     strat->currPosIndex = -1;
     strat->currAccIndex = -1;
     strat->currFPosIndex = -1;
+    strat->currBondIndex = -1;
     strat->currInvestorIndex = -1;
 }
 
@@ -1936,6 +1975,45 @@ LoadOldFNOPosition(FNO_position *pos, char *line)
 }
 
 void
+LoadOldBondPosition(Bond_position *pos, char *line)
+{
+    char *token;
+    int i = 0;
+    while ((token = strsep(&line, ",")) != NULL)
+    {
+        if (i == 1)
+        {
+            strcpy(pos->symbol, token);
+        }
+        else if (i == 2)
+        {
+            strcpy(pos->isin, token);
+        }
+        else if (i == 3)
+        {
+            strcpy(pos->expiryDate, token);
+        }
+        else if (i == 4)
+        {
+            strcpy(pos->date, token);
+        }
+        else if (i ==  6)
+        {
+            pos->qty = (real64)atof(token);
+        }
+        else if (i == 8)
+        {
+            pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
+        }
+        else if (i == 9)
+        {
+            pos->interestRate = (real64)atof(token); // NOTE(Akhil): needs to be different.
+        }
+        i++;
+    }
+}
+
+void
 LoadOldPosition(PositionEquity *pos, char *line)
 {
     char *token;
@@ -2087,6 +2165,7 @@ loadStateFromDB(State *state)
             strat.currInvestorIndex = -1;
             strat.currFPosIndex = -1;
             strat.currAccIndex = -1;
+            strat.currBondIndex = -1;
             for (int j = 0; j < cols; j++)
             {
                 char *str = PQgetvalue(pgResult, i, j);
@@ -2137,6 +2216,10 @@ loadStateFromDB(State *state)
                 else if (j == 13)
                 {
                     strat.currAccIndex = atoi(str);
+                }
+                else if (j == 13)
+                {
+                    strat.currBondIndex = atoi(str);
                 }
                 else if (j == 8)
                 {
@@ -2234,6 +2317,59 @@ loadStateFromDB(State *state)
                         PQclear(pgResultAcc);
                     }
 
+                    // go for bond positions now.
+                    sprintf(query,
+                            "SELECT * FROM bond_position WHERE strategy_id = %d",
+                            strat.id);
+                    pgResultAcc = executeQuery(conn, query);
+                    ir = PQntuples(pgResultAcc);
+                    ic = PQnfields(pgResultAcc);
+                    if (ir == 0)
+                    {
+                        fprintf(stderr, "No fno_position found matching symbol: \n");
+                        PQclear(pgResultAcc);
+                    }
+                    else
+                    {
+                        for (int i = 0; i < ir; i++)
+                        {
+                            Bond_position pos = {};
+                            for (int j = 0; j < ic; j++)
+                            {
+                                char *str = PQgetvalue(pgResultAcc, i, j);
+                                if (j == 1)
+                                {
+                                    strcpy(pos.symbol, str);
+                                }
+                                else if (j == 2)
+                                {
+                                    strcpy(pos.isin, str);
+                                }
+                                else if (j == 3)
+                                {
+                                    strcpy(pos.date, str);
+                                }
+                                else if (j == 4)
+                                {
+                                    strcpy(pos.expiryDate, str);
+                                }
+                                else if (j == 5)
+                                {
+                                    pos.qty = (real64)atof(str);
+                                }
+                                else if (j == 6)
+                                {
+                                    pos.price = (real64)atof(str);
+                                }
+                                else if (j == 7)
+                                {
+                                    pos.interestRate = (real64)atof(str);
+                                }
+                            }
+                            strat.bondPositions[++strat.currBondIndex] = pos; 
+                        }
+                        PQclear(pgResultAcc);
+                    }
 
                     // now, add the fno_positions to the strat.
                     sprintf(query,
@@ -3694,6 +3830,37 @@ uploadPositions(FILE *secFile, State *state, int stratIndex, int stratId)
 }
 
 void
+uploadBondPositions(FILE *secFile, State *state, int stratIndex, int stratId)
+{
+    char line[1024];
+    int i = 0;
+    while (fgets(line, sizeof(line), secFile))
+    {
+        TrimString(line);
+        if (line[0] == '\0') {
+            continue; 
+        }
+        if (i == 0)
+        {
+            //TODO(Akhil): validate header in a way that res doesn't come here.
+            i++;
+            continue; // ignore the top heading row.
+        }
+        char *tmp = strchr(line, '\n');
+        if (tmp) *tmp = '\0';
+        Bond_position pos = {};
+        LoadOldBondPosition(&pos, line);
+
+        /* modify the in memory state */
+        state->strategies[stratIndex]
+            .bondPositions[++state->strategies[stratIndex].currBondIndex] = pos;
+
+        DBInsertBondPosition(state->db, &pos, stratId);
+        // printf("security is %s\n", state->secs[i - 1].name);
+    }
+}
+
+void
 uploadFNOPositions(FILE *secFile, State *state, int stratIndex, int stratId)
 {
     char line[1024];
@@ -3725,6 +3892,42 @@ uploadFNOPositions(FILE *secFile, State *state, int stratIndex, int stratId)
 }
 
 /* --------------- Api Handlers ------------------------------------------------*/
+/* Create bond */
+void
+handleBondPosition(State *state,
+                   char *stratSymbol,
+                   char *symbol,
+                   char *isin,
+                   char *date,
+                   char *expiryDate,
+                   char *interestRate,
+                   char *qty,
+                   char *price,
+                   char *res)
+{
+    Bond_position pos = {};
+    strcpy(pos.symbol, symbol);
+    strcpy(pos.date, date);
+    strcpy(pos.expiryDate, expiryDate);
+    strcpy(pos.isin, isin);
+    pos.qty = atof(qty);
+    pos.price = atof(price);
+    pos.interestRate = atof(interestRate);
+
+    /* add it in mem and in db */
+    int stratIndex = getStratIndex(state, stratSymbol);
+    state->strategies[stratIndex].
+        bondPositions[++state->strategies[stratIndex].currBondIndex] = pos;
+
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+    DBInsertBondPosition(state->db, &pos, stratId);
+}
+
 void
 handleLinkBillGroup(State *state,
                     char *invName,
@@ -4318,6 +4521,30 @@ handleUploadPositions(State *state, char *stratSymbol, char *res)
 }
 
 void
+handleUploadBondPositions(State *state, char *stratSymbol, char *res)
+{
+    FILE *upFile = fopen("tmp.csv", "r");
+    if (upFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+    }
+
+    printf("in bond positions\n");
+    /* get strat id from db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    int stratIndex = getStratIndex(state, stratSymbol);
+
+    uploadBondPositions(upFile, state, stratIndex, stratId);
+    strcpy(res, "completed");
+}
+
+void
 handleUploadFNOPositions(State *state, char *stratSymbol, char *res)
 {
     FILE *upFile = fopen("tmp.csv", "r");
@@ -4869,6 +5096,7 @@ saveDailySnapshot(PGconn *conn,
     cJSON_AddItemToObject(meta, "nav", cJSON_CreateNumber(strat->nav));
     cJSON_AddItemToObject(meta, "currPosIndex", cJSON_CreateNumber(strat->currPosIndex));
     cJSON_AddItemToObject(meta, "currFPosIndex", cJSON_CreateNumber(strat->currFPosIndex));
+    cJSON_AddItemToObject(meta, "currBondIndex", cJSON_CreateNumber(strat->currBondIndex));
     cJSON_AddItemToObject(meta, "currAccIndex", cJSON_CreateNumber(strat->currAccIndex));
     cJSON_AddItemToObject(meta, "currInvestorIndex", cJSON_CreateNumber(strat->currInvestorIndex));
     cJSON_AddItemToObject(meta, "currJournalId", cJSON_CreateNumber(strat->currJournalId));
@@ -4945,6 +5173,34 @@ saveDailySnapshot(PGconn *conn,
         cJSON_AddItemToArray(fno_pos, position);
     }
 
+    cJSON *bond_pos = cJSON_CreateArray();
+    for (int i = 0; i <= strat->currFPosIndex; i++) {
+        cJSON *position = cJSON_CreateObject();
+        cJSON_AddItemToObject(position,
+                              "symbol",
+                              cJSON_CreateString(strat->bondPositions[i].symbol));
+        cJSON_AddItemToObject(position,
+                              "expiryDate",
+                              cJSON_CreateString(strat->bondPositions[i].expiryDate));
+        cJSON_AddItemToObject(position,
+                              "qty",
+                              cJSON_CreateNumber(strat->bondPositions[i].qty));
+        cJSON_AddItemToObject(position,
+                              "price",
+                              cJSON_CreateNumber(strat->bondPositions[i].price));
+        cJSON_AddItemToObject(position,
+                              "interestRate",
+                              cJSON_CreateNumber(strat->bondPositions[i].interestRate));
+        cJSON_AddItemToObject(position,
+                              "price",
+                              cJSON_CreateNumber(strat->bondPositions[i].price));
+        cJSON_AddItemToObject(position,
+                              "isin",
+                              cJSON_CreateString(strat->bondPositions[i].isin));
+
+        cJSON_AddItemToArray(bond_pos, position);
+    }
+
     cJSON *bankAccs = cJSON_CreateArray();
     for (int i = 0; i <= strat->currAccIndex; i++) {
         cJSON *acc = cJSON_CreateObject();
@@ -4992,17 +5248,18 @@ saveDailySnapshot(PGconn *conn,
     char *meta_str = cJSON_Print(meta);
     char *eq_str = cJSON_Print(eq_pos);
     char *fno_str = cJSON_Print(fno_pos);
+    char *bond_str = cJSON_Print(bond_pos);
     char *acc_str = cJSON_Print(bankAccs);
     char *inv_str = cJSON_Print(investors);
 
     /* 4. Save to PostgreSQL using an UPSERT pattern */
     char query[8192 * 3];
     snprintf(query, sizeof(query),
-             "INSERT INTO strategy_state_snapshot (strategy_id, snapshot_date, meta_state, equity_positions, fno_positions, banks, investors) "
-             "VALUES (%d, to_date('%s', 'DD/MM/YYYY'), '%s', '%s', '%s', '%s', '%s') "
+             "INSERT INTO strategy_state_snapshot (strategy_id, snapshot_date, meta_state, equity_positions, fno_positions, banks, investors, bond_positions) "
+             "VALUES (%d, to_date('%s', 'DD/MM/YYYY'), '%s', '%s', '%s', '%s', '%s', '%s') "
              "ON CONFLICT (strategy_id, snapshot_date) DO UPDATE SET "
              "meta_state = EXCLUDED.meta_state, equity_positions = EXCLUDED.equity_positions, fno_positions = EXCLUDED.fno_positions, banks = EXCLUDED.banks;",
-             stratId, date, meta_str, eq_str, fno_str, acc_str, inv_str);
+             stratId, date, meta_str, eq_str, fno_str, acc_str, inv_str, bond_str);
 
     PGresult *res = PQexec(conn, query);
     char *error = PQresultErrorMessage(res);
@@ -6274,6 +6531,42 @@ iterate_post (void *coninfo_cls,
         con_info->strategySymbol[off + size] = '\0';
         return MHD_YES;
     }
+    else if (strcmp(key, "symbol") == 0)
+    {
+        memcpy(con_info->symbol+ off, data, size);
+        con_info->symbol[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "isin") == 0)
+    {
+        memcpy(con_info->isin+ off, data, size);
+        con_info->isin[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "expiryDate") == 0)
+    {
+        memcpy(con_info->expiryDate + off, data, size);
+        con_info->expiryDate[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "interestRate") == 0)
+    {
+        memcpy(con_info->interestRate + off, data, size);
+        con_info->interestRate[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "qty") == 0)
+    {
+        memcpy(con_info->qty + off, data, size);
+        con_info->qty[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "price") == 0)
+    {
+        memcpy(con_info->price + off, data, size);
+        con_info->price[off + size] = '\0';
+        return MHD_YES;
+    }
     else if (strcmp(key, "hurldlerate") == 0)
     {
         memcpy(con_info->hurdlerate + off, data, size);
@@ -6614,6 +6907,12 @@ answer_to_connection (void *cls,
                                      con_info->strategySymbol,
                                      con_info->answerstring);
         }
+        else if (0 == strcmp(url, "/upload-bond-positions"))
+        {
+            handleUploadBondPositions(state,
+                                     con_info->strategySymbol,
+                                     con_info->answerstring);
+        }
         else if (0 == strcmp(url, "/upload-balances"))
         {
             handleBalances(state,
@@ -6663,6 +6962,19 @@ answer_to_connection (void *cls,
                                 con_info->strategySymbol,
                                 con_info->billSymbol,
                                 con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/create-bond-position"))
+        {
+            handleBondPosition(state,
+                               con_info->strategySymbol,
+                               con_info->symbol,
+                               con_info->isin,
+                               con_info->date,
+                               con_info->expiryDate,
+                               con_info->interestRate,
+                               con_info->qty,
+                               con_info->price,
+                               con_info->answerstring);
         }
 
         return send_page (connection,

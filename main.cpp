@@ -636,6 +636,21 @@ void ConvertDateSeparator(const char *input_date, char *output, size_t output_si
     }
 }
 
+int
+getAccIndex(State *state, int stratIndex, char *str, int strlen)
+{
+    for (int i = 0; i < state->strategies[stratIndex].currAccIndex + 1; i++)
+    {
+        if (strncmp(str, state->strategies[stratIndex].accs[i].symbol, strlen) == 0)
+        {
+            return i;
+            break;
+        }
+    }
+
+    return -1;
+}
+
 /* --------------- DB helpers ------------------------------------------------*/
 PGresult *
 executeQuery(PGconn *conn, char *query)
@@ -1040,14 +1055,15 @@ DBUpdateRecv(PGconn *conn, real64 balance, int stratId)
 }
 
 void
-DBUpdateBankBalance(PGconn *conn, real64 balance, char *symbol)
+DBUpdateBankBalance(PGconn *conn, real64 balance, char *symbol, int stratId)
 {
     char query[1024];
     snprintf(query, sizeof(query),
              "UPDATE bank_account SET balance = %f "
-             "WHERE symbol = '%s'; ",
+             "WHERE symbol = '%s' AND strategy_id = %d; ",
              balance,
-             symbol); 
+             symbol,
+             stratId); 
     PGresult *res = executeQuery(conn, query);
     PQclear(res);
 }
@@ -2830,6 +2846,7 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
 int
 processTradesEq(FILE *tradeFile, int dbStratId, State *state)
 {
+    printf("in equity trades\n");
     char line[1024];
     int i = 0;
     int stratIndex = -1;
@@ -2850,7 +2867,9 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
         /* NOTE(Akhil): this overwriting of stratId here is to 
          * allow for handling a trade file containing trades for
          * multiple strategies in the same file */
-        LoadStratSymbolFromFile(line, stratSymbol);
+        char copyLine[1024];
+        strcpy(copyLine, line);
+        LoadStratSymbolFromFile(copyLine, stratSymbol);
         int stratId = getStratId(stratSymbol, state->db); 
         if (stratId < 0)
         {
@@ -2888,6 +2907,13 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
             return -2;
         }
 
+        int accIndex = getAccIndex(state, stratIndex, (char *)"SBI_", 4);
+        if (accIndex < 1)
+        {
+            printf("Couldn't find bank account, aborting!\n");
+            return -3;
+        }
+
         // apply trade to the positions state.
         strcpy(stratSymbol, state->strategies[stratIndex].symbol);
         int found = 0;
@@ -2910,16 +2936,17 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty; 
 
-                            /* NOTE(Akhil): 2 because sbirc for equities */
-                            state->strategies[stratIndex].accs[2].balance -=
+                            /* NOTE(Akhil): 1 because sbi for equities */
+                            state->strategies[stratIndex].accs[accIndex].balance -=
                                 trade.qty * priceAfterFee;
                             /* persist the accs balance. */
                             DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[2].balance,
-                                                state->strategies[stratIndex].accs[2].symbol);
+                                                state->strategies[stratIndex].accs[accIndex].balance,
+                                                state->strategies[stratIndex].accs[accIndex].symbol,
+                                                stratId);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[2].balance,
+                                     state->strategies[stratIndex].accs[1].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -2980,15 +3007,16 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             / abs(trade.qty); 
 
                             // you always get less after selling.
-                            state->strategies[stratIndex].accs[2].balance -=
+                            state->strategies[stratIndex].accs[accIndex].balance -=
                                 trade.qty * priceAfterFee; 
                             /* persist the accs balance. */
                             DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[3].balance,
-                                                state->strategies[stratIndex].accs[3].symbol);
+                                                state->strategies[stratIndex].accs[accIndex].balance,
+                                                state->strategies[stratIndex].accs[accIndex].symbol,
+                                                stratId);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[accIndex].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3087,12 +3115,13 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty;
                         // you always pay more while buying.
-                        state->strategies[stratIndex].accs[2].balance -=
+                        state->strategies[stratIndex].accs[accIndex].balance -=
                             trade.qty * priceAfterFee; 
                         /* persist the accs balance. */
                         DBUpdateBankBalance(state->db,
-                                            state->strategies[stratIndex].accs[2].balance,
-                                            state->strategies[stratIndex].accs[2].symbol);
+                                            state->strategies[stratIndex].accs[accIndex].balance,
+                                            state->strategies[stratIndex].accs[accIndex].symbol,
+                                            stratId);
                         snprintf(query, sizeof(query),
                                  "UPDATE strategy SET cash = %f WHERE id = %d",
                                  state->strategies[stratIndex].accs[3].balance,
@@ -3138,11 +3167,12 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             trade.qty * priceAfterFee;
                         /* persist the accs balance. */
                         DBUpdateBankBalance(state->db,
-                                            state->strategies[stratIndex].accs[2].balance,
-                                            state->strategies[stratIndex].accs[2].symbol);
+                                            state->strategies[stratIndex].accs[accIndex].balance,
+                                            state->strategies[stratIndex].accs[accIndex].symbol,
+                                            stratId);
                         snprintf(query, sizeof(query),
                                  "UPDATE strategy SET cash = %f WHERE id = %d",
-                                 state->strategies[stratIndex].accs[3].balance,
+                                 state->strategies[stratIndex].accs[accIndex].balance,
                                  dbStratId
                                  );
                         pgResult = executeQuery(state->db, query);
@@ -3182,7 +3212,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
             DBInsertLedgerEntry(state->db, &assetEntry, dbStratId);
             DBInsertLedgerEntry(state->db, &liabEntry, dbStratId);
         }
-        printf("cash is %f\n", state->strategies[stratIndex].accs[2].balance);
+        printf("cash is %f\n", state->strategies[stratIndex].accs[accIndex].balance);
         
     }
     return stratIndex;
@@ -3254,6 +3284,12 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             return -2;
         }
 
+        int accIndex = getAccIndex(state, stratIndex, (char *)"SBIRC_", 6);
+        if (accIndex < 1)
+        {
+            printf("Couldn't find bank account, aborting!\n");
+            return -3;
+        }
         // apply trade to the positions state.
         strcpy(stratSymbol, state->strategies[stratIndex].symbol);
         int found = 0;
@@ -3288,15 +3324,16 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                                 / trade.qty; 
 
                             /* NOTE(Akhil): 3 because sbirc for options/fut */
-                            state->strategies[stratIndex].accs[3].balance -=
+                            state->strategies[stratIndex].accs[accIndex].balance -=
                                 trade.qty * priceAfterFee;
                             // persist the accs balance.
                             DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[3].balance,
-                                                state->strategies[stratIndex].accs[3].symbol);
+                                                state->strategies[stratIndex].accs[accIndex].balance,
+                                                state->strategies[stratIndex].accs[accIndex].symbol,
+                                                stratId);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[accIndex].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3357,15 +3394,16 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                                 / abs(trade.qty); 
 
                             // you always get less after selling.
-                            state->strategies[stratIndex].accs[3].balance -=
+                            state->strategies[stratIndex].accs[accIndex].balance -=
                                 trade.qty * priceAfterFee;
                             // persist the accs balance.
                             DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[3].balance,
-                                                state->strategies[stratIndex].accs[3].symbol);
+                                                state->strategies[stratIndex].accs[accIndex].balance,
+                                                state->strategies[stratIndex].accs[accIndex].symbol,
+                                                stratId);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[accIndex].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3469,15 +3507,16 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                         // you always pay more while buying.
                         if (pos.instType != FUTSTK)
                         {
-                            state->strategies[stratIndex].accs[3].balance -=
+                            state->strategies[stratIndex].accs[accIndex].balance -=
                                 trade.qty * priceAfterFee;
                             // persist the accs balance.
                             DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[3].balance,
-                                                state->strategies[stratIndex].accs[3].symbol);
+                                                state->strategies[stratIndex].accs[accIndex].balance,
+                                                state->strategies[stratIndex].accs[accIndex].symbol,
+                                                stratId);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[accIndex].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3519,15 +3558,16 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                         // you always get less after selling.
                         if (pos.instType != FUTSTK)
                         {
-                            state->strategies[stratIndex].accs[3].balance -=
+                            state->strategies[stratIndex].accs[accIndex].balance -=
                                 trade.qty * priceAfterFee;
                             // persist the accs balance.
                             DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[3].balance,
-                                                state->strategies[stratIndex].accs[3].symbol);
+                                                state->strategies[stratIndex].accs[accIndex].balance,
+                                                state->strategies[stratIndex].accs[accIndex].symbol,
+                                                stratId);
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[3].balance,
+                                     state->strategies[stratIndex].accs[accIndex].balance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3581,7 +3621,7 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             DBInsertLedgerEntry(state->db, &assetEntry, dbStratId);
             DBInsertLedgerEntry(state->db, &liabEntry, dbStratId);
         }
-        printf("cash is %f\n", state->strategies[stratIndex].accs[3].balance);
+        printf("cash is %f\n", state->strategies[stratIndex].accs[accIndex].balance);
     }
     return stratIndex;
 }
@@ -3714,6 +3754,13 @@ collapsePositions(State *state, int stratIndex)
 void
 makeVariationSettlements(State *state, int dbStratId, int stratIndex)
 {
+    int accIndex = getAccIndex(state, stratIndex, (char *)"SBIRC_", 6);
+    if (accIndex < 1)
+    {
+        printf("Couldn't find bank account, aborting!\n");
+        return;
+    }
+
     real64 totalVariation = 0.0;
     for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
     {
@@ -3722,11 +3769,15 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
         {
             real64 variation = pos.qty * (pos.ltp - pos.price); 
             printf("variation of %f against %s\n", variation, pos.symbol);
-            state->strategies[stratIndex].cash += variation;
+            state->strategies[stratIndex].accs[accIndex].balance += variation;
+            DBUpdateBankBalance(state->db,
+                                state->strategies[stratIndex].accs[accIndex].balance,
+                                state->strategies[stratIndex].accs[accIndex].symbol,
+                                dbStratId);
             char query[1024];
             sprintf(query,
                     "UPDATE strategy SET cash = %f where id = %d",
-                    state->strategies[stratIndex].cash,
+                    state->strategies[stratIndex].accs[accIndex].balance,
                     dbStratId);
             PGresult *pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
@@ -4630,7 +4681,7 @@ handleBalances(State *state, char *stratSymbol, char *res)
                     /* modify the in memory state */
                     state->strategies[stratIndex].accs[i].balance = bal.balance;
 
-                    DBUpdateBankBalance(state->db, bal.balance, bal.symbol); 
+                    DBUpdateBankBalance(state->db, bal.balance, bal.symbol, stratId); 
                     break;
                 }
             }
@@ -4853,7 +4904,8 @@ handleOffBank(State *state, char *invName, char *res)
                     // db.
                     DBUpdateBankBalance(state->db,
                                         state->strategies[state->currStratIndex].accs[i].balance,
-                                        liabEntry.accountName);
+                                        liabEntry.accountName,
+                                        stratId);
                 }
             }
             PQclear(pgResult);
@@ -4896,7 +4948,8 @@ handleOffBank(State *state, char *invName, char *res)
                     // db.
                     DBUpdateBankBalance(state->db,
                                         state->strategies[state->currStratIndex].accs[i].balance,
-                                        assetEntry.accountName);
+                                        assetEntry.accountName,
+                                        stratId);
                 }
             }
             PQclear(pgResult);
@@ -5686,6 +5739,7 @@ handleBhavFNO(State *state, char *date, char *stratSymbol, char *res)
 void
 handleTradesEq(State *state, char *res)
 {
+    printf("in handle trades equity\n");
     FILE *FTradesFile = fopen("tmp.csv", "r");
     if (FTradesFile == NULL)
     {
@@ -5710,11 +5764,11 @@ handleTradesEq(State *state, char *res)
         if (i == 0)
         {
             TrimString(copyLine);
-            if(ValidateCsvHeader(copyLine, fnoTradesHeader) != 0)
-            {
-                strcpy(res, invalidfileformaterror);
-                return;
-            }
+            // if(ValidateCsvHeader(copyLine, fnoTradesHeader) != 0)
+            // {
+            //     strcpy(res, invalidfileformaterror);
+            //     return;
+            // }
             i++;
             continue; // ignore the top heading row.
         }
@@ -6230,7 +6284,8 @@ handleBankTransfer(State *state, char *res)
                     // db.
                     DBUpdateBankBalance(state->db,
                                         state->strategies[state->currStratIndex].accs[i].balance,
-                                        liabEntry.accountName);
+                                        liabEntry.accountName,
+                                        stratId);
                 }
             }
             PQclear(pgResult);
@@ -6275,7 +6330,8 @@ handleBankTransfer(State *state, char *res)
                     // db.
                     DBUpdateBankBalance(state->db,
                                         state->strategies[state->currStratIndex].accs[i].balance,
-                                        assetEntry.accountName);
+                                        assetEntry.accountName,
+                                        stratId);
                 }
             }
             PQclear(pgResult);

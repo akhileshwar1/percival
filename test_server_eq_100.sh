@@ -191,7 +191,7 @@ curl -v -X POST \
 # 10. Trades
 curl -v -X POST \
     -F "file=@alpha_100/eq_trades_alpha100.csv" \
-    $SERVER/trades-eq
+    $SERVER/trades-equity
 
 curl -v -X POST \
     -F "file=@alpha_100/eq_trades_alpha_100_FNO.csv" \

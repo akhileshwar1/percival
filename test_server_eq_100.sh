@@ -168,6 +168,11 @@ curl -v -X POST \
 
 curl -v -X POST \
     -F "strategySymbol=B105S29B" \
+    -F "file=@alpha_100/21_Price Update_TVSMNCRPS.csv" \
+    $SERVER/price-update
+
+curl -v -X POST \
+    -F "strategySymbol=B105S29B" \
     -F "date=01/04/2026" \
     -F "file=@alpha_500/WO010426.CSV" \
     $SERVER/bhav-fno
@@ -188,12 +193,21 @@ curl -v -X POST \
     -F "file=@alpha_100/eq_trades_alpha100.csv" \
     $SERVER/trades-eq
 
+curl -v -X POST \
+    -F "file=@alpha_100/eq_trades_alpha_100_FNO.csv" \
+    $SERVER/trades-fno
+
 # 11. eq Bhavcopy
 curl -v -X POST \
     -F "strategySymbol=B105S29B" \
     -F "date=02/04/2026" \
     -F "file=@alpha_500/Bhavcopies/WE020426.CSV" \
     $SERVER/bhav-eq
+
+curl -v -X POST \
+    -F "strategySymbol=B105S29B" \
+    -F "file=@alpha_100/21_Price Update_TVSMNCRPSS.csv" \
+    $SERVER/price-update
 
 curl -v -X POST \
     -F "strategySymbol=B105S29B" \

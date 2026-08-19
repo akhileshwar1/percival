@@ -2643,6 +2643,63 @@ getStratIndex(State *state, char *stratSymbol)
 }
 
 void
+processPriceUpdates(FILE *bhavFile,
+                    int stratIndex,
+                    int stratId,
+                    State *state)
+{
+    char line[1024];
+    int i = 0;
+    while (fgets(line, sizeof(line), bhavFile))
+    {
+        TrimString(line);
+
+        if (line[0] == '\0') {
+            continue; 
+        } 
+
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        PriceUpdate update = {};
+        LoadPriceUpdate(&update, line);
+        /* NOTE(Akhil): The symbol may be present in multiple strats,
+                        need to update the posns in all of them. */
+        for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
+        {
+            if (strcmp(update.symbol,
+                       state->strategies[stratIndex].positions[i].symbol) == 0)
+            {
+                state->strategies[stratIndex].positions[i].ltp = update.price;
+                char query[512];
+                snprintf(query, sizeof(query),
+                         "INSERT INTO equity_bhav (symbol, ltp, date) VALUES ('%s', %f, to_date('%s', 'DD/MM/YYYY')) "
+                         "ON CONFLICT (symbol) DO UPDATE SET "
+                         "ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
+                         update.symbol,
+                         update.price,
+                         update.date
+                         ); 
+                PGresult *pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+
+                snprintf(query, sizeof(query),
+                         "UPDATE position_equity SET ltp = %f WHERE symbol = '%s' AND strategy_id = %d",
+                         update.price,
+                         state->strategies[stratIndex].positions[i].symbol,
+                         stratId
+                         );
+                pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+            }
+        }
+        // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
+    }
+}
+
+void
 processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
 {
     char line[1024];
@@ -2756,10 +2813,11 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
 
                 snprintf(query, sizeof(query),
                          "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
-                         "AND expiry = '%s'",
+                         "AND expiry = '%s' AND strike = %f",
                          bhav.ltp,
                          state->strategies[stratIndex].fpositions[i].symbol,
-                         state->strategies[stratIndex].fpositions[i].expiry
+                         state->strategies[stratIndex].fpositions[i].expiry,
+                         state->strategies[stratIndex].fpositions[i].strike
                          );
                 pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
@@ -3149,7 +3207,9 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
         /* NOTE(Akhil): this overwriting of stratId here is to 
          * allow for handling a trade file containing trades for
          * multiple strategies in the same file */
-        LoadStratSymbolFromFile(line, stratSymbol);
+        char copyLine[1024];
+        strcpy(copyLine, line);
+        LoadStratSymbolFromFile(copyLine, stratSymbol);
         int stratId = getStratId(stratSymbol, state->db); 
         if (stratId < 0)
         {
@@ -3355,11 +3415,13 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                 // persist the updates to price and qty.
                 snprintf(query, sizeof(query),
                          "UPDATE fno_position SET price = %f, qty = %d, pnl = %f "
-                         " WHERE sys_id = '%s'",
+                         " WHERE symbol = '%s' AND expiry = '%s' AND strike = %f",
                          state->strategies[stratIndex].fpositions[i].price,
                          state->strategies[stratIndex].fpositions[i].qty,
                          state->strategies[stratIndex].fpositions[i].pnl,
-                         state->strategies[stratIndex].fpositions[i].sys_id
+                         state->strategies[stratIndex].fpositions[i].symbol,
+                         state->strategies[stratIndex].fpositions[i].expiry,
+                         state->strategies[stratIndex].fpositions[i].strike
                          );
                 pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
@@ -3558,6 +3620,31 @@ printPositions(State *state, int stratIndex)
                pos.ltp,
                pos.qty * pos.ltp);
     }
+    printf("fno positions============\n");
+
+    for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+    {
+        FNO_position pos = state->strategies[stratIndex].fpositions[i];
+        printf("name: %s, qty : %d, price: %f, ltp : %f, \
+                value : %f\n",
+               pos.symbol,
+               pos.qty,
+               pos.price,
+               pos.ltp,
+               pos.qty * pos.ltp);
+    }
+
+    printf("bond positions============\n");
+    for (int i = 0; i < state->strategies[stratIndex].currBondIndex + 1; i++)
+    {
+        Bond_position pos = state->strategies[stratIndex].bondPositions[i];
+        printf("name: %s, qty : %f, price: %f, \
+                value : %f\n",
+               pos.symbol,
+               pos.qty,
+               pos.price,
+               pos.qty * pos.price);
+    }
 }
 
 void
@@ -3648,9 +3735,10 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
             // so that the next time variation is correct.
             pos.price = pos.ltp;
             sprintf(query,
-                    "UPDATE fno_position SET price = %f where sys_id = '%s'",
+                    "UPDATE fno_position SET price = %f where symbol = '%s' AND strike = %f",
                     pos.ltp,
-                    pos.sys_id);
+                    pos.symbol,
+                    pos.strike);
             pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
             state->strategies[stratIndex].fpositions[i] = pos;
@@ -3683,6 +3771,7 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
             DBInsertLedgerEntry(state->db, &liabEntry, dbStratId);
         }
     }
+    printf("total variation is %f\n", totalVariation);
 }
 
 real64
@@ -5527,6 +5616,29 @@ handleMTM(State *state, char *stratSymbol, char *res)
 }
 
 void
+handlePriceUpdate(State *state, char *stratSymbol, char *res)
+{
+    FILE *FBhavFile = fopen("tmp.csv", "r");
+    if (FBhavFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
+    }
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    /* get the stratIndex from the memory */
+    int stratIndex = getStratIndex(state, stratSymbol);
+    processPriceUpdates(FBhavFile, stratIndex, stratId, state);
+    strcpy(res, "completed");
+}
+
+void
 handleBhavEq(State *state, char *date, char *stratSymbol, char *res)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
@@ -6911,6 +7023,10 @@ answer_to_connection (void *cls,
         else if (0 == strcmp(url, "/bhav-eq"))
         {
             handleBhavEq(state, con_info->date, con_info->strategySymbol, con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/price-update"))
+        {
+            handlePriceUpdate(state, con_info->strategySymbol, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/mtm-process"))
         {

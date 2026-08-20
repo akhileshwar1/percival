@@ -3276,7 +3276,7 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
         PQclear(pgResult);
 
         // find the strategy index first.
-        int stratIndex = getStratIndex(state, trade.strategySymbol);
+        stratIndex = getStratIndex(state, trade.strategySymbol);
 
         if (stratIndex == -1)
         {
@@ -3290,6 +3290,7 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             printf("Couldn't find bank account, aborting!\n");
             return -3;
         }
+
         // apply trade to the positions state.
         strcpy(stratSymbol, state->strategies[stratIndex].symbol);
         int found = 0;

@@ -3875,8 +3875,7 @@ getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
         }
     }
 
-    /* add the receivables now */
-    totalCashUSD += state->strategies[stratIndex].receivable;
+    
     totalCashUSD += (totalCashINR / exRate->rate);
     return totalCashUSD;
 }
@@ -3919,20 +3918,23 @@ printNav(State *state, Exchange_rate *exRate,
     real64 totalValueUSD = totalValue / exRate->rate;
     printf("total position value in usd is %f\n", totalValueUSD);
     printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
-    real64 netAssets = totalValueUSD + cashUSD;
-    printf("net assets are %f\n", netAssets);
-    real64 fee = netAssets * (0.01 / 365); // 1% p.a
+    /* accrue interest of the day for all bond positions */
+    real64 TDS = state->strategies[stratIndex].TDS; 
+    accrueInterest(state, stratIndex, dbStratId, exRate->rate);
+    real64 interestAccrued = state->strategies[stratIndex].interestAccrued;
+    /* add the receivables now */
+    real64 receivable = state->strategies[stratIndex].receivable;
+    real64 grossAssets = totalValueUSD + cashUSD - TDS + interestAccrued + receivable;
+    printf("gross assets are %f\n", grossAssets);
+    real64 fee = grossAssets * (0.01 / 365); // 1% p.a
     state->strategies[stratIndex].feesAccrued += fee;
     real64 feesAccrued = state->strategies[stratIndex].feesAccrued; 
-    real64 TDS = state->strategies[stratIndex].TDS; 
     DBUpdateFee(state->db, feesAccrued, dbStratId); 
     char query[1024];
     printf("fee accrued %f, %f\n", fee, feesAccrued);
-    /* accrue interest of the day for all bond positions */
-    accrueInterest(state, stratIndex, dbStratId, exRate->rate);
-    real64 interestAccrued = state->strategies[stratIndex].interestAccrued;
-    printf("net %f\n", (netAssets - feesAccrued - TDS + interestAccrued));
-    real64 nav = (netAssets - feesAccrued - TDS + interestAccrued) / totalUnits;
+    real64 netAssets = grossAssets - feesAccrued;
+    printf("net assets %f\n", (netAssets));
+    real64 nav = (netAssets) / totalUnits;
     /* persist nav in its own seperate table. */
     snprintf(query, sizeof(query),
              "INSERT INTO strategy_nav (strategy_id, nav_date, nav) "

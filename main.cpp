@@ -2829,11 +2829,14 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
 
                 snprintf(query, sizeof(query),
                          "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
-                         "AND expiry = '%s' AND strike = %f",
+                         "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
+                         "AND inst_type = '%s';",
                          bhav.ltp,
                          state->strategies[stratIndex].fpositions[i].symbol,
                          state->strategies[stratIndex].fpositions[i].expiry,
-                         state->strategies[stratIndex].fpositions[i].strike
+                         state->strategies[stratIndex].fpositions[i].strike,
+                         OptTypeStrings[state->strategies[stratIndex].fpositions[i].optType],
+                         InstrumentTypeStrings[state->strategies[stratIndex].fpositions[i].instType]
                          );
                 pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
@@ -3306,6 +3309,8 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                 trade.optType &&
                 state->strategies[stratIndex].fpositions[i].instType !=
                 FUTSTK &&
+                state->strategies[stratIndex].fpositions[i].instType !=
+                FUTIDX &&
                 state->strategies[stratIndex].fpositions[i].instType ==
                 trade.instType)
             {
@@ -3454,13 +3459,16 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                 // persist the updates to price and qty.
                 snprintf(query, sizeof(query),
                          "UPDATE fno_position SET price = %f, qty = %d, pnl = %f "
-                         " WHERE symbol = '%s' AND expiry = '%s' AND strike = %f",
+                         "WHERE symbol = '%s' AND expiry = '%s' AND strike = %f "
+                         "AND opt_type = '%s' AND inst_type = '%s';",
                          state->strategies[stratIndex].fpositions[i].price,
                          state->strategies[stratIndex].fpositions[i].qty,
                          state->strategies[stratIndex].fpositions[i].pnl,
                          state->strategies[stratIndex].fpositions[i].symbol,
                          state->strategies[stratIndex].fpositions[i].expiry,
-                         state->strategies[stratIndex].fpositions[i].strike
+                         state->strategies[stratIndex].fpositions[i].strike,
+                         OptTypeStrings[state->strategies[stratIndex].fpositions[i].optType],
+                         InstrumentTypeStrings[state->strategies[stratIndex].fpositions[i].instType]
                          );
                 pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
@@ -3506,7 +3514,7 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                             (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty;
                         // you always pay more while buying.
-                        if (pos.instType != FUTSTK)
+                        if (pos.instType != FUTSTK && pos.instType != FUTIDX)
                         {
                             state->strategies[stratIndex].accs[accIndex].balance -=
                                 trade.qty * priceAfterFee;
@@ -3557,7 +3565,7 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                             / abs(trade.qty);
 
                         // you always get less after selling.
-                        if (pos.instType != FUTSTK)
+                        if (pos.instType != FUTSTK && pos.instType != FUTIDX)
                         {
                             state->strategies[stratIndex].accs[accIndex].balance -=
                                 trade.qty * priceAfterFee;
@@ -3766,7 +3774,7 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
     for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
     {
         FNO_position pos = state->strategies[stratIndex].fpositions[i];
-        if (pos.instType == FUTSTK)
+        if (pos.instType == FUTSTK || pos.instType == FUTIDX)
         {
             real64 variation = pos.qty * (pos.ltp - pos.price); 
             printf("variation of %f against %s\n", variation, pos.symbol);
@@ -3787,10 +3795,15 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
             // so that the next time variation is correct.
             pos.price = pos.ltp;
             sprintf(query,
-                    "UPDATE fno_position SET price = %f where symbol = '%s' AND strike = %f",
+                    "UPDATE fno_position SET price = %f where symbol = '%s' "
+                    "AND strike = %f AND expiry = '%s' AND opt_type = '%s' "
+                    "AND inst_type = '%s';",
                     pos.ltp,
                     pos.symbol,
-                    pos.strike);
+                    pos.strike,
+                    pos.expiry,
+                    OptTypeStrings[pos.optType],
+                    InstrumentTypeStrings[pos.instType]);
             pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
             state->strategies[stratIndex].fpositions[i] = pos;
@@ -3841,7 +3854,7 @@ getTotalPositionValue(State *state, int stratIndex)
     for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
     {
         FNO_position pos = state->strategies[stratIndex].fpositions[i];
-        if (pos.instType != FUTSTK)
+        if (pos.instType != FUTSTK && pos.instType != FUTIDX)
         {
             totalValue  += pos.qty * pos.ltp;
         }

@@ -77,13 +77,13 @@ curl -v -X POST \
 #
 
 curl -v -X POST \
-    -F "file=@alpha_India_FNO_Levered/eq_trades_India_FNO_Levered_.csv" \
+    -F "file=@alpha_India_FNO_Levered/eq_trades_India_FNO_Levered.csv" \
     $SERVER/trades-fno
 
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
     -F "date=01/04/2026" \
-    -F "file=@alpha_India_FNO_Levered/eq_bhav_1_alpha_India_FNO_Levered.CSV" \
+    -F "file=@alpha_India_FNO_Levered/eq_bhav_1_India_FNO_Levered.CSV" \
     $SERVER/bhav-fno
 
 # 12. MTM Process
@@ -102,6 +102,11 @@ curl -v -X POST \
 #     -F "file=@alpha_India_FNO_Levered/21_Price Update_TVSMNCRPSS.csv" \
 #     $SERVER/price-update
 #
+
+curl -v -X POST \
+    -F "file=@alpha_India_FNO_Levered/eq_trades_India_FNO_Levered_2.csv" \
+    $SERVER/trades-fno
+
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
     -F "date=02/04/2026" \

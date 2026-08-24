@@ -113,6 +113,13 @@ curl -v -X POST \
     -F "file=@alpha_500/WO020426.CSV" \
     $SERVER/bhav-fno
 
+# sensex bhav
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=01/04/2026" \
+    -F "file=@alpha_India_FNO/bhav_sensex_2_apr.CSV" \
+    $SERVER/bse-bhav
+
 # 12. MTM Process
 curl -v -X POST \
     -F "strategySymbol=31500012A" \

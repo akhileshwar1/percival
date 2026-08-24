@@ -612,6 +612,25 @@ mmddyyyy_to_ddmmyyyy(const char *in, char *out)
     sprintf(out, "%02d/%02d/%04d", day, month, year);
 }
 
+/* yyyy-mm-dd to dd/mm/yyyy */
+void
+yyyymmdd_to_ddmmyyyy(const char *in, char *out)
+{
+    int month, day, year;
+
+    if (sscanf(in, "%d-%d-%d", &year, &month, &day) != 3)
+    {
+        out[0] = '\0';   // Invalid date
+        return;
+    }
+
+    // Convert 2-digit year if necessary
+    if (year < 100)
+        year += 2000;
+
+    sprintf(out, "%02d/%02d/%04d", day, month, year);
+}
+
 /* 30-06-2026 to 30/06/2026 */
 void ConvertDateSeparator(const char *input_date, char *output, size_t output_size)
 {
@@ -1092,6 +1111,54 @@ DBUpdateTDS(PGconn *conn, real64 balance, int stratId)
     PQclear(res);
 }
 /* --------------- Loaders/Parsers ------------------------------------------------*/
+void
+LoadBSEBhav(FNO_bhav *bhav, char *line)
+{
+    char *token;
+    int i = 0;
+    bhav->instType = OPTIDX; // default
+    while ((token = strsep(&line, ",")) != NULL)
+    {
+        if (i == 7)
+        {
+            strcpy(bhav->symbol, token);
+        }
+        else if (i == 9)
+        {
+            char output[11]; // "DD/MM/YYYY" requires 10 chars + 1 for null terminator
+
+            yyyymmdd_to_ddmmyyyy(token, output);
+            strcpy(bhav->expiry, output);
+        }
+        else if (i == 11)
+        {
+            bhav->strike = (real64)atof(token);
+        }
+        else if (i == 12)
+        {
+            if (strcmp(token, "PE") == 0)
+            {
+                bhav->optType = PE;
+            }
+            else if (strcmp(token, "CE") == 0)
+            {
+                bhav->optType = CE;
+            }
+            else
+            {
+                bhav->optType = NA;
+                bhav->instType = FUTIDX; // usually sensex future. 
+                bhav->strike = 0;
+            }
+        }
+        else if (i == 18)
+        {
+            bhav->ltp = (real64)atof(token);
+        }
+        i++;
+    }
+}
+
 void
 LoadFNOBhav(FNO_bhav *bhav, char *line)
 {
@@ -2769,6 +2836,84 @@ processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
     }
 }
 
+/* TODO(AKHIL): abstract this and fno one */
+void
+processBhavBSE(FILE *bhavFile, char *date, int dbStratId,
+               int stratIndex, State *state)
+{
+    char line[4096];
+    int i = 0;
+    while (fgets(line, sizeof(line), bhavFile))
+    {
+        TrimString(line);
+
+        if (line[0] == '\0') {
+            continue; 
+        } 
+
+        if (i == 0)
+        {
+            i++;
+            continue; // ignore the top heading row.
+        }
+        FNO_bhav bhav = {};
+        LoadBSEBhav(&bhav, line);
+        strcpy(bhav.date, date);
+        /* NOTE(Akhil): The symbol may be present in multiple strats,
+                        need to update the posns in all of them. */
+        for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+        {
+
+            if (strcmp(bhav.symbol,
+                       state->strategies[stratIndex].fpositions[i].symbol) == 0 &&
+                strcmp(bhav.expiry,
+                       state->strategies[stratIndex].fpositions[i].expiry) == 0 &&
+                bhav.strike == state->strategies[stratIndex].fpositions[i].strike &&
+                bhav.optType == state->strategies[stratIndex].fpositions[i].optType &&
+                bhav.instType == state->strategies[stratIndex].fpositions[i].instType)
+            {
+                state->strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
+
+                printf("pos after bhav is %s, %d, %f\n",
+                       state->strategies[stratIndex].fpositions[i].symbol,
+                       state->strategies[stratIndex].fpositions[i].qty,
+                       state->strategies[stratIndex].fpositions[i].ltp);
+                // persist the matched bhav and update the position.
+                char query[512];
+                snprintf(query, sizeof(query),
+                         "INSERT INTO fno_bhav (strategy_id, symbol, ltp, expiry, strike, opt_type, inst_type, date) "
+                         "VALUES (%d, '%s', %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s', to_date('%s', 'DD/MM/YYYY'));",
+                         dbStratId,
+                         bhav.symbol,
+                         bhav.ltp,
+                         bhav.expiry,
+                         bhav.strike,
+                         OptTypeStrings[bhav.optType],
+                         InstrumentTypeStrings[bhav.instType],
+                         bhav.date
+                         );
+                PGresult *pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+
+                snprintf(query, sizeof(query),
+                         "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
+                         "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
+                         "AND inst_type = '%s';",
+                         bhav.ltp,
+                         state->strategies[stratIndex].fpositions[i].symbol,
+                         state->strategies[stratIndex].fpositions[i].expiry,
+                         state->strategies[stratIndex].fpositions[i].strike,
+                         OptTypeStrings[state->strategies[stratIndex].fpositions[i].optType],
+                         InstrumentTypeStrings[state->strategies[stratIndex].fpositions[i].instType]
+                         );
+                pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+            }
+        }
+        // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
+    }
+}
+
 void
 processBhav(FILE *bhavFile, char *date, int dbStratId,
             int stratIndex, State *state)
@@ -3907,6 +4052,7 @@ accrueInterest(State *state, int stratIndex, int stratId, real64 exRate)
 
     /* update the mem as well as the db, always in USD */
     state->strategies[stratIndex].interestAccrued += (totalInterestToAccrue / exRate);
+    printf("total interest accrued in usd is %f\n", state->strategies[stratIndex].interestAccrued);
     DBUpdateInterest(state->db, state->strategies[stratIndex].interestAccrued, stratId);
 }
 
@@ -5726,6 +5872,33 @@ handleBhavEq(State *state, char *date, char *stratSymbol, char *res)
 }
 
 void
+handleBhavBSE(State *state, char *date, char *stratSymbol, char *res)
+{
+    FILE *FBhavFile = fopen("tmp.csv", "r");
+    if (FBhavFile == NULL)
+    {
+        printf("sorry, couldn't upload file!\n");
+        strcpy(res, "couldn't upload file");
+        return;
+    }
+    /* fetch the strategy's id from the db */
+    int stratId = getStratId(stratSymbol, state->db); 
+    if (stratId < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    /* get the stratIndex from the memory */
+    int stratIndex = getStratIndex(state, stratSymbol);
+    printf("strat index is %d\n", stratIndex);
+
+    /* TODO(Akhil) : format error for bhav file */
+    processBhavBSE(FBhavFile, date, stratId, stratIndex, state);
+    strcpy(res, "completed");
+}
+
+void
 handleBhavFNO(State *state, char *date, char *stratSymbol, char *res)
 {
     FILE *FBhavFile = fopen("tmp.csv", "r");
@@ -7222,6 +7395,13 @@ answer_to_connection (void *cls,
                                con_info->qty,
                                con_info->price,
                                con_info->answerstring);
+        }
+        else if (0 == strcmp(url, "/bse-bhav"))
+        {
+            handleBhavBSE(state,
+                          con_info->date,
+                          con_info->strategySymbol,
+                          con_info->answerstring);
         }
 
         return send_page (connection,

@@ -55,6 +55,11 @@ curl -v -X POST \
     -F "file=@alpha_India_Combined/Eq_units/eq_units _Hemant N.csv" \
     $SERVER/allot-units
 
+curl -v -X POST \
+    -F "strategySymbol=31500012C" \
+    -F "file=@alpha_India_Combined/eq_fno_positions_India_Combined.csv" \
+    $SERVER/upload-fno-positions
+
 # 8. upload balances. 
 curl -v -X POST \
     -F "strategySymbol=31500012C" \

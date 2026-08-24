@@ -79,13 +79,13 @@ curl -v -X POST \
 # 8. upload old positions. 
 curl -v -X POST \
     -F "strategySymbol=31500012B" \
-    -F "file=@alpha_India_FNO_Beta/eq_fno_positions_India_FNO_Beta.csv" \
+    -F "file=@alpha_India_FNO_Beta/eq_fno_positions_FNO_Beta.csv" \
     $SERVER/upload-fno-positions
 
 # 8. upload balances. 
 curl -v -X POST \
     -F "strategySymbol=31500012B" \
-    -F "file=@alpha_India_FNO_Beta/eq_balances_INDIA_FNO_Beta.csv" \
+    -F "file=@alpha_India_FNO_Beta/eq_balances_India_FNO_Beta.csv" \
     $SERVER/upload-balances
 
 # # corp action
@@ -104,7 +104,7 @@ curl -v -X POST \
 #
 
 curl -v -X POST \
-    -F "file=@alpha_India_FNO_Beta/eq_trades_India_FNO_Beta_.csv" \
+    -F "file=@alpha_India_FNO_Beta/eq_trades_India_FNO_Beta.csv" \
     $SERVER/trades-fno
 
 curl -v -X POST \

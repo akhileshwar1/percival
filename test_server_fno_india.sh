@@ -8,15 +8,16 @@ curl -v -X POST \
     -F "file=@alpha_India_FNO/eq_strat_India_FNO.csv" \
     $SERVER/create-strategy
 
-# # create bill group
-# curl -v -X POST \
-#     -F "billSymbol=Biller" \
-#     -F "hurdlerate=-50" \
-#     -F "frequency=ANNIVERSARY" \
-#     -F "perfFee=20" \
-#     -F "date=21/03/2024" \
-#     $SERVER/bill-group
-#
+# create bill group
+curl -v -X POST \
+    -F "billSymbol=Biller" \
+    -F "hurdlerate=-50" \
+    -F "frequency=ANNIVERSARY" \
+    -F "perfFee=20" \
+    -F "mgmtFee=1.5" \
+    -F "date=21/03/2024" \
+    $SERVER/bill-group
+
 # 1. Exchange Rate
 curl -v -X POST \
     -F "strategySymbol=B105S29E" \

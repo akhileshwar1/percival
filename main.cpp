@@ -122,6 +122,7 @@ typedef struct
     char isin[100];
     char frequency[100];
     char perfFee[100];
+    char mgmtFee[100];
     char billSymbol[100];
     char invName[100];
 
@@ -184,6 +185,7 @@ typedef struct
     char date[100];
     real64 hurdlerate;
     real64 perfFee;
+    real64 mgmtFee;
     Bill_group_frequency frequency;
 } Bill_group;
 
@@ -370,6 +372,7 @@ typedef struct
 typedef struct
 {
     char symbol[100];
+    char billGroup[100];
     real64 cash;
     real64 nav;
     real64 feesAccrued;
@@ -716,8 +719,9 @@ DBLoadBillGroup(PGconn *conn, Bill_group *bill, char *billSymbol)
         return;
     }
     bill->perfFee = atof(PQgetvalue(pgResult, 0, 3));
+    bill->mgmtFee = atof(PQgetvalue(pgResult, 0, 4));
     bill->hurdlerate = atof(PQgetvalue(pgResult, 0, 2));
-    char *frequencyStr = PQgetvalue(pgResult, 0, 4);
+    char *frequencyStr = PQgetvalue(pgResult, 0, 5);
     if (0 == strcmp("ANNIVERSARY", frequencyStr)) bill->frequency = ANNIVERSARY;
     else if (0 == strcmp("ANNUAL", frequencyStr)) bill->frequency = ANNUAL;
     else if (0 == strcmp("FIN", frequencyStr)) bill->frequency = FIN;
@@ -1319,32 +1323,6 @@ LoadSecurity(Security *sec, State *state, char *line)
 }
 
 void
-LoadStrategy(Strategy *strat, char *line)
-{
-    char *token;
-    token = strtok(line, ",");
-    int i = 0;
-    while (token != NULL)
-    {
-        if (i == 0)
-        {
-            strcpy(strat->symbol, token);
-        }
-        else if (i ==  4)
-        {
-            strat->cash = (real64)atof(token);
-        }
-        else if (i ==  6)
-        {
-            strat->nav = (real64)atof(token);
-        }
-        token = strtok(NULL, ",");
-        i++;
-    }
-    strat->currInvestorIndex = -1;
-}
-
-void
 LoadStrategyFromFile(Strategy *strat, char *line)
 {
     char *token;
@@ -1355,6 +1333,10 @@ LoadStrategyFromFile(Strategy *strat, char *line)
         if (i == 3)
         {
             strcpy(strat->symbol, token);
+        }
+        else if (i ==  32)
+        {
+            strcpy(strat->billGroup, token);
         }
         token = strtok(NULL, ",");
         i++;
@@ -2320,6 +2302,14 @@ loadStateFromDB(State *state)
                 else if (j == 15)
                 {
                     strat.currBondIndex = atoi(str);
+                }
+                else if (j == 16)
+                {
+                    char billSymbol[100];
+                    DBgetBillSymbolFromId(conn,
+                                          atoi(str),
+                                          billSymbol);
+                    strcpy(strat.billGroup, billSymbol);
                 }
                 else if (j == 9)
                 {
@@ -4058,7 +4048,7 @@ accrueInterest(State *state, int stratIndex, int stratId, real64 exRate)
 
 real64
 printNav(State *state, Exchange_rate *exRate,
-         int stratIndex, int dbStratId)
+         int stratIndex, int dbStratId, char *billGroup)
 {
     real64 totalUnits = 0;
     for (int i = 0; i < state->strategies[stratIndex].currInvestorIndex + 1; i++)
@@ -4086,7 +4076,11 @@ printNav(State *state, Exchange_rate *exRate,
     real64 receivable = state->strategies[stratIndex].receivable;
     real64 grossAssets = totalValueUSD + cashUSD - TDS + interestAccrued + receivable;
     printf("gross assets are %f\n", grossAssets);
-    real64 fee = grossAssets * (0.01 / 365); // 1% p.a
+
+    Bill_group bill = {};
+    DBLoadBillGroup(state->db, &bill, billGroup);
+
+    real64 fee = grossAssets * ((bill.mgmtFee) / (100 * 365)); // 1% p.a
     state->strategies[stratIndex].feesAccrued += fee;
     real64 feesAccrued = state->strategies[stratIndex].feesAccrued; 
     DBUpdateFee(state->db, feesAccrued, dbStratId); 
@@ -4342,8 +4336,11 @@ handleGetBillGroups(State *state,
                               "perfFee",
                               cJSON_CreateNumber(atof(PQgetvalue(pgResult,i,3))));
         cJSON_AddItemToObject(bill,
+                              "mgmtFee",
+                              cJSON_CreateNumber(atof(PQgetvalue(pgResult,i,4))));
+        cJSON_AddItemToObject(bill,
                               "frequency",
-                              cJSON_CreateString((PQgetvalue(pgResult,i,3))));
+                              cJSON_CreateString((PQgetvalue(pgResult,i,5))));
         cJSON_AddItemToArray(billgrps, bill);
     }
 
@@ -4358,6 +4355,7 @@ void
 handleCreateBillGroup(State *state,
                       real64 hurdlerate,
                       real64 perfFee,
+                      real64 mgmtFee,
                       char *frequency,
                       char *billSymbol,
                       char *date,
@@ -4365,10 +4363,11 @@ handleCreateBillGroup(State *state,
 {
     char query[4096];
     snprintf(query, sizeof(query),
-             "INSERT INTO bill_group (hurdlerate, perf_fee, frequency, symbol, date) "
-             "VALUES (%f, '%f', '%s', '%s','%s');",
+             "INSERT INTO bill_group (hurdlerate, perf_fee, mgmt_fee, frequency, symbol, date) "
+             "VALUES (%f, '%f', '%f', '%s', '%s','%s');",
              hurdlerate,
              perfFee,
+             mgmtFee,
              frequency,
              billSymbol,
              date); 
@@ -5466,6 +5465,7 @@ saveDailySnapshot(PGconn *conn,
     cJSON_AddItemToObject(meta, "TDS", cJSON_CreateNumber(strat->TDS));
     cJSON_AddItemToObject(meta, "receivable", cJSON_CreateNumber(strat->receivable));
     cJSON_AddItemToObject(meta, "symbol", cJSON_CreateString(strat->symbol));
+    cJSON_AddItemToObject(meta, "billGroup", cJSON_CreateString(strat->billGroup));
 
     /* 2. Serialize structural arrays up to active boundaries */
     cJSON *eq_pos = cJSON_CreateArray();
@@ -5666,7 +5666,11 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     Exchange_rate exRate = {};
     exRate.rate = rate;
     strcpy(exRate.date, date);
-    nav = printNav(state, &exRate, stratIndex, stratId);
+    nav = printNav(state,
+                   &exRate,
+                   stratIndex,
+                   stratId,
+                   state->strategies[stratIndex].billGroup);
     sprintf(res, "nav is %f", nav);
     
     /* save the state snapshot for the date */
@@ -6796,14 +6800,16 @@ handleCreateStrategy(State *state, char *res)
         state->strategies[state->currStratIndex] = strategy;
         printf("strategy id is %d\n", state->strategies[state->currStratIndex].id);
         printf("strategy name is %s\n", state->strategies[state->currStratIndex].symbol);
-        char query[512];
+        int billId = DBgetBillId(state->db, strategy.billGroup);
+        char query[1096];
         sprintf(query,
                 "INSERT INTO strategy"
-                "(symbol, cash) "
-                "VALUES ('%s', %f) "
+                "(symbol, cash, bill_group_id) "
+                "VALUES ('%s', %f, %d) "
                 "ON CONFLICT (symbol) DO NOTHING;",
                 strategy.symbol,
-                strategy.cash);
+                strategy.cash,
+                billId);
 
         pgResult = executeQuery(state->db, query);
         i++;
@@ -7005,6 +7011,12 @@ iterate_post (void *coninfo_cls,
     {
         memcpy(con_info->perfFee + off, data, size);
         con_info->perfFee[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "mgmtFee") == 0)
+    {
+        memcpy(con_info->mgmtFee + off, data, size);
+        con_info->mgmtFee[off + size] = '\0';
         return MHD_YES;
     }
     else if (strcmp(key, "invName") == 0)
@@ -7367,6 +7379,7 @@ answer_to_connection (void *cls,
             handleCreateBillGroup(state,
                                   atof(con_info->hurdlerate),
                                   atof(con_info->perfFee),
+                                  atof(con_info->mgmtFee),
                                   con_info->frequency,
                                   con_info->billSymbol,
                                   con_info->date,

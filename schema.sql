@@ -29,7 +29,7 @@ CREATE TABLE strategy
     curr_journal_id INTEGER DEFAULT -1,
     curr_acc_index INTEGER DEFAULT -1,
     curr_bond_index INTEGER DEFAULT -1,
-    
+    bill_group_id INTEGER REFERENCES bill_group(id) ON DELETE CASCADE,
 
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint
 );
@@ -46,6 +46,7 @@ CREATE TABLE bill_group (
     symbol VARCHAR(100) NULL UNIQUE,
     hurdlerate DOUBLE PRECISION NULL,
     perf_fee DOUBLE PRECISION NULL,
+    mgmt_fee DOUBLE PRECISION NULL,
     frequency frequency_enum NOT NULL DEFAULT 'ANNIVERSARY',
     date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

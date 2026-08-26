@@ -4831,10 +4831,10 @@ handleBalances(State *state, char *stratSymbol, char *res)
         else /* else its a bank account symbol */
         {
             for (int i = 0;
-                 state->strategies[stratIndex].currAccIndex + 1;
+                 i < state->strategies[stratIndex].currAccIndex + 1;
                  i++)
             {
-                printf("bal symbol is %s\n", bal.symbol);
+                printf("bal symbol is %s nidex is %d\n", bal.symbol, state->strategies[stratIndex].currAccIndex);
                 printf("strat bal symbol is %s\n", state->strategies[stratIndex].accs[i].symbol);
                 if (0 == strcmp(bal.symbol,
                                 state->strategies[stratIndex].accs[i].symbol))

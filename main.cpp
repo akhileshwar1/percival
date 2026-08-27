@@ -2742,8 +2742,12 @@ processPriceUpdates(FILE *bhavFile,
                         need to update the posns in all of them. */
         for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
         {
-            if (strcmp(update.symbol,
-                       state->strategies[stratIndex].positions[i].symbol) == 0)
+            if (0 == strcmp(update.symbol,
+                            state->strategies[stratIndex].positions[i].symbol) ||
+                0 == strcmp(update.symbol,
+                            state->strategies[stratIndex].positions[i].sys_id) ||
+                0 == strcmp(update.symbol,
+                            state->strategies[stratIndex].positions[i].isin))
             {
                 state->strategies[stratIndex].positions[i].ltp = update.price;
                 char query[512];
@@ -2760,6 +2764,43 @@ processPriceUpdates(FILE *bhavFile,
 
                 snprintf(query, sizeof(query),
                          "UPDATE position_equity SET ltp = %f WHERE symbol = '%s' AND strategy_id = %d",
+                         update.price,
+                         state->strategies[stratIndex].positions[i].symbol,
+                         stratId
+                         );
+                pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+            }
+        }
+
+        /* check in fno positions
+           NOTE(AKHIL): Just make sure the same key isn't being present in both
+           positions and fno_positions, they have to be different. */
+        for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+        {
+            if (0 == strcmp(update.symbol,
+                            state->strategies[stratIndex].fpositions[i].symbol) ||
+                0 == strcmp(update.symbol,
+                            state->strategies[stratIndex].fpositions[i].sys_id))
+            {
+                state->strategies[stratIndex].fpositions[i].ltp = update.price;
+                char query[512];
+                snprintf(query, sizeof(query),
+                         "INSERT INTO fno_bhav (symbol, ltp, date, expiry, strike, opt_type, inst_type) "
+                         "VALUES ('%s', %f, to_date('%s', 'DD/MM/YYYY'), '%s', %f, '%s', '%s');",
+                         update.symbol,
+                         update.price,
+                         update.date,
+                         update.date,
+                         0.0,
+                         OptTypeStrings[NA],
+                         InstrumentTypeStrings[OPTIDX]
+                         ); 
+                PGresult *pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+
+                snprintf(query, sizeof(query),
+                         "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' AND strategy_id = %d",
                          update.price,
                          state->strategies[stratIndex].positions[i].symbol,
                          stratId
@@ -4011,7 +4052,7 @@ getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
     real64 totalCashINR = 0.0;
     real64 totalCashUSD = 0.0;
     // NOTE(Akhil) : starting i from 1 because we skip sbm account.
-    for (int i = 1; i <= state->strategies[stratIndex].currAccIndex;
+    for (int i = 0; i <= state->strategies[stratIndex].currAccIndex;
          i++)
     {
         if (state->strategies[stratIndex].accs[i].currency == INR)
@@ -4224,7 +4265,12 @@ uploadFNOPositions(FILE *secFile, State *state, int stratIndex, int stratId)
         if (tmp) *tmp = '\0';
         FNO_position pos = {};
         LoadOldFNOPosition(&pos, line);
-
+        sprintf(pos.sys_id, "OPT%d", ++state->currOptIDCount);
+        /* Persist the opt counter */
+        char query[1024];
+        snprintf(query, sizeof(query),
+                 "UPDATE global_state SET curr_opt_id_count = %d WHERE id = 1;",
+                 state->currOptIDCount);
         /* modify the in memory state */
         state->strategies[stratIndex]
             .fpositions[++state->strategies[stratIndex].currFPosIndex] = pos;
@@ -5661,10 +5707,12 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
     {
         fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
         sprintf(res, "No exchange_rate found matching symbol: %s\n", stratSymbol);
-        return;
+        // return;
     }
     Exchange_rate exRate = {};
-    exRate.rate = rate;
+    exRate.rate = abs(rate); /* abs(-1) is 1 i.e it's a US strategy 
+                              * but still it might incorrectly take an inr
+                              * with no exchange rate as a US strategy */
     strcpy(exRate.date, date);
     nav = printNav(state,
                    &exRate,

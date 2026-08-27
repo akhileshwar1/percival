@@ -8,21 +8,22 @@ curl -v -X POST \
     -F "file=@Sp_Large_Cap/eq_strat_sp_large.csv" \
     $SERVER/create-strategy
 
-# # create bill group
-# curl -v -X POST \
-#     -F "billSymbol=Biller" \
-#     -F "hurdlerate=-50" \
-#     -F "frequency=ANNIVERSARY" \
-#     -F "perfFee=20" \
-#     -F "date=21/03/2024" \
-#     $SERVER/bill-group
-#
+# create bill group
+curl -v -X POST \
+    -F "billSymbol=Biller" \
+    -F "hurdlerate=-50" \
+    -F "frequency=ANNIVERSARY" \
+    -F "perfFee=20" \
+    -F "mgmtFee=1" \
+    -F "date=21/03/2024" \
+    $SERVER/bill-group
+
 # 1. Exchange Rate
 
 # 3. Add Investor
 curl -v -X POST \
     -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_inv_sp_large_Cap/eq_inv_vikas.csv" \
+    -F "file=@Sp_Large_Cap/eq_inv_sp_large_cap/eq_inv_vikas.csv" \
     $SERVER/add-investor
 
 # 5. Bank Transfer
@@ -97,7 +98,7 @@ curl -v -X POST \
 
 curl -v -X POST \
     -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_bhav_1_sp_large.CSV" \
+    -F "file=@Sp_Large_Cap/eq_bhav_2_sp_large.CSV" \
     $SERVER/price-update
 
 # 12. MTM Process

@@ -135,7 +135,7 @@ CREATE TABLE fno_position (
     id SERIAL PRIMARY KEY,                                      
     sys_id VARCHAR(100), -- maps to char id[100]
     symbol VARCHAR(100) NOT NULL,
-    qty INTEGER NOT NULL,
+    qty DOUBLE PRECISION NOT NULL,
     price DOUBLE PRECISION NOT NULL,
     ltp DOUBLE PRECISION NOT NULL,
     pnl DOUBLE PRECISION NOT NULL,
@@ -247,7 +247,7 @@ CREATE TABLE position_equity (
     sys_id VARCHAR(100) UNIQUE,
     isin VARCHAR(100) NOT NULL,
     symbol VARCHAR(100) NOT NULL,
-    qty INTEGER NOT NULL,
+    qty DOUBLE PRECISION NOT NULL,
     price DOUBLE PRECISION NOT NULL,                                   
     ltp DOUBLE PRECISION NOT NULL,                                     
     pnl DOUBLE PRECISION NOT NULL,

@@ -14,7 +14,7 @@ curl -v -X POST \
     -F "hurdlerate=-50" \
     -F "frequency=ANNIVERSARY" \
     -F "perfFee=20" \
-    -F "mgmtFee=1" \
+    -F "mgmtFee=1.5" \
     -F "date=21/03/2024" \
     $SERVER/bill-group
 

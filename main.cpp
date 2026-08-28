@@ -300,7 +300,7 @@ typedef struct
 {
     char isin[100];
     char symbol[100];
-    int qty;
+    real64 qty;
     real64 price;
     real64 ltp;
     real64 pnl;
@@ -1038,7 +1038,7 @@ DBInsertPosition(PGconn *conn, PositionEquity *pos, int stratId)
     char query[2096];
     snprintf(query, sizeof(query),
              "INSERT INTO position_equity (sys_id, isin, symbol, qty, price, ltp, pnl, strategy_id) "
-             "VALUES ('%s', '%s', '%s', %d, %f, %f, %f, %d) "
+             "VALUES ('%s', '%s', '%s', %f, %f, %f, %f, %d) "
              "ON CONFLICT (sys_id) DO UPDATE SET "
              "qty = EXCLUDED.qty, price = EXCLUDED.price, ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
              pos->sys_id,
@@ -3248,7 +3248,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                 } 
                 /* persist the updates to price and qty. */
                 snprintf(query, sizeof(query),
-                         "UPDATE position_equity SET price = %f, qty = %d , pnl = %f"
+                         "UPDATE position_equity SET price = %f, qty = %f , pnl = %f"
                          " WHERE sys_id = '%s'",
                          state->strategies[stratIndex].positions[i].price,
                          state->strategies[stratIndex].positions[i].qty,
@@ -3837,7 +3837,7 @@ printPositions(State *state, int stratIndex)
     for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
     {
         PositionEquity pos = state->strategies[stratIndex].positions[i];
-        printf("name: %s, qty : %d, price: %f, ltp : %f, \
+        printf("name: %s, qty : %f, price: %f, ltp : %f, \
                 value : %f\n",
                pos.symbol,
                pos.qty,
@@ -4105,7 +4105,7 @@ printNav(State *state, Exchange_rate *exRate,
     real64 totalValue = getTotalPositionValue(state, stratIndex); 
     printPositions(state, stratIndex);
     real64 cashUSD = getTotalCashUSD(state, stratIndex, exRate);
-    printf("closing cash balance with receivables in usd is %f\n", cashUSD);
+    printf("closing cash balance in usd is %f\n", cashUSD);
     real64 totalValueUSD = totalValue / exRate->rate;
     printf("total position value in usd is %f\n", totalValueUSD);
     printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
@@ -4116,6 +4116,16 @@ printNav(State *state, Exchange_rate *exRate,
     /* add the receivables now */
     real64 receivable = state->strategies[stratIndex].receivable;
     real64 grossAssets = totalValueUSD + cashUSD - TDS + interestAccrued + receivable;
+    printf("calculation ---------%f\n" \
+           "                     %f\n" \
+           "                     %f\n" \
+           "                     %f\n" \
+           "                     %f\n",
+           totalValueUSD,
+           cashUSD,
+           -TDS,
+           interestAccrued,
+           receivable);
     printf("gross assets are %f\n", grossAssets);
 
     Bill_group bill = {};

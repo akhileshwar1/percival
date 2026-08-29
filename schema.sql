@@ -30,6 +30,7 @@ CREATE TABLE strategy
     curr_acc_index INTEGER DEFAULT -1,
     curr_bond_index INTEGER DEFAULT -1,
     bill_group_id INTEGER REFERENCES bill_group(id) ON DELETE CASCADE,
+    is_usd INTEGER DEFAULT 0,
 
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint
 );
@@ -106,7 +107,8 @@ DROP TABLE IF EXISTS bank_account CASCADE;
 CREATE TABLE bank_account (
     id SERIAL PRIMARY KEY,
     symbol VARCHAR(100) NULL,
-    balance DOUBLE PRECISION DEFAULT 0.0,
+    inr_balance DOUBLE PRECISION DEFAULT 0.0,
+    usd_balance DOUBLE PRECISION DEFAULT 0.0,
     currency VARCHAR(10) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE

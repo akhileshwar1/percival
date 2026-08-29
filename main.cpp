@@ -125,6 +125,7 @@ typedef struct
     char mgmtFee[100];
     char billSymbol[100];
     char invName[100];
+    char isUSD[100]; /* is it a usd strategy */
 
     char date[100];
     char expiryDate[100];
@@ -211,7 +212,8 @@ typedef struct
 typedef struct
 {
     char symbol[100];
-    real64 balance;
+    real64 inrBalance;
+    real64 usdBalance;
     Currency_code currency;
 } Bank_account;
 
@@ -393,6 +395,7 @@ typedef struct
     int currEntryId;
     int currJournalId;
     int currAccIndex;
+    int isUSD;
 } Strategy;
 
 typedef struct
@@ -686,6 +689,29 @@ executeQuery(PGconn *conn, char *query)
     return pgResult;
 }
 
+int
+DBgetIsUSD(PGconn *conn, char *stratSymbol)
+{
+    char query[1024];
+    sprintf(query,
+            "SELECT is_usd FROM strategy where symbol = '%s' LIMIT 1",
+            stratSymbol);
+
+    PGresult *pgResult = executeQuery(conn, query);
+
+    if (PQntuples(pgResult) == 0)
+    {
+        fprintf(stderr, "No strategy found matching symbol: %s\n", stratSymbol);
+        PQclear(pgResult);
+        return -1;
+    }
+
+    char *id_str = PQgetvalue(pgResult, 0, 0);
+    int stratId = atoi(id_str);
+    PQclear(pgResult);
+    return stratId;
+}
+
 void
 DBUpdatePerfFeeInvestor(PGconn *conn,
                         char *invName,
@@ -959,11 +985,12 @@ DBInsertBankAcc(PGconn *conn, Bank_account *acc, int stratId)
 {
     char query[1024];
     snprintf(query, sizeof(query),
-             "INSERT INTO bank_account (strategy_id, symbol, balance, currency) "
-             "VALUES (%d, '%s', %f, '%s');",
+             "INSERT INTO bank_account (strategy_id, symbol, inr_balance, usd_balance, currency) "
+             "VALUES (%d, '%s', %f, %f, '%s');",
              stratId,
              acc->symbol,
-             acc->balance,
+             acc->inrBalance,
+             acc->usdBalance,
              acc->currency == USD ? "USD" : "INR" 
              ); 
     PGresult *res = executeQuery(conn, query);
@@ -1078,11 +1105,25 @@ DBUpdateRecv(PGconn *conn, real64 balance, int stratId)
 }
 
 void
-DBUpdateBankBalance(PGconn *conn, real64 balance, char *symbol, int stratId)
+DBUpdateBankBalanceINR(PGconn *conn, real64 balance, char *symbol, int stratId)
 {
     char query[1024];
     snprintf(query, sizeof(query),
-             "UPDATE bank_account SET balance = %f "
+             "UPDATE bank_account SET inr_balance = %f "
+             "WHERE symbol = '%s' AND strategy_id = %d; ",
+             balance,
+             symbol,
+             stratId); 
+    PGresult *res = executeQuery(conn, query);
+    PQclear(res);
+}
+
+void
+DBUpdateBankBalanceUSD(PGconn *conn, real64 balance, char *symbol, int stratId)
+{
+    char query[1024];
+    snprintf(query, sizeof(query),
+             "UPDATE bank_account SET usd_balance = %f "
              "WHERE symbol = '%s' AND strategy_id = %d; ",
              balance,
              symbol,
@@ -2311,6 +2352,10 @@ loadStateFromDB(State *state)
                                           billSymbol);
                     strcpy(strat.billGroup, billSymbol);
                 }
+                else if (j == 17)
+                {
+                    strat.isUSD = atoi(str);
+                }
                 else if (j == 9)
                 {
                     strat.currPosIndex = atoi(str);
@@ -2395,9 +2440,13 @@ loadStateFromDB(State *state)
                                 }
                                 else if (j == 2)
                                 {
-                                    acc.balance = atof(str);
+                                    acc.inrBalance = atof(str);
                                 }
                                 else if (j == 3)
+                                {
+                                    acc.usdBalance = atof(str);
+                                }
+                                else if (j == 4)
                                 {
                                     acc.currency = strcmp(str, "USD") == 0 ? USD : INR;
                                 }
@@ -3023,7 +3072,7 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
 }
 
 int
-processTradesEq(FILE *tradeFile, int dbStratId, State *state)
+processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *state)
 {
     printf("in equity trades\n");
     char line[1024];
@@ -3051,6 +3100,12 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
         LoadStratSymbolFromFile(copyLine, stratSymbol);
         int stratId = getStratId(stratSymbol, state->db); 
         if (stratId < 0)
+        {
+            printf("No strategy found matching symbol: %s\n", stratSymbol);
+            return -1;
+        }
+        int isUSD = DBgetIsUSD(state->db, stratSymbol);
+        if (isUSD < 0)
         {
             printf("No strategy found matching symbol: %s\n", stratSymbol);
             return -1;
@@ -3115,17 +3170,40 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty; 
 
-                            /* NOTE(Akhil): 1 because sbi for equities */
-                            state->strategies[stratIndex].accs[accIndex].balance -=
-                                trade.qty * priceAfterFee;
-                            /* persist the accs balance. */
-                            DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[accIndex].balance,
-                                                state->strategies[stratIndex].accs[accIndex].symbol,
-                                                stratId);
+                            if (isUSD)
+                            {
+                                /* only debit/credit the usd balance */
+                                /* NOTE(Akhil): 1 because sbi for equities */
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
+                            else
+                            {
+                                /* do the accounting in both base and settlement currencies */
+                                state->strategies[stratIndex].accs[accIndex].inrBalance -=
+                                    (trade.qty * priceAfterFee);
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceINR(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    ((trade.qty * priceAfterFee) / rate);
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[1].balance,
+                                     state->strategies[stratIndex].accs[1].inrBalance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3184,18 +3262,42 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             (abs(trade.qty) * trade.price *
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
                             / abs(trade.qty); 
+                            if (isUSD)
+                            {
+                                /* only debit/credit the usd balance */
+                                /* NOTE(Akhil): 1 because sbi for equities */
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
+                            else
+                            {
+                                /* do the accounting in both base and settlement currencies */
+                                state->strategies[stratIndex].accs[accIndex].inrBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceINR(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
 
-                            // you always get less after selling.
-                            state->strategies[stratIndex].accs[accIndex].balance -=
-                                trade.qty * priceAfterFee; 
-                            /* persist the accs balance. */
-                            DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[accIndex].balance,
-                                                state->strategies[stratIndex].accs[accIndex].symbol,
-                                                stratId);
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    ((trade.qty * priceAfterFee) / rate);
+                                    
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
+                            
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[accIndex].balance,
+                                     state->strategies[stratIndex].accs[accIndex].inrBalance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3293,17 +3395,41 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             (trade.qty * trade.price *
                             (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                             / trade.qty;
-                        // you always pay more while buying.
-                        state->strategies[stratIndex].accs[accIndex].balance -=
-                            trade.qty * priceAfterFee; 
-                        /* persist the accs balance. */
-                        DBUpdateBankBalance(state->db,
-                                            state->strategies[stratIndex].accs[accIndex].balance,
-                                            state->strategies[stratIndex].accs[accIndex].symbol,
-                                            stratId);
+                        if (isUSD)
+                        {
+                            /* only debit/credit the usd balance */
+                            /* NOTE(Akhil): 1 because sbi for equities */
+                            state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                trade.qty * priceAfterFee;
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceUSD(state->db,
+                                                   state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                   state->strategies[stratIndex].accs[accIndex].symbol,
+                                                   stratId);
+                        }
+                        else
+                        {
+                            /* do the accounting in both base and settlement currencies */
+                            state->strategies[stratIndex].accs[accIndex].inrBalance -=
+                                trade.qty * priceAfterFee;
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceINR(state->db,
+                                                   state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                                   state->strategies[stratIndex].accs[accIndex].symbol,
+                                                   stratId);
+
+                            state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    ((trade.qty * priceAfterFee) / rate);
+                                
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceUSD(state->db,
+                                                   state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                   state->strategies[stratIndex].accs[accIndex].symbol,
+                                                   stratId);
+                        }
                         snprintf(query, sizeof(query),
                                  "UPDATE strategy SET cash = %f WHERE id = %d",
-                                 state->strategies[stratIndex].accs[3].balance,
+                                 state->strategies[stratIndex].accs[3].inrBalance,
                                  dbStratId
                                  );
                         pgResult = executeQuery(state->db, query);
@@ -3341,17 +3467,42 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
                             (abs(trade.qty) * trade.price *
                             (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
                             / abs(trade.qty);
-                        // you always get less after selling.
-                        state->strategies[stratIndex].accs[2].balance -=
-                            trade.qty * priceAfterFee;
-                        /* persist the accs balance. */
-                        DBUpdateBankBalance(state->db,
-                                            state->strategies[stratIndex].accs[accIndex].balance,
-                                            state->strategies[stratIndex].accs[accIndex].symbol,
-                                            stratId);
+                        if (isUSD)
+                        {
+                            /* only debit/credit the usd balance */
+                            /* NOTE(Akhil): 1 because sbi for equities */
+                            state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                trade.qty * priceAfterFee;
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceUSD(state->db,
+                                                   state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                   state->strategies[stratIndex].accs[accIndex].symbol,
+                                                   stratId);
+                        }
+                        else
+                        {
+                            /* do the accounting in both base and settlement currencies */
+                            state->strategies[stratIndex].accs[accIndex].inrBalance -=
+                                trade.qty * priceAfterFee;
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceINR(state->db,
+                                                   state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                                   state->strategies[stratIndex].accs[accIndex].symbol,
+                                                   stratId);
+
+                            state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    ((trade.qty * priceAfterFee) / rate);
+                                
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceUSD(state->db,
+                                                   state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                   state->strategies[stratIndex].accs[accIndex].symbol,
+                                                   stratId);
+                        }
+                        
                         snprintf(query, sizeof(query),
                                  "UPDATE strategy SET cash = %f WHERE id = %d",
-                                 state->strategies[stratIndex].accs[accIndex].balance,
+                                 state->strategies[stratIndex].accs[accIndex].inrBalance,
                                  dbStratId
                                  );
                         pgResult = executeQuery(state->db, query);
@@ -3391,14 +3542,15 @@ processTradesEq(FILE *tradeFile, int dbStratId, State *state)
             DBInsertLedgerEntry(state->db, &assetEntry, dbStratId);
             DBInsertLedgerEntry(state->db, &liabEntry, dbStratId);
         }
-        printf("cash is %f\n", state->strategies[stratIndex].accs[accIndex].balance);
+        printf("cash is %f\n", state->strategies[stratIndex].accs[accIndex].inrBalance);
+        printf("cash in usd is %f\n", state->strategies[stratIndex].accs[accIndex].usdBalance);
         
     }
     return stratIndex;
 }
 
 int
-processTrades(FILE *tradeFile, int dbStratId, State *state)
+processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *state)
 {
     char line[1024];
     int i = 0;
@@ -3421,6 +3573,12 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
         LoadStratSymbolFromFile(copyLine, stratSymbol);
         int stratId = getStratId(stratSymbol, state->db); 
         if (stratId < 0)
+        {
+            printf("No strategy found matching symbol: %s\n", stratSymbol);
+            return -1;
+        }
+        int isUSD = DBgetIsUSD(state->db, stratSymbol);
+        if (isUSD < 0)
         {
             printf("No strategy found matching symbol: %s\n", stratSymbol);
             return -1;
@@ -3504,18 +3662,40 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                                 (trade.qty * trade.price *
                                 (1.0 + (trade.brokerage + trade.serviceTax) / 100.0))
                                 / trade.qty; 
+                            if (isUSD)
+                            {
+                                /* only debit/credit the usd balance */
+                                /* NOTE(Akhil): 1 because sbi for equities */
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
+                            else
+                            {
+                                /* do the accounting in both base and settlement currencies */
+                                state->strategies[stratIndex].accs[accIndex].inrBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceINR(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
 
-                            /* NOTE(Akhil): 3 because sbirc for options/fut */
-                            state->strategies[stratIndex].accs[accIndex].balance -=
-                                trade.qty * priceAfterFee;
-                            // persist the accs balance.
-                            DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[accIndex].balance,
-                                                state->strategies[stratIndex].accs[accIndex].symbol,
-                                                stratId);
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[accIndex].balance,
+                                     state->strategies[stratIndex].accs[accIndex].inrBalance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3575,17 +3755,40 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                                 (1.0 - (trade.brokerage + trade.serviceTax) / 100.0))
                                 / abs(trade.qty); 
 
-                            // you always get less after selling.
-                            state->strategies[stratIndex].accs[accIndex].balance -=
-                                trade.qty * priceAfterFee;
-                            // persist the accs balance.
-                            DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[accIndex].balance,
-                                                state->strategies[stratIndex].accs[accIndex].symbol,
-                                                stratId);
+                            if (isUSD)
+                            {
+                                /* only debit/credit the usd balance */
+                                /* NOTE(Akhil): 1 because sbi for equities */
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
+                            else
+                            {
+                                /* do the accounting in both base and settlement currencies */
+                                state->strategies[stratIndex].accs[accIndex].inrBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceINR(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            } 
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[accIndex].balance,
+                                     state->strategies[stratIndex].accs[accIndex].inrBalance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3692,16 +3895,40 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                         // you always pay more while buying.
                         if (pos.instType != FUTSTK && pos.instType != FUTIDX)
                         {
-                            state->strategies[stratIndex].accs[accIndex].balance -=
-                                trade.qty * priceAfterFee;
-                            // persist the accs balance.
-                            DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[accIndex].balance,
-                                                state->strategies[stratIndex].accs[accIndex].symbol,
-                                                stratId);
+                            if (isUSD)
+                            {
+                                /* only debit/credit the usd balance */
+                                /* NOTE(Akhil): 1 because sbi for equities */
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
+                            else
+                            {
+                                /* do the accounting in both base and settlement currencies */
+                                state->strategies[stratIndex].accs[accIndex].inrBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceINR(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            } 
                             snprintf(query, sizeof(query),
                                      "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[accIndex].balance,
+                                     state->strategies[stratIndex].accs[accIndex].inrBalance,
                                      dbStratId
                                      );
                             pgResult = executeQuery(state->db, query);
@@ -3743,18 +3970,37 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
                         // you always get less after selling.
                         if (pos.instType != FUTSTK && pos.instType != FUTIDX)
                         {
-                            state->strategies[stratIndex].accs[accIndex].balance -=
-                                trade.qty * priceAfterFee;
-                            // persist the accs balance.
-                            DBUpdateBankBalance(state->db,
-                                                state->strategies[stratIndex].accs[accIndex].balance,
-                                                state->strategies[stratIndex].accs[accIndex].symbol,
-                                                stratId);
-                            snprintf(query, sizeof(query),
-                                     "UPDATE strategy SET cash = %f WHERE id = %d",
-                                     state->strategies[stratIndex].accs[accIndex].balance,
-                                     dbStratId
-                                     );
+                            if (isUSD)
+                            {
+                                /* only debit/credit the usd balance */
+                                /* NOTE(Akhil): 1 because sbi for equities */
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            }
+                            else
+                            {
+                                /* do the accounting in both base and settlement currencies */
+                                state->strategies[stratIndex].accs[accIndex].inrBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceINR(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+
+                                state->strategies[stratIndex].accs[accIndex].usdBalance -=
+                                    trade.qty * priceAfterFee;
+                                /* persist the accs balance. */
+                                DBUpdateBankBalanceUSD(state->db,
+                                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                                       stratId);
+                            } 
                             pgResult = executeQuery(state->db, query);
                             PQclear(pgResult);
                             ++state->strategies[state->currStratIndex].currJournalId;
@@ -3806,7 +4052,8 @@ processTrades(FILE *tradeFile, int dbStratId, State *state)
             DBInsertLedgerEntry(state->db, &assetEntry, dbStratId);
             DBInsertLedgerEntry(state->db, &liabEntry, dbStratId);
         }
-        printf("cash is %f\n", state->strategies[stratIndex].accs[accIndex].balance);
+        printf("cash is %f\n", state->strategies[stratIndex].accs[accIndex].inrBalance);
+        printf("cash in usd is %f\n", state->strategies[stratIndex].accs[accIndex].usdBalance);
     }
     return stratIndex;
 }
@@ -3937,7 +4184,11 @@ collapsePositions(State *state, int stratIndex)
 }
 
 void
-makeVariationSettlements(State *state, int dbStratId, int stratIndex)
+makeVariationSettlements(State *state,
+                         int dbStratId,
+                         int isUSD,
+                         real64 rate,
+                         int stratIndex)
 {
     int accIndex = getAccIndex(state, stratIndex, (char *)"SBIRC_", 6);
     if (accIndex < 1)
@@ -3954,15 +4205,38 @@ makeVariationSettlements(State *state, int dbStratId, int stratIndex)
         {
             real64 variation = pos.qty * (pos.ltp - pos.price); 
             printf("variation of %f against %s\n", variation, pos.symbol);
-            state->strategies[stratIndex].accs[accIndex].balance += variation;
-            DBUpdateBankBalance(state->db,
-                                state->strategies[stratIndex].accs[accIndex].balance,
-                                state->strategies[stratIndex].accs[accIndex].symbol,
-                                dbStratId);
+            if (isUSD)
+            {
+                /* only debit/credit the usd balance */
+                /* NOTE(Akhil): 1 because sbi for equities */
+                state->strategies[stratIndex].accs[accIndex].usdBalance += variation;
+                /* persist the accs balance. */
+                DBUpdateBankBalanceUSD(state->db,
+                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                       dbStratId);
+            }
+            else
+            {
+                /* do the accounting in both base and settlement currencies */
+                state->strategies[stratIndex].accs[accIndex].inrBalance += variation;
+                /* persist the accs balance. */
+                DBUpdateBankBalanceINR(state->db,
+                                       state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                       dbStratId);
+
+                state->strategies[stratIndex].accs[accIndex].usdBalance += (variation / rate);
+                /* persist the accs balance. */
+                DBUpdateBankBalanceUSD(state->db,
+                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                       state->strategies[stratIndex].accs[accIndex].symbol,
+                                       dbStratId);
+            }
             char query[1024];
             sprintf(query,
                     "UPDATE strategy SET cash = %f where id = %d",
-                    state->strategies[stratIndex].accs[accIndex].balance,
+                    state->strategies[stratIndex].accs[accIndex].inrBalance,
                     dbStratId);
             PGresult *pgResult = executeQuery(state->db, query);
             PQclear(pgResult);
@@ -4049,24 +4323,15 @@ getTotalPositionValue(State *state, int stratIndex)
 real64
 getTotalCashUSD(State *state, int stratIndex, Exchange_rate *exRate)
 {
-    real64 totalCashINR = 0.0;
     real64 totalCashUSD = 0.0;
     // NOTE(Akhil) : starting i from 1 because we skip sbm account.
     for (int i = 0; i <= state->strategies[stratIndex].currAccIndex;
          i++)
     {
-        if (state->strategies[stratIndex].accs[i].currency == INR)
-        {
-            totalCashINR += state->strategies[stratIndex].accs[i].balance;
-        }
-        else
-        {
-            totalCashUSD += state->strategies[stratIndex].accs[i].balance;
-        }
+
+            totalCashUSD += state->strategies[stratIndex].accs[i].usdBalance;
     }
 
-    
-    totalCashUSD += (totalCashINR / exRate->rate);
     return totalCashUSD;
 }
 
@@ -4088,9 +4353,25 @@ accrueInterest(State *state, int stratIndex, int stratId, real64 exRate)
 }
 
 real64
-printNav(State *state, Exchange_rate *exRate,
-         int stratIndex, int dbStratId, char *billGroup)
+printNav(State *state,
+         Exchange_rate *exRate,
+         Exchange_rate *prevRate,
+         int stratIndex,
+         int dbStratId,
+         char *billGroup)
 {
+    /* perform fx movement for all the bank accounts of this strategy
+     * this is done here after assuming all the price gains have been included in 
+     * the dollar balances. */
+    for (int i = 0; i < state->strategies[stratIndex].currAccIndex + 1; i++)
+    {
+        Bank_account acc = state->strategies[stratIndex].accs[i];
+        real64 currencyGain =  (acc.inrBalance / exRate->rate) -
+                               (acc.inrBalance / prevRate->rate);
+        acc.usdBalance += currencyGain;
+        state->strategies[stratIndex].accs[i] = acc;
+        DBUpdateBankBalanceUSD(state->db, acc.usdBalance, acc.symbol, dbStratId); 
+    }
     real64 totalUnits = 0;
     for (int i = 0; i < state->strategies[stratIndex].currInvestorIndex + 1; i++)
     {
@@ -4886,6 +5167,16 @@ handleBalances(State *state, char *stratSymbol, char *res)
         }
         else /* else its a bank account symbol */
         {
+            bool isUSD = false;
+            char buf[500];
+            int length = strlen(bal.symbol);
+            /* SBIRC_XXX_USD take out the usd */
+            strncpy(buf, bal.symbol + length - 3, 3);
+            /* SBIRC_XXX_USD take out the SBIRC_XXX */
+            strncpy(bal.symbol, bal.symbol, length - 4);
+            buf[3] = '\0';
+            bal.symbol[length - 4] = '\0';
+            if (0 == strcmp(buf, "USD")) isUSD = true;
             for (int i = 0;
                  i < state->strategies[stratIndex].currAccIndex + 1;
                  i++)
@@ -4896,9 +5187,17 @@ handleBalances(State *state, char *stratSymbol, char *res)
                                 state->strategies[stratIndex].accs[i].symbol))
                 {
                     /* modify the in memory state */
-                    state->strategies[stratIndex].accs[i].balance = bal.balance;
+                    if (isUSD)
+                    {
+                        state->strategies[stratIndex].accs[i].usdBalance = bal.balance;
+                        DBUpdateBankBalanceUSD(state->db, bal.balance, bal.symbol, stratId); 
+                    }
+                    else
+                    {
+                        state->strategies[stratIndex].accs[i].inrBalance = bal.balance;
+                        DBUpdateBankBalanceINR(state->db, bal.balance, bal.symbol, stratId); 
+                    }
 
-                    DBUpdateBankBalance(state->db, bal.balance, bal.symbol, stratId); 
                     break;
                 }
             }
@@ -5522,6 +5821,7 @@ saveDailySnapshot(PGconn *conn,
     cJSON_AddItemToObject(meta, "receivable", cJSON_CreateNumber(strat->receivable));
     cJSON_AddItemToObject(meta, "symbol", cJSON_CreateString(strat->symbol));
     cJSON_AddItemToObject(meta, "billGroup", cJSON_CreateString(strat->billGroup));
+    cJSON_AddItemToObject(meta, "isUSD", cJSON_CreateString(strat->isUSD));
 
     /* 2. Serialize structural arrays up to active boundaries */
     cJSON *eq_pos = cJSON_CreateArray();
@@ -5625,8 +5925,11 @@ saveDailySnapshot(PGconn *conn,
                               "symbol",
                               cJSON_CreateString(strat->accs[i].symbol));
         cJSON_AddItemToObject(acc,
-                              "balance",
-                              cJSON_CreateNumber(strat->accs[i].balance));
+                              "usdBalance",
+                              cJSON_CreateNumber(strat->accs[i].usdBalance));
+        cJSON_AddItemToObject(acc,
+                              "inrBalance",
+                              cJSON_CreateNumber(strat->accs[i].inrBalance));
         cJSON_AddItemToObject(acc,
                               "currency_code",
                               cJSON_CreateString(CurrencyCodeStrings[strat->accs[i].currency]));
@@ -5724,8 +6027,24 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
                               * but still it might incorrectly take an inr
                               * with no exchange rate as a US strategy */
     strcpy(exRate.date, date);
+    char prevDate[11];
+    decrementDate(date, prevDate);
+    real64 prevRate = DBGetExchangeRate(state->db, prevDate, stratId);
+
+    if(prevRate == -1)
+    {
+        fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+        sprintf(res, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+        // return;
+    }
+    Exchange_rate prevExRate = {};
+    prevExRate.rate = abs(prevRate); /* abs(-1) is 1 i.e it's a US strategy 
+                              * but still it might incorrectly take an inr
+                              * with no exchange rate as a US strategy */
+    strcpy(exRate.date, date);
     nav = printNav(state,
                    &exRate,
+                   &prevExRate,
                    stratIndex,
                    stratId,
                    state->strategies[stratIndex].billGroup);
@@ -5875,7 +6194,7 @@ handleCorpAction(State *state,
 }
 
 void
-handleMTM(State *state, char *stratSymbol, char *res)
+handleMTM(State *state, char *stratSymbol, char *date, char *res)
 {
     /* fetch the strategy's id from the db */
     int stratId = getStratId(stratSymbol, state->db); 
@@ -5887,8 +6206,14 @@ handleMTM(State *state, char *stratSymbol, char *res)
 
     /* get the stratIndex from the memory */
     int stratIndex = getStratIndex(state, stratSymbol);
-
-    makeVariationSettlements(state, stratId, stratIndex);
+    int isUSD = DBgetIsUSD(state->db, stratSymbol);
+    if (isUSD < 0)
+    {
+        printf("No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+    real64 rate = DBGetExchangeRate(state->db, date, stratId);
+    makeVariationSettlements(state, stratId, isUSD, rate,stratIndex);
     strcpy(res, "completed");
 }
 
@@ -5988,7 +6313,7 @@ handleBhavFNO(State *state, char *date, char *stratSymbol, char *res)
 }
 
 void
-handleTradesEq(State *state, char *res)
+handleTradesEq(State *state, char *date, char *res)
 {
     printf("in handle trades equity\n");
     FILE *FTradesFile = fopen("tmp.csv", "r");
@@ -6039,7 +6364,15 @@ handleTradesEq(State *state, char *res)
         return;
     }
 
-    int result = processTradesEq(FTradesFile, stratId, state);
+    int isUSD = DBgetIsUSD(state->db, stratSymbol);
+    if (isUSD < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+
+    real64 rate = DBGetExchangeRate(state->db, date, stratId);
+    int result = processTradesEq(FTradesFile, stratId, isUSD, rate, state);
     if (result < 0)
     {
 
@@ -6052,7 +6385,7 @@ handleTradesEq(State *state, char *res)
 }
 
 void 
-handleTradesFNO(State *state, char *res)
+handleTradesFNO(State *state, char *date, char *res)
 {
     FILE *FTradesFile = fopen("tmp.csv", "r");
     if (FTradesFile == NULL)
@@ -6102,7 +6435,14 @@ handleTradesFNO(State *state, char *res)
         return;
     }
 
-    int result = processTrades(FTradesFile, stratId, state);
+    int isUSD = DBgetIsUSD(state->db, stratSymbol);
+    if (isUSD < 0)
+    {
+        sprintf(res, "No strategy found matching symbol: %s\n", stratSymbol);
+        return;
+    }
+    real64 rate = DBGetExchangeRate(state->db, date, stratId);
+    int result = processTrades(FTradesFile, stratId, isUSD, rate, state);
     if (result < 0)
     {
         strcpy(res, "couldn't find strategy");
@@ -6820,7 +7160,7 @@ handleAddInvestor(State *state, char *stratSymbol, char *res)
 }
 
 void
-handleCreateStrategy(State *state, char *res)
+handleCreateStrategy(State *state, char *isUSD, char *res)
 {
     FILE *stratFile = fopen("tmp.csv", "r");
     char line[4096];
@@ -6852,6 +7192,14 @@ handleCreateStrategy(State *state, char *res)
             continue; // ignore the top heading row.
         }
         LoadStrategyFromFile(&strategy, line);
+        if (0 == strcmp(isUSD, "1"))
+        {
+            strategy->isUSD = 1;
+        }
+        else
+        {
+            strategy->isUSD = 0;
+        }
         strategy.cash = 0;
         strategy.id = ++state->currStratIndex;
         state->strategies[state->currStratIndex].currEntryId = -1;
@@ -6862,12 +7210,13 @@ handleCreateStrategy(State *state, char *res)
         char query[1096];
         sprintf(query,
                 "INSERT INTO strategy"
-                "(symbol, cash, bill_group_id) "
-                "VALUES ('%s', %f, %d) "
+                "(symbol, cash, bill_group_id, is_usd) "
+                "VALUES ('%s', %f, %d, %d) "
                 "ON CONFLICT (symbol) DO NOTHING;",
                 strategy.symbol,
                 strategy.cash,
-                billId);
+                billId,
+                strategy->isUSD);
 
         pgResult = executeQuery(state->db, query);
         i++;
@@ -7009,6 +7358,12 @@ iterate_post (void *coninfo_cls,
     {
         memcpy(con_info->strategySymbol + off, data, size);
         con_info->strategySymbol[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "isUSD") == 0)
+    {
+        memcpy(con_info->isUSD+ off, data, size);
+        con_info->isUSD[off + size] = '\0';
         return MHD_YES;
     }
     else if (strcmp(key, "symbol") == 0)
@@ -7293,7 +7648,7 @@ answer_to_connection (void *cls,
         }
         else if (0 == strcmp(url, "/create-strategy"))
         {
-            handleCreateStrategy(state, con_info->answerstring);
+            handleCreateStrategy(state, con_info->isUSD, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/add-investor"))
         {
@@ -7325,11 +7680,11 @@ answer_to_connection (void *cls,
         }
         else if (0 == strcmp(url, "/trades-fno"))
         {
-            handleTradesFNO(state, con_info->answerstring);
+            handleTradesFNO(state, con_info->date, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/trades-equity"))
         {
-            handleTradesEq(state, con_info->answerstring);
+            handleTradesEq(state, con_info->date, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/bhav-fno"))
         {
@@ -7345,7 +7700,7 @@ answer_to_connection (void *cls,
         }
         else if (0 == strcmp(url, "/mtm-process"))
         {
-            handleMTM(state, con_info->strategySymbol, con_info->answerstring);
+            handleMTM(state, con_info->strategySymbol, con_info->date, con_info->answerstring);
         }
         else if (0 == strcmp(url, "/corporate-action"))
         {

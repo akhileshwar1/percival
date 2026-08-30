@@ -5,6 +5,7 @@ SERVER=http://localhost:8888
 
 # 2. Create Strategy
 curl -v -X POST \
+    -F "isUSD=0" \
     -F "file=@alpha_India_FNO_Beta/eq_strat_India_FNO_Beta.csv" \
     $SERVER/create-strategy
 
@@ -48,6 +49,7 @@ curl -v -X POST \
 
 # 5. Bank Transfer
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "file=@alpha_India_FNO_Beta/eq_bank_India_FNO_Beta.csv" \
     $SERVER/bank-transfer
 
@@ -104,6 +106,7 @@ curl -v -X POST \
 #
 
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "file=@alpha_India_FNO_Beta/eq_trades_India_FNO_Beta.csv" \
     $SERVER/trades-fno
 
@@ -115,6 +118,7 @@ curl -v -X POST \
 
 # 12. MTM Process
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "strategySymbol=31500012B" \
     $SERVER/mtm-process
 
@@ -137,6 +141,7 @@ curl -v -X POST \
 
 # 12. MTM Process
 curl -v -X POST \
+    -F "date=02/04/2026" \
     -F "strategySymbol=31500012B" \
     $SERVER/mtm-process
 

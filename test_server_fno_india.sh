@@ -5,6 +5,7 @@ SERVER=http://localhost:8888
 
 # 2. Create Strategy
 curl -v -X POST \
+    -F "isUSD=0" \
     -F "file=@alpha_India_FNO/eq_strat_India_FNO.csv" \
     $SERVER/create-strategy
 
@@ -86,6 +87,7 @@ curl -v -X POST \
 
 # 5. Bank Transfer
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "file=@alpha_India_FNO/eq_bank_India_FNO.csv" \
     $SERVER/bank-transfer
 
@@ -169,40 +171,42 @@ curl -v -X POST \
 #     $SERVER/corporate-action
 #
 # 11. eq Bhavcopy
-# curl -v -X POST \
-#     -F "strategySymbol=B105S29E" \
-#     -F "date=01/04/2026" \
-#     -F "file=@alpha_India_FNO/eq_bhav_1_alpha_India_FNO.CSV" \
-#     $SERVER/bhav-eq
-#
-# curl -v -X POST \
-#     -F "file=@alpha_India_FNO/eq_trades_India_FNO_.csv" \
-#     $SERVER/trades-fno
-#
-# curl -v -X POST \
-#     -F "strategySymbol=B105S29E" \
-#     -F "date=01/04/2026" \
-#     -F "file=@alpha_India_FNO/eq_bhav_1_alpha_India_FNO.CSV" \
-#     $SERVER/bhav-fno
-#
-# # sensex bhav
-# curl -v -X POST \
-#     -F "strategySymbol=B105S29E" \
-#     -F "date=01/04/2026" \
-#     -F "file=@alpha_India_FNO/bhav_sensex_2_apr.CSV" \
-#     $SERVER/bse-bhav
-#
-# # 12. MTM Process
-# curl -v -X POST \
-#     -F "strategySymbol=B105S29E" \
-#     $SERVER/mtm-process
-#
-#  # to use 31st april's ex rate for fee accrual. Nav is also done on holidays. 
-# curl -v -X POST \
-#     -F "strategySymbol=B105S29E" \
-#     -F "date=01/04/2026" \
-#     $SERVER/process-nav
-#
+curl -v -X POST \
+    -F "strategySymbol=B105S29E" \
+    -F "date=01/04/2026" \
+    -F "file=@alpha_India_FNO/eq_bhav_1_alpha_India_FNO.CSV" \
+    $SERVER/bhav-eq
+
+curl -v -X POST \
+    -F "date=01/04/2026" \
+    -F "file=@alpha_India_FNO/eq_trades_India_FNO_.csv" \
+    $SERVER/trades-fno
+
+curl -v -X POST \
+    -F "strategySymbol=B105S29E" \
+    -F "date=01/04/2026" \
+    -F "file=@alpha_India_FNO/eq_bhav_1_alpha_India_FNO.CSV" \
+    $SERVER/bhav-fno
+
+# sensex bhav
+curl -v -X POST \
+    -F "strategySymbol=B105S29E" \
+    -F "date=01/04/2026" \
+    -F "file=@alpha_India_FNO/bhav_sensex_2_apr.CSV" \
+    $SERVER/bse-bhav
+
+# 12. MTM Process
+curl -v -X POST \
+    -F "date=01/04/2026" \
+    -F "strategySymbol=B105S29E" \
+    $SERVER/mtm-process
+
+ # to use 31st april's ex rate for fee accrual. Nav is also done on holidays. 
+curl -v -X POST \
+    -F "strategySymbol=B105S29E" \
+    -F "date=01/04/2026" \
+    $SERVER/process-nav
+
 # curl -v -X POST \
 #     -F "strategySymbol=B105S29E" \
 #     -F "file=@alpha_India_FNO/21_Price Update_TVSMNCRPSS.csv" \

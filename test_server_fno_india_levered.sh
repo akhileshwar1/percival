@@ -1,22 +1,24 @@
 #!/bin/bash
 
-SERVER=http://localhost:8888
-# SERVER=http://13.53.138.234:8888
+# SERVER=http://localhost:8888
+SERVER=http://13.53.138.234:8888
 
 # 2. Create Strategy
 curl -v -X POST \
+    -F "isUSD=0" \
     -F "file=@alpha_India_FNO_Levered/eq_strat_India_FNO_Levered.csv" \
     $SERVER/create-strategy
 
 # # create bill group
-# curl -v -X POST \
-#     -F "billSymbol=Biller" \
-#     -F "hurdlerate=-50" \
-#     -F "frequency=ANNIVERSARY" \
-#     -F "perfFee=20" \
-#     -F "date=21/03/2024" \
-#     $SERVER/bill-group
-#
+curl -v -X POST \
+    -F "billSymbol=Biller" \
+    -F "hurdlerate=-50" \
+    -F "frequency=ANNIVERSARY" \
+    -F "perfFee=20" \
+    -F "mgmtFee=1" \
+    -F "date=21/03/2024" \
+    $SERVER/bill-group
+
 # 1. Exchange Rate
 curl -v -X POST \
     -F "strategySymbol=31500012A" \
@@ -37,6 +39,7 @@ curl -v -X POST \
 
 # 5. Bank Transfer
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "file=@alpha_India_FNO_Levered/eq_bank_India_FNO_Levered.csv" \
     $SERVER/bank-transfer
 
@@ -77,6 +80,7 @@ curl -v -X POST \
 #
 
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "file=@alpha_India_FNO_Levered/eq_trades_India_FNO_Levered.csv" \
     $SERVER/trades-fno
 
@@ -88,6 +92,7 @@ curl -v -X POST \
 
 # 12. MTM Process
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "strategySymbol=31500012A" \
     $SERVER/mtm-process
 
@@ -103,32 +108,34 @@ curl -v -X POST \
 #     $SERVER/price-update
 #
 
-curl -v -X POST \
-    -F "file=@alpha_India_FNO_Levered/eq_trades_India_FNO_Levered_2.csv" \
-    $SERVER/trades-fno
-
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "date=02/04/2026" \
-    -F "file=@alpha_500/WO020426.CSV" \
-    $SERVER/bhav-fno
-
-# sensex bhav
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "date=01/04/2026" \
-    -F "file=@alpha_India_FNO/bhav_sensex_2_apr.CSV" \
-    $SERVER/bse-bhav
-
-# 12. MTM Process
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    $SERVER/mtm-process
-
-curl -v -X POST \
-    -F "strategySymbol=31500012A" \
-    -F "date=02/04/2026" \
-    $SERVER/process-nav
+# curl -v -X POST \
+#     -F "date=02/04/2026" \
+#     -F "file=@alpha_India_FNO_Levered/eq_trades_India_FNO_Levered_2.csv" \
+#     $SERVER/trades-fno
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=02/04/2026" \
+#     -F "file=@alpha_500/WO020426.CSV" \
+#     $SERVER/bhav-fno
+#
+# # sensex bhav
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=02/04/2026" \
+#     -F "file=@alpha_India_FNO/bhav_sensex_2_apr.CSV" \
+#     $SERVER/bse-bhav
+#
+# # 12. MTM Process
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=02/04/2026" \
+#     $SERVER/mtm-process
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012A" \
+#     -F "date=02/04/2026" \
+#     $SERVER/process-nav
 # ===== here=======
 # # 9. Fund Expense
 # curl -v -X POST \

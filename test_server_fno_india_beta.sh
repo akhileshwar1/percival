@@ -133,22 +133,22 @@ curl -v -X POST \
 #     -F "file=@alpha_India_FNO_Beta/21_Price Update_TVSMNCRPSS.csv" \
 #     $SERVER/price-update
 #
-curl -v -X POST \
-    -F "strategySymbol=31500012B" \
-    -F "date=02/04/2026" \
-    -F "file=@alpha_500/WO020426.CSV" \
-    $SERVER/bhav-fno
-
-# 12. MTM Process
-curl -v -X POST \
-    -F "date=02/04/2026" \
-    -F "strategySymbol=31500012B" \
-    $SERVER/mtm-process
-
-curl -v -X POST \
-    -F "strategySymbol=31500012B" \
-    -F "date=02/04/2026" \
-    $SERVER/process-nav
+# curl -v -X POST \
+#     -F "strategySymbol=31500012B" \
+#     -F "date=02/04/2026" \
+#     -F "file=@alpha_500/WO020426.CSV" \
+#     $SERVER/bhav-fno
+#
+# # 12. MTM Process
+# curl -v -X POST \
+#     -F "date=02/04/2026" \
+#     -F "strategySymbol=31500012B" \
+#     $SERVER/mtm-process
+#
+# curl -v -X POST \
+#     -F "strategySymbol=31500012B" \
+#     -F "date=02/04/2026" \
+#     $SERVER/process-nav
 # ===== here=======
 # # 9. Fund Expense
 # curl -v -X POST \

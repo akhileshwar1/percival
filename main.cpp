@@ -4334,8 +4334,7 @@ getTotalCashUSD(State *state, int stratIndex)
     for (int i = 0; i <= state->strategies[stratIndex].currAccIndex;
          i++)
     {
-
-            totalCashUSD += state->strategies[stratIndex].accs[i].usdBalance;
+        totalCashUSD += state->strategies[stratIndex].accs[i].usdBalance;
     }
 
     return totalCashUSD;
@@ -5185,7 +5184,14 @@ handleBalances(State *state, char *stratSymbol, char *res)
             strncpy(bal.symbol, temp, length - 4);
             buf[3] = '\0';
             bal.symbol[length - 4] = '\0';
-            if (0 == strcmp(buf, "USD")) isUSD = true;
+            if (0 == strcmp(buf, "USD"))
+            {
+                isUSD = true;
+            }
+            else
+            {
+                strcpy(bal.symbol, temp); /* get the full name again */
+            }
             for (int i = 0;
                  i < state->strategies[stratIndex].currAccIndex + 1;
                  i++)
@@ -5193,10 +5199,10 @@ handleBalances(State *state, char *stratSymbol, char *res)
                 printf("bal symbol is %s nidex is %d\n", bal.symbol, state->strategies[stratIndex].currAccIndex);
                 printf("strat bal symbol is %s\n", state->strategies[stratIndex].accs[i].symbol);
                 if (0 == strcmp(bal.symbol,
-                                state->strategies[stratIndex].accs[i].symbol))
+                                  state->strategies[stratIndex].accs[i].symbol))
                 {
                     /* modify the in memory state */
-                    if (isUSD == 1)
+                    if (isUSD)
                     {
                         state->strategies[stratIndex].accs[i].usdBalance = bal.balance;
                         DBUpdateBankBalanceUSD(state->db, bal.balance, bal.symbol, stratId); 

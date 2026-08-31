@@ -40,3 +40,4 @@ Net quantities implied by trade history
 * get all bill groups api.
 * link investor to billgroup api.
 * apply perf fee api.
+* accounting all the transitions. gain, income, interest, currencygain etc

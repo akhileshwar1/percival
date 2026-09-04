@@ -6,7 +6,7 @@ SERVER=http://localhost:8888
 # 2. Create Strategy
 curl -v -X POST \
     -F "isUSD=1" \
-    -F "file=@Sp_Large_Cap/eq_strat_sp_large.csv" \
+    -F "file=@SPX/eq_strat_spx.csv" \
     $SERVER/create-strategy
 
 # create bill group
@@ -23,14 +23,25 @@ curl -v -X POST \
 
 # 3. Add Investor
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_inv_sp_large_cap/eq_inv_vikas.csv" \
+    -F "strategySymbol=SSF000066" \
+    -F "file=@SPX/eq_inv_spx/eq_inv_abhimanyu.csv" \
     $SERVER/add-investor
+
+curl -v -X POST \
+    -F "strategySymbol=SSF000066" \
+    -F "file=@SPX/eq_inv_spx/eq_inv_aNAND.csv" \
+    $SERVER/add-investor
+
+curl -v -X POST \
+    -F "strategySymbol=SSF000066" \
+    -F "file=@SPX/eq_inv_spx/eq_inv_Pawan.csv" \
+    $SERVER/add-investor
+
 
 # 5. Bank Transfer
 curl -v -X POST \
     -F "date=01/04/2026" \
-    -F "file=@Sp_Large_Cap/eq_bank_sp_large.csv" \
+    -F "file=@SPX/eq_bank_spx.csv" \
     $SERVER/bank-transfer
 
 # # 7. Fund Cashflow
@@ -40,30 +51,33 @@ curl -v -X POST \
 #
 # 8. Unit Allotment
 curl -v -X POST \
-    -F "file=@Sp_Large_Cap/Eq_units/eq_units _vikas.csv" \
+    -F "file=@SPX/Eq_units/eq_units _ABHI.csv" \
     $SERVER/allot-units
+
+curl -v -X POST \
+    -F "file=@SPX/Eq_units/eq_units _anand.csv" \
+    $SERVER/allot-units
+
+curl -v -X POST \
+    -F "file=@SPX/Eq_units/eq_units _pawan.csv" \
+    $SERVER/allot-units
+
 
 # 8. upload securities. 
 curl -v -X POST \
-    -F "file=@Sp_Large_Cap/security_sp_large.csv" \
+    -F "file=@SPX/security_spx.csv" \
     $SERVER/upload-securities
 
 # 8. upload old positions. 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_positions_sp_large.csv" \
+    -F "strategySymbol=SSF000066" \
+    -F "file=@SPX/eq_positions_spx.csv" \
     $SERVER/upload-positions
-
-# 8. upload old positions. 
-curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_fno_positions_sp_large.csv" \
-    $SERVER/upload-fno-positions
 
 # 8. upload balances. 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_balances_sp_large.csv" \
+    -F "strategySymbol=SSF000066" \
+    -F "file=@SPX/eq_balances_spx.csv" \
     $SERVER/upload-balances
 
 # # corp action
@@ -77,12 +91,12 @@ curl -v -X POST \
 
 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_bhav_1_sp_large.CSV" \
+    -F "strategySymbol=SSF000066" \
+    -F "file=@SPX/eq_bhav_1_spx.CSV" \
     $SERVER/price-update
 
 # curl -v -X POST \
-#     -F "strategySymbol=SSFSPUSOP" \
+#     -F "strategySymbol=SSF000066" \
 #     -F "date=01/04/2026" \
 #     -F "file=@alpha_500/WO010426.CSV" \
 #     $SERVER/bhav-fno
@@ -90,28 +104,28 @@ curl -v -X POST \
 # 12. MTM Process
 curl -v -X POST \
     -F "date=01/04/2026" \
-    -F "strategySymbol=SSFSPUSOP" \
+    -F "strategySymbol=SSF000066" \
     $SERVER/mtm-process
 
  # to use 31st april's ex rate for fee accrual. Nav is also done on holidays. 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
+    -F "strategySymbol=SSF000066" \
     -F "date=01/04/2026" \
     $SERVER/process-nav
 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_bhav_2_sp_large.CSV" \
+    -F "strategySymbol=SSF000066" \
+    -F "file=@SPX/eq_bhav_2_spx.CSV" \
     $SERVER/price-update
 
 # 12. MTM Process
 curl -v -X POST \
     -F "date=02/04/2026" \
-    -F "strategySymbol=SSFSPUSOP" \
+    -F "strategySymbol=SSF000066" \
     $SERVER/mtm-process
 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
+    -F "strategySymbol=SSF000066" \
     -F "date=02/04/2026" \
     $SERVER/process-nav
 # ===== here=======

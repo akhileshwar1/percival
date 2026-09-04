@@ -6,7 +6,7 @@ SERVER=http://localhost:8888
 # 2. Create Strategy
 curl -v -X POST \
     -F "isUSD=1" \
-    -F "file=@Sp_Large_Cap/eq_strat_sp_large.csv" \
+    -F "file=@US_ramani/eq_strat_us_active.csv" \
     $SERVER/create-strategy
 
 # create bill group
@@ -23,14 +23,30 @@ curl -v -X POST \
 
 # 3. Add Investor
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_inv_sp_large_cap/eq_inv_vikas.csv" \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_inv_us_active/eq_inv_beena.csv" \
     $SERVER/add-investor
+
+curl -v -X POST \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_inv_us_active/eq_inv_muffazal.csv" \
+    $SERVER/add-investor
+
+curl -v -X POST \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_inv_us_active/eq_inv_murtaza.csv" \
+    $SERVER/add-investor
+
+curl -v -X POST \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_inv_us_active/eq_inv_ramani.csv" \
+    $SERVER/add-investor
+
 
 # 5. Bank Transfer
 curl -v -X POST \
     -F "date=01/04/2026" \
-    -F "file=@Sp_Large_Cap/eq_bank_sp_large.csv" \
+    -F "file=@US_ramani/eq_bank_us_active.csv" \
     $SERVER/bank-transfer
 
 # # 7. Fund Cashflow
@@ -40,30 +56,44 @@ curl -v -X POST \
 #
 # 8. Unit Allotment
 curl -v -X POST \
-    -F "file=@Sp_Large_Cap/Eq_units/eq_units _vikas.csv" \
+    -F "file=@US_ramani/Eq_units/eq_units _beena.csv" \
     $SERVER/allot-units
+
+curl -v -X POST \
+    -F "file=@US_ramani/Eq_units/eq_units _muffazal.csv" \
+    $SERVER/allot-units
+
+curl -v -X POST \
+    -F "file=@US_ramani/Eq_units/eq_units _murtaza.csv" \
+    $SERVER/allot-units
+
+curl -v -X POST \
+    -F "file=@US_ramani/Eq_units/eq_units _ramani.csv" \
+    $SERVER/allot-units
+
+
 
 # 8. upload securities. 
 curl -v -X POST \
-    -F "file=@Sp_Large_Cap/security_sp_large.csv" \
+    -F "file=@US_ramani/security_us_active.csv" \
     $SERVER/upload-securities
 
 # 8. upload old positions. 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_positions_sp_large.csv" \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_positions_us_active.csv" \
     $SERVER/upload-positions
 
-# 8. upload old positions. 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_fno_positions_sp_large.csv" \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_fno_positions_us_active.csv" \
     $SERVER/upload-fno-positions
+
 
 # 8. upload balances. 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_balances_sp_large.csv" \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_balances_us_active.csv" \
     $SERVER/upload-balances
 
 # # corp action
@@ -77,12 +107,12 @@ curl -v -X POST \
 
 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_bhav_1_sp_large.CSV" \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_bhav_1_us_active.CSV" \
     $SERVER/price-update
 
 # curl -v -X POST \
-#     -F "strategySymbol=SSFSPUSOP" \
+#     -F "strategySymbol=SSF000068" \
 #     -F "date=01/04/2026" \
 #     -F "file=@alpha_500/WO010426.CSV" \
 #     $SERVER/bhav-fno
@@ -90,28 +120,28 @@ curl -v -X POST \
 # 12. MTM Process
 curl -v -X POST \
     -F "date=01/04/2026" \
-    -F "strategySymbol=SSFSPUSOP" \
+    -F "strategySymbol=SSF000068" \
     $SERVER/mtm-process
 
  # to use 31st april's ex rate for fee accrual. Nav is also done on holidays. 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
+    -F "strategySymbol=SSF000068" \
     -F "date=01/04/2026" \
     $SERVER/process-nav
 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
-    -F "file=@Sp_Large_Cap/eq_bhav_2_sp_large.CSV" \
+    -F "strategySymbol=SSF000068" \
+    -F "file=@US_ramani/eq_bhav_2_us_active.CSV" \
     $SERVER/price-update
 
 # 12. MTM Process
 curl -v -X POST \
     -F "date=02/04/2026" \
-    -F "strategySymbol=SSFSPUSOP" \
+    -F "strategySymbol=SSF000068" \
     $SERVER/mtm-process
 
 curl -v -X POST \
-    -F "strategySymbol=SSFSPUSOP" \
+    -F "strategySymbol=SSF000068" \
     -F "date=02/04/2026" \
     $SERVER/process-nav
 # ===== here=======

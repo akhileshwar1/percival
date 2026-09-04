@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# SERVER=http://localhost:8888
-SERVER=http://13.53.138.234:8888
+SERVER=http://localhost:8888
+# SERVER=http://13.53.138.234:8888
 
 # 2. Create Strategy
 curl -v -X POST \

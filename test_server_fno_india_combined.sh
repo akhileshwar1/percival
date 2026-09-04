@@ -5,18 +5,20 @@ SERVER=http://localhost:8888
 
 # 2. Create Strategy
 curl -v -X POST \
+    -F "isUSD=0" \
     -F "file=@alpha_India_Combined/eq_strat_India_Combined.csv" \
     $SERVER/create-strategy
 
 # # create bill group
-# curl -v -X POST \
-#     -F "billSymbol=Biller" \
-#     -F "hurdlerate=-50" \
-#     -F "frequency=ANNIVERSARY" \
-#     -F "perfFee=20" \
-#     -F "date=21/03/2024" \
-#     $SERVER/bill-group
-#
+curl -v -X POST \
+    -F "billSymbol=Biller" \
+    -F "hurdlerate=-50" \
+    -F "frequency=ANNIVERSARY" \
+    -F "perfFee=20" \
+    -F "mgmtFee=1" \
+    -F "date=21/03/2024" \
+    $SERVER/bill-group
+
 # 1. Exchange Rate
 curl -v -X POST \
     -F "strategySymbol=31500012C" \
@@ -37,6 +39,7 @@ curl -v -X POST \
 
 # 5. Bank Transfer
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "file=@alpha_India_Combined/eq_bank_India_Combined.csv" \
     $SERVER/bank-transfer
 
@@ -82,6 +85,7 @@ curl -v -X POST \
 #
 
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "file=@alpha_India_Combined/eq_trades_India_Combined.csv" \
     $SERVER/trades-fno
 
@@ -93,6 +97,7 @@ curl -v -X POST \
 
 # 12. MTM Process
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "strategySymbol=31500012C" \
     $SERVER/mtm-process
 
@@ -115,6 +120,7 @@ curl -v -X POST \
 
 # 12. MTM Process
 curl -v -X POST \
+    -F "date=02/04/2026" \
     -F "strategySymbol=31500012C" \
     $SERVER/mtm-process
 

@@ -5,6 +5,7 @@ SERVER=http://localhost:8888
 
 # 2. Create Strategy
 curl -v -X POST \
+    -F "isUSD=0" \
     -F "file=@alpha_500/eq_strat_alpha_500.csv" \
     $SERVER/create-strategy
 
@@ -14,6 +15,7 @@ curl -v -X POST \
     -F "hurdlerate=-50" \
     -F "frequency=ANNIVERSARY" \
     -F "perfFee=20" \
+    -F "mgmtFee=1" \
     -F "date=21/03/2024" \
     $SERVER/bill-group
 
@@ -61,6 +63,7 @@ curl -v -X POST \
 
 # 5. Bank Transfer
 curl -v -X POST \
+    -F "date=01/04/2026" \
     -F "file=@alpha_500/eq_bank_alpha_500.csv" \
     $SERVER/bank-transfer
 
@@ -139,6 +142,7 @@ curl -v -X POST \
 
 # 10. Trades
 curl -v -X POST \
+    -F "date=02/04/2026" \
     -F "file=@alpha_500/eq_trades_alpha500.csv" \
     $SERVER/trades-eq
 

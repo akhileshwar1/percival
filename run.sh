@@ -1,2 +1,3 @@
 #!/bin/bash
-source env.sh && ./percival.out
+source ./env.sh 
+./percival.out

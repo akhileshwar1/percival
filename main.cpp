@@ -2865,6 +2865,7 @@ processPriceUpdates(FILE *bhavFile,
 void
 processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
 {
+    (void)stratIndex;
     char line[1024];
     int i = 0;
     while (fgets(line, sizeof(line), bhavFile))
@@ -2883,33 +2884,41 @@ processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
         Bhav bhav = {};
         LoadBhav(&bhav, line);
         strcpy(bhav.date, date);
-        /* NOTE(Akhil): The symbol may be present in multiple strats,
-                        need to update the posns in all of them. */
-        for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
+        for (int stratIndex = 0; stratIndex < state->currStratIndex + 1; stratIndex++)
         {
-            if (strcmp(bhav.symbol,
-                       state->strategies[stratIndex].positions[i].symbol) == 0)
+            int dbStratId = getStratId(state->strategies[stratIndex].symbol, state->db);
+            if (dbStratId < 0)
             {
-                state->strategies[stratIndex].positions[i].ltp = bhav.ltp;
-                char query[512];
-                snprintf(query, sizeof(query),
-                         "INSERT INTO equity_bhav (symbol, ltp, date) VALUES ('%s', %f, to_date('%s', 'DD/MM/YYYY')) "
-                         "ON CONFLICT (symbol) DO UPDATE SET "
-                         "ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
-                         bhav.symbol,
-                         bhav.ltp,
-                         bhav.date
-                         ); 
-                PGresult *pgResult = executeQuery(state->db, query);
-                PQclear(pgResult);
+                printf("No strategy found matching symbol: %s\n",
+                       state->strategies[stratIndex].symbol);
+                continue;
+            }
+            for (int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
+            {
+                if (strcmp(bhav.symbol,
+                           state->strategies[stratIndex].positions[i].symbol) == 0)
+                {
+                    state->strategies[stratIndex].positions[i].ltp = bhav.ltp;
+                    char query[512];
+                    snprintf(query, sizeof(query),
+                             "INSERT INTO equity_bhav (symbol, ltp, date) VALUES ('%s', %f, to_date('%s', 'DD/MM/YYYY')) "
+                             "ON CONFLICT (symbol) DO UPDATE SET "
+                             "ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
+                             bhav.symbol,
+                             bhav.ltp,
+                             bhav.date
+                             ); 
+                    PGresult *pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
 
-                snprintf(query, sizeof(query),
-                         "UPDATE position_equity SET ltp = %f WHERE sys_id = '%s'",
-                         bhav.ltp,
-                         state->strategies[stratIndex].positions[i].sys_id
-                         );
-                pgResult = executeQuery(state->db, query);
-                PQclear(pgResult);
+                    snprintf(query, sizeof(query),
+                             "UPDATE position_equity SET ltp = %f WHERE sys_id = '%s'",
+                             bhav.ltp,
+                             state->strategies[stratIndex].positions[i].sys_id
+                             );
+                    pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+                }
             }
         }
         // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
@@ -2921,6 +2930,8 @@ void
 processBhavBSE(FILE *bhavFile, char *date, int dbStratId,
                int stratIndex, State *state)
 {
+    (void)stratIndex;
+    (void)dbStratId;
     char line[4096];
     int i = 0;
     while (fgets(line, sizeof(line), bhavFile))
@@ -2939,55 +2950,63 @@ processBhavBSE(FILE *bhavFile, char *date, int dbStratId,
         FNO_bhav bhav = {};
         LoadBSEBhav(&bhav, line);
         strcpy(bhav.date, date);
-        /* NOTE(Akhil): The symbol may be present in multiple strats,
-                        need to update the posns in all of them. */
-        for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+        for (int stratIndex = 0; stratIndex < state->currStratIndex + 1; stratIndex++)
         {
-
-            if (strcmp(bhav.symbol,
-                       state->strategies[stratIndex].fpositions[i].symbol) == 0 &&
-                strcmp(bhav.expiry,
-                       state->strategies[stratIndex].fpositions[i].expiry) == 0 &&
-                bhav.strike == state->strategies[stratIndex].fpositions[i].strike &&
-                bhav.optType == state->strategies[stratIndex].fpositions[i].optType &&
-                bhav.instType == state->strategies[stratIndex].fpositions[i].instType)
+            int dbStratId = getStratId(state->strategies[stratIndex].symbol, state->db);
+            if (dbStratId < 0)
             {
-                state->strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
+                printf("No strategy found matching symbol: %s\n",
+                       state->strategies[stratIndex].symbol);
+                continue;
+            }
+            for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+            {
 
-                printf("pos after bhav is %s, %d, %f\n",
-                       state->strategies[stratIndex].fpositions[i].symbol,
-                       state->strategies[stratIndex].fpositions[i].qty,
-                       state->strategies[stratIndex].fpositions[i].ltp);
-                // persist the matched bhav and update the position.
-                char query[512];
-                snprintf(query, sizeof(query),
-                         "INSERT INTO fno_bhav (strategy_id, symbol, ltp, expiry, strike, opt_type, inst_type, date) "
-                         "VALUES (%d, '%s', %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s', to_date('%s', 'DD/MM/YYYY'));",
-                         dbStratId,
-                         bhav.symbol,
-                         bhav.ltp,
-                         bhav.expiry,
-                         bhav.strike,
-                         OptTypeStrings[bhav.optType],
-                         InstrumentTypeStrings[bhav.instType],
-                         bhav.date
-                         );
-                PGresult *pgResult = executeQuery(state->db, query);
-                PQclear(pgResult);
+                if (strcmp(bhav.symbol,
+                           state->strategies[stratIndex].fpositions[i].symbol) == 0 &&
+                    strcmp(bhav.expiry,
+                           state->strategies[stratIndex].fpositions[i].expiry) == 0 &&
+                    bhav.strike == state->strategies[stratIndex].fpositions[i].strike &&
+                    bhav.optType == state->strategies[stratIndex].fpositions[i].optType &&
+                    bhav.instType == state->strategies[stratIndex].fpositions[i].instType)
+                {
+                    state->strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
 
-                snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
-                         "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
-                         "AND inst_type = '%s';",
-                         bhav.ltp,
-                         state->strategies[stratIndex].fpositions[i].symbol,
-                         state->strategies[stratIndex].fpositions[i].expiry,
-                         state->strategies[stratIndex].fpositions[i].strike,
-                         OptTypeStrings[state->strategies[stratIndex].fpositions[i].optType],
-                         InstrumentTypeStrings[state->strategies[stratIndex].fpositions[i].instType]
-                         );
-                pgResult = executeQuery(state->db, query);
-                PQclear(pgResult);
+                    printf("pos after bhav is %s, %d, %f\n",
+                           state->strategies[stratIndex].fpositions[i].symbol,
+                           state->strategies[stratIndex].fpositions[i].qty,
+                           state->strategies[stratIndex].fpositions[i].ltp);
+                    // persist the matched bhav and update the position.
+                    char query[512];
+                    snprintf(query, sizeof(query),
+                             "INSERT INTO fno_bhav (strategy_id, symbol, ltp, expiry, strike, opt_type, inst_type, date) "
+                             "VALUES (%d, '%s', %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s', to_date('%s', 'DD/MM/YYYY'));",
+                             dbStratId,
+                             bhav.symbol,
+                             bhav.ltp,
+                             bhav.expiry,
+                             bhav.strike,
+                             OptTypeStrings[bhav.optType],
+                             InstrumentTypeStrings[bhav.instType],
+                             bhav.date
+                             );
+                    PGresult *pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+
+                    snprintf(query, sizeof(query),
+                             "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
+                             "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
+                             "AND inst_type = '%s';",
+                             bhav.ltp,
+                             state->strategies[stratIndex].fpositions[i].symbol,
+                             state->strategies[stratIndex].fpositions[i].expiry,
+                             state->strategies[stratIndex].fpositions[i].strike,
+                             OptTypeStrings[state->strategies[stratIndex].fpositions[i].optType],
+                             InstrumentTypeStrings[state->strategies[stratIndex].fpositions[i].instType]
+                             );
+                    pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+                }
             }
         }
         // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
@@ -2998,6 +3017,8 @@ void
 processBhav(FILE *bhavFile, char *date, int dbStratId,
             int stratIndex, State *state)
 {
+    (void)stratIndex;
+    (void)dbStratId;
     char line[4096];
     int i = 0;
     while (fgets(line, sizeof(line), bhavFile))
@@ -3016,55 +3037,63 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
         FNO_bhav bhav = {};
         LoadFNOBhav(&bhav, line);
         strcpy(bhav.date, date);
-        /* NOTE(Akhil): The symbol may be present in multiple strats,
-                        need to update the posns in all of them. */
-        for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+        for (int stratIndex = 0; stratIndex < state->currStratIndex + 1; stratIndex++)
         {
-
-            if (strcmp(bhav.symbol,
-                       state->strategies[stratIndex].fpositions[i].symbol) == 0 &&
-                strcmp(bhav.expiry,
-                       state->strategies[stratIndex].fpositions[i].expiry) == 0 &&
-                bhav.strike == state->strategies[stratIndex].fpositions[i].strike &&
-                bhav.optType == state->strategies[stratIndex].fpositions[i].optType &&
-                bhav.instType == state->strategies[stratIndex].fpositions[i].instType)
+            int dbStratId = getStratId(state->strategies[stratIndex].symbol, state->db);
+            if (dbStratId < 0)
             {
-                state->strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
+                printf("No strategy found matching symbol: %s\n",
+                       state->strategies[stratIndex].symbol);
+                continue;
+            }
+            for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+            {
 
-                printf("pos after bhav is %s, %d, %f\n",
-                       state->strategies[stratIndex].fpositions[i].symbol,
-                       state->strategies[stratIndex].fpositions[i].qty,
-                       state->strategies[stratIndex].fpositions[i].ltp);
-                // persist the matched bhav and update the position.
-                char query[512];
-                snprintf(query, sizeof(query),
-                         "INSERT INTO fno_bhav (strategy_id, symbol, ltp, expiry, strike, opt_type, inst_type, date) "
-                         "VALUES (%d, '%s', %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s', to_date('%s', 'DD/MM/YYYY'));",
-                         dbStratId,
-                         bhav.symbol,
-                         bhav.ltp,
-                         bhav.expiry,
-                         bhav.strike,
-                         OptTypeStrings[bhav.optType],
-                         InstrumentTypeStrings[bhav.instType],
-                         bhav.date
-                         );
-                PGresult *pgResult = executeQuery(state->db, query);
-                PQclear(pgResult);
+                if (strcmp(bhav.symbol,
+                           state->strategies[stratIndex].fpositions[i].symbol) == 0 &&
+                    strcmp(bhav.expiry,
+                           state->strategies[stratIndex].fpositions[i].expiry) == 0 &&
+                    bhav.strike == state->strategies[stratIndex].fpositions[i].strike &&
+                    bhav.optType == state->strategies[stratIndex].fpositions[i].optType &&
+                    bhav.instType == state->strategies[stratIndex].fpositions[i].instType)
+                {
+                    state->strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
 
-                snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
-                         "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
-                         "AND inst_type = '%s';",
-                         bhav.ltp,
-                         state->strategies[stratIndex].fpositions[i].symbol,
-                         state->strategies[stratIndex].fpositions[i].expiry,
-                         state->strategies[stratIndex].fpositions[i].strike,
-                         OptTypeStrings[state->strategies[stratIndex].fpositions[i].optType],
-                         InstrumentTypeStrings[state->strategies[stratIndex].fpositions[i].instType]
-                         );
-                pgResult = executeQuery(state->db, query);
-                PQclear(pgResult);
+                    printf("pos after bhav is %s, %d, %f\n",
+                           state->strategies[stratIndex].fpositions[i].symbol,
+                           state->strategies[stratIndex].fpositions[i].qty,
+                           state->strategies[stratIndex].fpositions[i].ltp);
+                    // persist the matched bhav and update the position.
+                    char query[512];
+                    snprintf(query, sizeof(query),
+                             "INSERT INTO fno_bhav (strategy_id, symbol, ltp, expiry, strike, opt_type, inst_type, date) "
+                             "VALUES (%d, '%s', %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s', to_date('%s', 'DD/MM/YYYY'));",
+                             dbStratId,
+                             bhav.symbol,
+                             bhav.ltp,
+                             bhav.expiry,
+                             bhav.strike,
+                             OptTypeStrings[bhav.optType],
+                             InstrumentTypeStrings[bhav.instType],
+                             bhav.date
+                             );
+                    PGresult *pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+
+                    snprintf(query, sizeof(query),
+                             "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
+                             "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
+                             "AND inst_type = '%s';",
+                             bhav.ltp,
+                             state->strategies[stratIndex].fpositions[i].symbol,
+                             state->strategies[stratIndex].fpositions[i].expiry,
+                             state->strategies[stratIndex].fpositions[i].strike,
+                             OptTypeStrings[state->strategies[stratIndex].fpositions[i].optType],
+                             InstrumentTypeStrings[state->strategies[stratIndex].fpositions[i].instType]
+                             );
+                    pgResult = executeQuery(state->db, query);
+                    PQclear(pgResult);
+                }
             }
         }
         // printf("cash after bhav is %f\n", state->strategies[stratIndex].cash);
@@ -4196,6 +4225,8 @@ makeVariationSettlements(State *state,
                          real64 rate,
                          int stratIndex)
 {
+    int passedStratId = dbStratId;
+    int passedStratIndex = stratIndex;
     int accIndex = getAccIndex(state, stratIndex, (char *)"SBIRC_", 6);
     if (accIndex < 1)
     {
@@ -4204,94 +4235,107 @@ makeVariationSettlements(State *state,
     }
 
     real64 totalVariation = 0.0;
-    for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+    for (int stratIndex = 0; stratIndex < state->currStratIndex + 1; stratIndex++)
     {
-        FNO_position pos = state->strategies[stratIndex].fpositions[i];
-        if (pos.instType == FUTSTK || pos.instType == FUTIDX)
+        /* only do it when its "All" or if it matches the strategy in question */
+        if (passedStratId != -1 && stratIndex != passedStratIndex) continue;
+        int dbStratId = getStratId(state->strategies[stratIndex].symbol, state->db);
+        if (dbStratId < 0)
         {
-            real64 variation = pos.qty * (pos.ltp - pos.price); 
-            printf("variation of %f against %s\n", variation, pos.symbol);
-            if (isUSD == 1)
+            printf("No strategy found matching symbol: %s\n",
+                   state->strategies[stratIndex].symbol);
+            continue;
+        }
+        for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+        {
+            FNO_position pos = state->strategies[stratIndex].fpositions[i];
+            if (pos.instType == FUTSTK || pos.instType == FUTIDX)
             {
-                /* only debit/credit the usd balance */
-                /* NOTE(Akhil): 1 because sbi for equities */
-                state->strategies[stratIndex].accs[accIndex].usdBalance += variation;
-                /* persist the accs balance. */
-                DBUpdateBankBalanceUSD(state->db,
-                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
-                                       state->strategies[stratIndex].accs[accIndex].symbol,
-                                       dbStratId);
-            }
-            else
+                real64 variation = pos.qty * (pos.ltp - pos.price); 
+                printf("variation of %f against %s\n", variation, pos.symbol);
+                if (isUSD == 1)
+                {
+                    /* only debit/credit the usd balance */
+                    /* NOTE(Akhil): 1 because sbi for equities */
+                    state->strategies[stratIndex].accs[accIndex].usdBalance += variation;
+                    /* persist the accs balance. */
+                    DBUpdateBankBalanceUSD(state->db,
+                                           state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                           state->strategies[stratIndex].accs[accIndex].symbol,
+                                           dbStratId);
+                }
+                else
             {
-                /* do the accounting in both base and settlement currencies */
-                state->strategies[stratIndex].accs[accIndex].inrBalance += variation;
-                /* persist the accs balance. */
-                DBUpdateBankBalanceINR(state->db,
-                                       state->strategies[stratIndex].accs[accIndex].inrBalance,
-                                       state->strategies[stratIndex].accs[accIndex].symbol,
-                                       dbStratId);
+                    /* do the accounting in both base and settlement currencies */
+                    state->strategies[stratIndex].accs[accIndex].inrBalance += variation;
+                    /* persist the accs balance. */
+                    DBUpdateBankBalanceINR(state->db,
+                                           state->strategies[stratIndex].accs[accIndex].inrBalance,
+                                           state->strategies[stratIndex].accs[accIndex].symbol,
+                                           dbStratId);
 
-                state->strategies[stratIndex].accs[accIndex].usdBalance += (variation / rate);
-                /* persist the accs balance. */
-                DBUpdateBankBalanceUSD(state->db,
-                                       state->strategies[stratIndex].accs[accIndex].usdBalance,
-                                       state->strategies[stratIndex].accs[accIndex].symbol,
-                                       dbStratId);
+                    state->strategies[stratIndex].accs[accIndex].usdBalance += (variation / rate);
+                    /* persist the accs balance. */
+                    DBUpdateBankBalanceUSD(state->db,
+                                           state->strategies[stratIndex].accs[accIndex].usdBalance,
+                                           state->strategies[stratIndex].accs[accIndex].symbol,
+                                           dbStratId);
+                }
+                char query[1024];
+                sprintf(query,
+                        "UPDATE strategy SET cash = %f where id = %d",
+                        state->strategies[stratIndex].accs[accIndex].inrBalance,
+                        dbStratId);
+                PGresult *pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+                totalVariation += variation;
+                // move the ltp now to the price column,
+                // so that the next time variation is correct.
+                pos.price = pos.ltp;
+                sprintf(query,
+                        "UPDATE fno_position SET price = %f where symbol = '%s' "
+                        "AND strike = %f AND expiry = '%s' AND opt_type = '%s' "
+                        "AND inst_type = '%s';",
+                        pos.ltp,
+                        pos.symbol,
+                        pos.strike,
+                        pos.expiry,
+                        OptTypeStrings[pos.optType],
+                        InstrumentTypeStrings[pos.instType]);
+                pgResult = executeQuery(state->db, query);
+                PQclear(pgResult);
+                state->strategies[stratIndex].fpositions[i] = pos;
+                // make the ledger entries.
+                char stratSymbol[100];
+                strcpy(stratSymbol, state->strategies[stratIndex].symbol);
+                LedgerEntry assetEntry = {};
+                strcat(assetEntry.accountName, stratSymbol);
+                strcat(assetEntry.accountName, "_CASH_USD");
+                assetEntry.type = ASSET;
+                assetEntry.currency = INR;
+                assetEntry.debit = variation;
+                assetEntry.id = state->strategies[state->currStratIndex].
+                    currJournalId;
+                LedgerEntry liabEntry = {};
+                strcat(liabEntry.accountName, stratSymbol);
+                strcat(liabEntry.accountName, "_VARIATION");
+                liabEntry.credit = variation;
+                liabEntry.type = EQUITY;
+                liabEntry.id = state->strategies[state->currStratIndex].
+                    currJournalId;
+                liabEntry.currency = INR;
+                state->strategies[state->currStratIndex].
+                    ledger[++state->strategies[state->currStratIndex].
+                    currEntryId] = assetEntry;
+                state->strategies[state->currStratIndex].
+                    ledger[++state->strategies[state->currStratIndex].
+                    currEntryId] = liabEntry;
+                DBInsertLedgerEntry(state->db, &assetEntry, dbStratId);
+                DBInsertLedgerEntry(state->db, &liabEntry, dbStratId);
             }
-            char query[1024];
-            sprintf(query,
-                    "UPDATE strategy SET cash = %f where id = %d",
-                    state->strategies[stratIndex].accs[accIndex].inrBalance,
-                    dbStratId);
-            PGresult *pgResult = executeQuery(state->db, query);
-            PQclear(pgResult);
-            totalVariation += variation;
-            // move the ltp now to the price column,
-            // so that the next time variation is correct.
-            pos.price = pos.ltp;
-            sprintf(query,
-                    "UPDATE fno_position SET price = %f where symbol = '%s' "
-                    "AND strike = %f AND expiry = '%s' AND opt_type = '%s' "
-                    "AND inst_type = '%s';",
-                    pos.ltp,
-                    pos.symbol,
-                    pos.strike,
-                    pos.expiry,
-                    OptTypeStrings[pos.optType],
-                    InstrumentTypeStrings[pos.instType]);
-            pgResult = executeQuery(state->db, query);
-            PQclear(pgResult);
-            state->strategies[stratIndex].fpositions[i] = pos;
-            // make the ledger entries.
-            char stratSymbol[100];
-            strcpy(stratSymbol, state->strategies[stratIndex].symbol);
-            LedgerEntry assetEntry = {};
-            strcat(assetEntry.accountName, stratSymbol);
-            strcat(assetEntry.accountName, "_CASH_USD");
-            assetEntry.type = ASSET;
-            assetEntry.currency = INR;
-            assetEntry.debit = variation;
-            assetEntry.id = state->strategies[state->currStratIndex].
-                currJournalId;
-            LedgerEntry liabEntry = {};
-            strcat(liabEntry.accountName, stratSymbol);
-            strcat(liabEntry.accountName, "_VARIATION");
-            liabEntry.credit = variation;
-            liabEntry.type = EQUITY;
-            liabEntry.id = state->strategies[state->currStratIndex].
-                currJournalId;
-            liabEntry.currency = INR;
-            state->strategies[state->currStratIndex].
-                ledger[++state->strategies[state->currStratIndex].
-                currEntryId] = assetEntry;
-            state->strategies[state->currStratIndex].
-                ledger[++state->strategies[state->currStratIndex].
-                currEntryId] = liabEntry;
-            DBInsertLedgerEntry(state->db, &assetEntry, dbStratId);
-            DBInsertLedgerEntry(state->db, &liabEntry, dbStratId);
         }
     }
+
     printf("total variation is %f\n", totalVariation);
 }
 
@@ -6314,6 +6358,7 @@ handleMTM(State *state, char *stratSymbol, char *date, char *res)
         return;
     }
     real64 rate = DBGetExchangeRate(state->db, date, stratId);
+    if (0 == strcmp(stratSymbol, "All")) stratId = -1;
     makeVariationSettlements(state, stratId, isUSD, rate,stratIndex);
     strcpy(res, "completed");
 }

@@ -1981,7 +1981,7 @@ LoadTrade(Trade *trade, char *line)
         }
         else if (i == 7)
         {
-            trade->qty = (uint64)atoi(token);
+            trade->qty = atoi(token);
         }
         else if (i == 8)
         {

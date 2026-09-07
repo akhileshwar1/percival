@@ -234,45 +234,60 @@ curl -v -X POST \
     -F "date=01/04/2026" \
     $SERVER/process-nav
 
-# 10. Trades
+# OFFboarding test -----------------------------------------------------
 curl -v -X POST \
-    -F "date=02/04/2026" \
-    -F "file=@alpha_200/eq_trades_alpha200_2apr.csv" \
-    $SERVER/trades-equity
+    -F "file=@alpha_200/pawan_off_cashflow.csv" \
+    $SERVER/offboard-cashflow
 
 curl -v -X POST \
-    -F "date=02/04/2026" \
-    -F "file=@alpha_200/eq_trades_alpha_200_FNO.csv" \
-    $SERVER/trades-fno
+    -F "file=@alpha_200/pawan_redeem.csv" \
+    $SERVER/offboard-redeem
 
-# 11. eq Bhavcopy
 curl -v -X POST \
-    -F "strategySymbol=B105S29C" \
-    -F "date=02/04/2026" \
-    -F "file=@alpha_500/Bhavcopies/WE020426.CSV" \
-    $SERVER/bhav-eq
+    -F "date=01/04/2026" \
+    -F "invName=SSF0014A200" \
+    -F "file=@alpha_200/pawan_off_bank.csv" \
+    $SERVER/offboard-bank
 
+# # 10. Trades
+# curl -v -X POST \
+#     -F "date=02/04/2026" \
+#     -F "file=@alpha_200/eq_trades_alpha200_2apr.csv" \
+#     $SERVER/trades-equity
+#
+# curl -v -X POST \
+#     -F "date=02/04/2026" \
+#     -F "file=@alpha_200/eq_trades_alpha_200_FNO.csv" \
+#     $SERVER/trades-fno
+#
+# # 11. eq Bhavcopy
 # curl -v -X POST \
 #     -F "strategySymbol=B105S29C" \
-#     -F "file=@alpha_200/21_Price Update_TVSMNCRPSS.csv" \
-#     $SERVER/price-update
+#     -F "date=02/04/2026" \
+#     -F "file=@alpha_500/Bhavcopies/WE020426.CSV" \
+#     $SERVER/bhav-eq
 #
-curl -v -X POST \
-    -F "strategySymbol=B105S29C" \
-    -F "date=02/04/2026" \
-    -F "file=@alpha_500/WO020426.CSV" \
-    $SERVER/bhav-fno
-
-# 12. MTM Process
-curl -v -X POST \
-    -F "date=02/04/2026" \
-    -F "strategySymbol=B105S29C" \
-    $SERVER/mtm-process
-
-curl -v -X POST \
-    -F "strategySymbol=B105S29C" \
-    -F "date=02/04/2026" \
-    $SERVER/process-nav
+# # curl -v -X POST \
+# #     -F "strategySymbol=B105S29C" \
+# #     -F "file=@alpha_200/21_Price Update_TVSMNCRPSS.csv" \
+# #     $SERVER/price-update
+# #
+# curl -v -X POST \
+#     -F "strategySymbol=B105S29C" \
+#     -F "date=02/04/2026" \
+#     -F "file=@alpha_500/WO020426.CSV" \
+#     $SERVER/bhav-fno
+#
+# # 12. MTM Process
+# curl -v -X POST \
+#     -F "date=02/04/2026" \
+#     -F "strategySymbol=B105S29C" \
+#     $SERVER/mtm-process
+#
+# curl -v -X POST \
+#     -F "strategySymbol=B105S29C" \
+#     -F "date=02/04/2026" \
+#     $SERVER/process-nav
 # ===== here=======
 # # 9. Fund Expense
 # curl -v -X POST \

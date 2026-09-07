@@ -1638,15 +1638,12 @@ AccountFromExpense(LedgerEntry *assetEntry, LedgerEntry *liabEntry,
 void
 AccountFromBank(LedgerEntry *assetEntry,
                 LedgerEntry *liabEntry,
-                char *line,
-                Currency_code startCurr)
+                char *line)
 {
     char *token;
     token = strtok(line, ",");
     int i = 0;
     char accountName[100] = "";
-    real64 prevValue;
-    Currency_code prevDenom = startCurr;
     while (token != NULL)
     {
         if (i ==  3)
@@ -1665,22 +1662,25 @@ AccountFromBank(LedgerEntry *assetEntry,
         else if (i ==  5)
         {
             liabEntry->credit = (real64)atof(token);
-            liabEntry->currency = prevDenom;
-            prevValue = liabEntry->credit;
+            char prefix[100];
+            strncpy(prefix, liabEntry->accountName, 3);
+            prefix[4] = '\0';
+            char longPrefix[100];
+            strncpy(longPrefix, liabEntry->accountName, 6);
+            longPrefix[7] = '\0';
+            if (0 == strcmp(prefix, "SBM") ||
+                0 == strcmp(longPrefix, "SBIUSD"))
+            {
+                liabEntry->currency = USD;
+            }
+            else
+            {
+                liabEntry->currency = INR;
+            }
         }
         else if (i ==  6)
         {
             assetEntry->debit = (real64)atof(token);
-            if (prevValue != assetEntry->debit)
-            {
-                assetEntry->currency = (startCurr == USD) ? INR : USD;
-                prevDenom = assetEntry->currency;
-            }
-            else
-            {
-                assetEntry->currency = (startCurr == USD) ? USD : INR;
-                prevDenom = assetEntry->currency;
-            }
         }
         else if (i == 7)
         {
@@ -1692,6 +1692,21 @@ AccountFromBank(LedgerEntry *assetEntry,
             strcat(accountName, token); 
             printf("account name is %s\n", accountName);
             strcpy(assetEntry->accountName, accountName);
+            char prefix[100];
+            strncpy(prefix, assetEntry->accountName, 3);
+            prefix[4] = '\0';
+            char longPrefix[100];
+            strncpy(longPrefix, assetEntry->accountName, 6);
+            longPrefix[7] = '\0';
+            if (0 == strcmp(prefix, "SBM") ||
+                0 == strcmp(longPrefix, "SBIUSD"))
+            {
+                assetEntry->currency = USD;
+            }
+            else
+            {
+                assetEntry->currency = INR;
+            }
             assetEntry->type = ASSET;
         }
         token = strtok(NULL, ",");
@@ -5427,14 +5442,7 @@ handleOffBank(State *state, char *invName, char *date, char *res)
         LedgerEntry liabEntry = {};
         assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
         liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
-        if (i == 3)
-        {
-            AccountFromBank(&assetEntry, &liabEntry, line, INR);
-        }
-        else
-        {
-            AccountFromBank(&assetEntry, &liabEntry, line, USD);
-        }
+        AccountFromBank(&assetEntry, &liabEntry, line);
 
         // insert or update the liabEntry bank acc.
         real64 rate = DBGetExchangeRate(state->db, date, stratId);
@@ -5509,26 +5517,59 @@ handleOffBank(State *state, char *invName, char *date, char *res)
                     }
                     else
                     {
-                        /* do the accounting in both base and settlement currencies */
-                        state->strategies[state->currStratIndex].accs[i].inrBalance -=
-                            liabEntry.credit; 
-                        /* persist the accs balance. */
-                       DBUpdateBankBalanceINR(state->db,
-                                               state->strategies[state->currStratIndex].accs[i].inrBalance,
-                                               liabEntry.accountName,
-                                               stratId); 
+                        printf("bal before inr %f\n", 
+                               state->strategies[state->currStratIndex].accs[i].inrBalance);
+                        printf("bal before usd %f\n", 
+                               state->strategies[state->currStratIndex].accs[i].usdBalance);
 
-                       state->strategies[state->currStratIndex].accs[i].inrBalance -=
-                            (liabEntry.credit / rate); 
-                        /* persist the accs balance. */
-                       DBUpdateBankBalanceUSD(state->db,
-                                               state->strategies[state->currStratIndex].accs[i].usdBalance,
-                                               liabEntry.accountName,
-                                               stratId); 
+                        if (liabEntry.currency == INR)
+                        {
+                            printf("liab entry is INR\n");
+
+                            /* do the accounting in both base and settlement currencies */
+                            state->strategies[state->currStratIndex].accs[i].inrBalance -=
+                                liabEntry.credit; 
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceINR(state->db,
+                                                   state->strategies[state->currStratIndex].accs[i].inrBalance,
+                                                   liabEntry.accountName,
+                                                   stratId); 
+
+                            state->strategies[state->currStratIndex].accs[i].usdBalance -=
+                                (liabEntry.credit / rate); 
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceUSD(state->db,
+                                                   state->strategies[state->currStratIndex].accs[i].usdBalance,
+                                                   liabEntry.accountName,
+                                                   stratId); 
+
+                        }
+                        else
+                        {
+                            printf("liab entry is USD\n");
+                            /* do the accounting in both base and settlement currencies */
+                            /* first in usd */
+                            state->strategies[state->currStratIndex].accs[i].usdBalance -=
+                                (liabEntry.credit); 
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceUSD(state->db,
+                                                   state->strategies[state->currStratIndex].accs[i].usdBalance,
+                                                   liabEntry.accountName,
+                                                   stratId); 
+
+                            state->strategies[state->currStratIndex].accs[i].inrBalance -=
+                                (liabEntry.credit * rate); 
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceINR(state->db,
+                                                   state->strategies[state->currStratIndex].accs[i].inrBalance,
+                                                   liabEntry.accountName,
+                                                   stratId); 
+                        }
+                        printf("bal after inr %f\n", 
+                               state->strategies[state->currStratIndex].accs[i].inrBalance);
+                        printf("bal after usd %f\n", 
+                               state->strategies[state->currStratIndex].accs[i].usdBalance);
                     }
-                   
-                    printf("bal after %f\n", 
-                           state->strategies[state->currStratIndex].accs[i].usdBalance);
 
                 }
             }
@@ -5593,22 +5634,59 @@ handleOffBank(State *state, char *invName, char *date, char *res)
                     }
                     else
                     {
-                        /* do the accounting in both base and settlement currencies */
-                        state->strategies[state->currStratIndex].accs[i].inrBalance +=
-                            assetEntry.debit; 
-                        /* persist the accs balance. */
-                       DBUpdateBankBalanceINR(state->db,
-                                               state->strategies[state->currStratIndex].accs[i].inrBalance,
-                                               liabEntry.accountName,
-                                               stratId); 
+                        printf("bal before inr %f\n", 
+                               state->strategies[state->currStratIndex].accs[i].inrBalance);
+                        printf("bal before usd %f\n", 
+                               state->strategies[state->currStratIndex].accs[i].usdBalance);
 
-                       state->strategies[state->currStratIndex].accs[i].usdBalance +=
-                            (assetEntry.debit / rate); 
-                        /* persist the accs balance. */
-                       DBUpdateBankBalanceUSD(state->db,
-                                               state->strategies[state->currStratIndex].accs[i].usdBalance,
-                                               assetEntry.accountName,
-                                               stratId); 
+
+                        if (assetEntry.currency == INR)
+                        {
+                            printf("asset entry is INR\n");
+                            /* do the accounting in both base and settlement currencies */
+                            state->strategies[state->currStratIndex].accs[i].inrBalance +=
+                                assetEntry.debit; 
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceINR(state->db,
+                                                   state->strategies[state->currStratIndex].accs[i].inrBalance,
+                                                   liabEntry.accountName,
+                                                   stratId); 
+
+                            state->strategies[state->currStratIndex].accs[i].usdBalance +=
+                                (assetEntry.debit / rate); 
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceUSD(state->db,
+                                                   state->strategies[state->currStratIndex].accs[i].usdBalance,
+                                                   assetEntry.accountName,
+                                                   stratId); 
+                        }
+                        else
+                        {
+                            printf("asset entry is USD\n");
+                            /* do the accounting in both base and settlement currencies */
+                            /* first in usd */
+                            state->strategies[state->currStratIndex].accs[i].usdBalance +=
+                                (assetEntry.debit); 
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceUSD(state->db,
+                                                   state->strategies[state->currStratIndex].accs[i].usdBalance,
+                                                   assetEntry.accountName,
+                                                   stratId);
+
+                            state->strategies[state->currStratIndex].accs[i].inrBalance +=
+                                (assetEntry.debit * rate); 
+                            /* persist the accs balance. */
+                            DBUpdateBankBalanceINR(state->db,
+                                                   state->strategies[state->currStratIndex].accs[i].inrBalance,
+                                                   liabEntry.accountName,
+                                                   stratId); 
+
+                        }
+                        printf("bal after inr %f\n", 
+                               state->strategies[state->currStratIndex].accs[i].inrBalance);
+                        printf("bal after usd %f\n", 
+                               state->strategies[state->currStratIndex].accs[i].usdBalance);
+
                     }
                     
                 }
@@ -6967,14 +7045,7 @@ handleBankTransfer(State *state, char *date, char *res)
         LedgerEntry liabEntry = {};
         assetEntry.id = state->strategies[state->currStratIndex].currJournalId;
         liabEntry.id = state->strategies[state->currStratIndex].currJournalId;
-        if (i == 3)
-        {
-            AccountFromBank(&assetEntry, &liabEntry, line, INR);
-        }
-        else
-        {
-            AccountFromBank(&assetEntry, &liabEntry, line, USD);
-        }
+        AccountFromBank(&assetEntry, &liabEntry, line);
 
         // insert or update the liabEntry bank acc.
         real64 rate = DBGetExchangeRate(state->db, date, stratId);

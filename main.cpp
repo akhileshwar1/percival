@@ -4390,7 +4390,7 @@ getTotalCashUSD(State *state, int stratIndex)
 {
     real64 totalCashUSD = 0.0;
     // NOTE(Akhil) : starting i from 1 because we skip sbm account.
-    for (int i = 0; i <= state->strategies[stratIndex].currAccIndex;
+    for (int i = 1; i <= state->strategies[stratIndex].currAccIndex;
          i++)
     {
         totalCashUSD += state->strategies[stratIndex].accs[i].usdBalance;
@@ -5649,7 +5649,7 @@ handleOffBank(State *state, char *invName, char *date, char *res)
                             /* persist the accs balance. */
                             DBUpdateBankBalanceINR(state->db,
                                                    state->strategies[state->currStratIndex].accs[i].inrBalance,
-                                                   liabEntry.accountName,
+                                                   assetEntry.accountName,
                                                    stratId); 
 
                             state->strategies[state->currStratIndex].accs[i].usdBalance +=
@@ -5678,7 +5678,7 @@ handleOffBank(State *state, char *invName, char *date, char *res)
                             /* persist the accs balance. */
                             DBUpdateBankBalanceINR(state->db,
                                                    state->strategies[state->currStratIndex].accs[i].inrBalance,
-                                                   liabEntry.accountName,
+                                                   assetEntry.accountName,
                                                    stratId); 
 
                         }

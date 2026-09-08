@@ -41,3 +41,18 @@ Net quantities implied by trade history
 * link investor to billgroup api.
 * apply perf fee api.
 * accounting all the transitions. gain, income, interest, currencygain etc
+
+
+
+
+
+
+
+
+
+
+
+## diff with WS:
+* currency gain directly realised into bank balance whereas in WS its in seperate
+  currency gain/loss account.
+* seperate accounts for almost every transition.

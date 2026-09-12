@@ -645,12 +645,14 @@ void ConvertDateSeparator(const char *input_date, char *output, size_t output_si
     /* 1. Extract pieces from DD-MM-YYYY layout */
     if (sscanf(input_date, "%d-%d-%d", &day, &month, &year) == 3)
     {
+        if (year < 2000) year += 2000;
         /* 2. Format with zero padding into your destination buffer */
         snprintf(output, output_size, "%02d/%02d/%04d", day, month, year);
     }
     /* 3/6/2026 to 03/06/2026 */
     else if (sscanf(input_date, "%d/%d/%d", &day, &month, &year) == 3)
     {
+        if (year < 2000) year += 2000;
         /* 2. Format with zero padding into your destination buffer */
         snprintf(output, output_size, "%02d/%02d/%04d", day, month, year);
     }

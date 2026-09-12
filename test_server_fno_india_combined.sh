@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# opening nav
+# 76169.02 + 2.06 + (147756 / 94.6543) - 809.56 - 332 + 24.55 
 SERVER=http://localhost:8888
 # SERVER=http://13.53.138.234:8888
 
@@ -15,7 +16,7 @@ curl -v -X POST \
     -F "hurdlerate=-50" \
     -F "frequency=ANNIVERSARY" \
     -F "perfFee=20" \
-    -F "mgmtFee=1" \
+    -F "mgmtFee=2" \
     -F "date=21/03/2024" \
     $SERVER/bill-group
 
@@ -107,11 +108,16 @@ curl -v -X POST \
     -F "date=01/04/2026" \
     $SERVER/process-nav
 
+curl -v -X POST \
+    -F "date=02/04/2026" \
+    -F "file=@alpha_India_Combined/eq_trades_India_combined_2_apr.csv" \
+    $SERVER/trades-fno
+
 # curl -v -X POST \
 #     -F "strategySymbol=31500012C" \
 #     -F "file=@alpha_India_Combined/21_Price Update_TVSMNCRPSS.csv" \
 #     $SERVER/price-update
-#
+
 curl -v -X POST \
     -F "strategySymbol=31500012C" \
     -F "date=02/04/2026" \

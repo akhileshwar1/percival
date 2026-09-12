@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# opening nav
+# 827,875.46 - 25,785.96 - 968.89 + (3185617.25 / 94.6543) - 64,381.38 - 3012.73
 SERVER=http://localhost:8888
 # SERVER=http://13.53.138.234:8888
 
@@ -15,7 +16,7 @@ curl -v -X POST \
     -F "hurdlerate=-50" \
     -F "frequency=ANNIVERSARY" \
     -F "perfFee=20" \
-    -F "mgmtFee=1" \
+    -F "mgmtFee=3" \
     -F "date=21/03/2024" \
     $SERVER/bill-group
 

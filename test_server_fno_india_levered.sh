@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# opening nav
+# 159898.34 - 4834.95 +112.52 - 351.23
 SERVER=http://localhost:8888
 # SERVER=http://13.53.138.234:8888
 
@@ -15,7 +16,7 @@ curl -v -X POST \
     -F "hurdlerate=-50" \
     -F "frequency=ANNIVERSARY" \
     -F "perfFee=20" \
-    -F "mgmtFee=1" \
+    -F "mgmtFee=0.5" \
     -F "date=21/03/2024" \
     $SERVER/bill-group
 
@@ -102,40 +103,39 @@ curl -v -X POST \
     -F "date=01/04/2026" \
     $SERVER/process-nav
 
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "file=@alpha_India_FNO_Levered/21_Price Update_TVSMNCRPSS.csv" \
-#     $SERVER/price-update
-#
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "file=@alpha_India_FNO_Levered/21_Price Update_TVSMNCRPSS.csv" \
+    $SERVER/price-update
 
-# curl -v -X POST \
-#     -F "date=02/04/2026" \
-#     -F "file=@alpha_India_FNO_Levered/eq_trades_India_FNO_Levered_2.csv" \
-#     $SERVER/trades-fno
-#
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "date=02/04/2026" \
-#     -F "file=@alpha_500/WO020426.CSV" \
-#     $SERVER/bhav-fno
-#
-# # sensex bhav
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "date=02/04/2026" \
-#     -F "file=@alpha_India_FNO/bhav_sensex_2_apr.CSV" \
-#     $SERVER/bse-bhav
-#
-# # 12. MTM Process
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "date=02/04/2026" \
-#     $SERVER/mtm-process
-#
-# curl -v -X POST \
-#     -F "strategySymbol=31500012A" \
-#     -F "date=02/04/2026" \
-#     $SERVER/process-nav
+curl -v -X POST \
+    -F "date=02/04/2026" \
+    -F "file=@alpha_India_FNO_Levered/eq_trades_India_FNO_Levered_2.csv" \
+    $SERVER/trades-fno
+
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=02/04/2026" \
+    -F "file=@alpha_India_FNO_Levered/eq_bhav_1_India_FNO_Levered_2.CSV" \
+    $SERVER/bhav-fno
+
+# sensex bhav
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=02/04/2026" \
+    -F "file=@alpha_India_FNO/bhav_sensex_2_apr.CSV" \
+    $SERVER/bse-bhav
+
+# 12. MTM Process
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=02/04/2026" \
+    $SERVER/mtm-process
+
+curl -v -X POST \
+    -F "strategySymbol=31500012A" \
+    -F "date=02/04/2026" \
+    $SERVER/process-nav
 # ===== here=======
 # # 9. Fund Expense
 # curl -v -X POST \

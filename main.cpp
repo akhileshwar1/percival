@@ -2848,10 +2848,15 @@ processPriceUpdates(FILE *bhavFile,
                          ); 
                 PGresult *pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
+                state->strategies[stratIndex].positions[i].pnl =
+                    state->strategies[stratIndex].positions[i].qty *
+                    (update.price -
+                    state->strategies[stratIndex].positions[i].price);
 
                 snprintf(query, sizeof(query),
-                         "UPDATE position_equity SET ltp = %f WHERE symbol = '%s' AND strategy_id = %d",
+                         "UPDATE position_equity SET ltp = %f, pnl = %f WHERE symbol = '%s' AND strategy_id = %d",
                          update.price,
+                         state->strategies[stratIndex].positions[i].pnl,
                          state->strategies[stratIndex].positions[i].symbol,
                          stratId
                          );
@@ -2885,10 +2890,15 @@ processPriceUpdates(FILE *bhavFile,
                          ); 
                 PGresult *pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
+                state->strategies[stratIndex].fpositions[i].pnl =
+                    state->strategies[stratIndex].fpositions[i].qty *
+                    (update.price -
+                    state->strategies[stratIndex].fpositions[i].price);
 
                 snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' AND strategy_id = %d",
+                         "UPDATE fno_position SET ltp = %f, pnl = %f WHERE symbol = '%s' AND strategy_id = %d",
                          update.price,
+                         state->strategies[stratIndex].fpositions[i].pnl,
                          state->strategies[stratIndex].positions[i].symbol,
                          stratId
                          );
@@ -2948,10 +2958,14 @@ processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
                              ); 
                     PGresult *pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
-
+                    state->strategies[stratIndex].positions[i].pnl =
+                        state->strategies[stratIndex].positions[i].qty *
+                        (bhav.ltp -
+                        state->strategies[stratIndex].positions[i].price);
                     snprintf(query, sizeof(query),
-                             "UPDATE position_equity SET ltp = %f WHERE sys_id = '%s'",
+                             "UPDATE position_equity SET ltp = %f, pnl = %f WHERE sys_id = '%s'",
                              bhav.ltp,
+                             state->strategies[stratIndex].positions[i].pnl,
                              state->strategies[stratIndex].positions[i].sys_id
                              );
                     pgResult = executeQuery(state->db, query);
@@ -3030,12 +3044,16 @@ processBhavBSE(FILE *bhavFile, char *date, int dbStratId,
                              );
                     PGresult *pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
-
+                    state->strategies[stratIndex].fpositions[i].pnl =
+                        state->strategies[stratIndex].fpositions[i].qty *
+                        (bhav.ltp -
+                        state->strategies[stratIndex].fpositions[i].price);
                     snprintf(query, sizeof(query),
-                             "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
+                             "UPDATE fno_position SET ltp = %f, pnl = %f WHERE symbol = '%s' "
                              "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
                              "AND inst_type = '%s';",
                              bhav.ltp,
+                             state->strategies[stratIndex].fpositions[i].pnl,
                              state->strategies[stratIndex].fpositions[i].symbol,
                              state->strategies[stratIndex].fpositions[i].expiry,
                              state->strategies[stratIndex].fpositions[i].strike,
@@ -3116,12 +3134,17 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
                              );
                     PGresult *pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
+                    state->strategies[stratIndex].fpositions[i].pnl =
+                        state->strategies[stratIndex].fpositions[i].qty *
+                        (bhav.ltp -
+                        state->strategies[stratIndex].fpositions[i].price);
 
                     snprintf(query, sizeof(query),
-                             "UPDATE fno_position SET ltp = %f WHERE symbol = '%s' "
+                             "UPDATE fno_position SET ltp = %f, pnl = %f WHERE symbol = '%s' "
                              "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
                              "AND inst_type = '%s';",
                              bhav.ltp,
+                             state->strategies[stratIndex].fpositions[i].pnl,
                              state->strategies[stratIndex].fpositions[i].symbol,
                              state->strategies[stratIndex].fpositions[i].expiry,
                              state->strategies[stratIndex].fpositions[i].strike,
@@ -3286,12 +3309,20 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                             }
                             else
                             {
+                                int totalQty = 
+                                    state->strategies[stratIndex].fpositions[i].qty +
+                                    trade.qty;
                                 state->strategies[stratIndex].positions[i].price =
                                     ((state->strategies[stratIndex].positions[i].price *
                                     state->strategies[stratIndex].positions[i].qty)
                                     + (trade.qty * priceAfterFee)) 
                                     / (state->strategies[stratIndex].positions[i].qty +
                                     trade.qty);
+                                /* unrealised price gain */
+                                state->strategies[stratIndex].fpositions[i].pnl =
+                                    totalQty *
+                                    (priceAfterFee -
+                                    state->strategies[stratIndex].fpositions[i].price);
                             }
 
                             state->strategies[stratIndex].positions[i].qty += trade.qty;
@@ -3381,12 +3412,20 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                             }
                             else
                             {
+                                int totalQty = 
+                                    state->strategies[stratIndex].fpositions[i].qty +
+                                    trade.qty;
                                 state->strategies[stratIndex].positions[i].price =
                                     ((state->strategies[stratIndex].positions[i].price *
                                     state->strategies[stratIndex].positions[i].qty) +
                                     (trade.qty * priceAfterFee)) 
                                     / (state->strategies[stratIndex].positions[i].qty +
                                     trade.qty);
+                                /* unrealised price gain */
+                                state->strategies[stratIndex].fpositions[i].pnl =
+                                    totalQty *
+                                    (priceAfterFee -
+                                    state->strategies[stratIndex].fpositions[i].price);
                             }
                             state->strategies[stratIndex].positions[i].qty += trade.qty;
                             ++state->strategies[state->currStratIndex].currJournalId;
@@ -3772,21 +3811,29 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                             if (state->strategies[stratIndex].fpositions[i].qty + 
                                 trade.qty == 0)
                             {
+                                /* realised price gain */
                                 state->strategies[stratIndex].fpositions[i].pnl =
                                     trade.qty * priceAfterFee +
                                     state->strategies[stratIndex].fpositions[i].price *
                                     state->strategies[stratIndex].fpositions[i].qty;
-
                                 state->strategies[stratIndex].fpositions[i].price = 0.0;
                             }
                             else
                             {
+                                int totalQty = 
+                                    state->strategies[stratIndex].fpositions[i].qty +
+                                    trade.qty;
                                 state->strategies[stratIndex].fpositions[i].price =
                                     ((state->strategies[stratIndex].fpositions[i].price *
                                     state->strategies[stratIndex].fpositions[i].qty)
                                     + (trade.qty * priceAfterFee)) 
                                     / (state->strategies[stratIndex].fpositions[i].qty +
                                     trade.qty);
+                                /* unrealised price gain */
+                                state->strategies[stratIndex].fpositions[i].pnl =
+                                    totalQty *
+                                    (priceAfterFee -
+                                    state->strategies[stratIndex].fpositions[i].price);
                             }
                             state->strategies[stratIndex].fpositions[i].qty += trade.qty;
 
@@ -3874,11 +3921,19 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                             }
                             else
                             {
+                                int totalQty = 
+                                    state->strategies[stratIndex].fpositions[i].qty +
+                                    trade.qty;
                                 state->strategies[stratIndex].fpositions[i].price =
                                     ((state->strategies[stratIndex].fpositions[i].price *
                                     state->strategies[stratIndex].fpositions[i].qty) +
                                     (trade.qty * priceAfterFee)) 
                                     / (state->strategies[stratIndex].fpositions[i].qty + trade.qty);
+                                /* unrealised price gain */
+                                state->strategies[stratIndex].fpositions[i].pnl =
+                                    totalQty *
+                                    (priceAfterFee -
+                                    state->strategies[stratIndex].fpositions[i].price);
                             }
                             state->strategies[stratIndex].fpositions[i].qty += trade.qty;
                             ++state->strategies[state->currStratIndex].currJournalId;

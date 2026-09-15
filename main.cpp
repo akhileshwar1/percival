@@ -575,6 +575,22 @@ int get_month_number(const char *month_str) {
     return -1; // Return -1 if the month is invalid
 }
 
+/* 1/4/2026 or 1/4/26 to 01/04/2026 */
+void cleanDate(const char *input_date, char *output_date) {
+    int day, year, month;
+
+    // Parse the input string (e.g., "30-Jun-2026")
+    if (sscanf(input_date, "%d/%d/%d", &day, &month, &year) != 3)
+    {
+        return; // Parsing failed
+    }
+
+    /* incase it's 26 */
+    if (year < 2000) year += 2000;
+
+    sprintf(output_date, "%02d/%02d/%04d", day, month, year);
+}
+
 /* 30-Jun-2026 or 30-Jun-26 to 30/06/2026 */
 int convert_date_format(const char *input_date, char *output_date) {
     int day, year;
@@ -1906,6 +1922,7 @@ LoadFNOTrade(FNO_trade *trade, char *line)
             ConvertDateSeparator(token, output, sizeof(output));
             if (output[0] != '\0')
             {
+                cleanDate(token, output);
                 strcpy(trade->expiry, output);
             }
         }
@@ -2056,7 +2073,9 @@ LoadOldFNOPosition(FNO_position *pos, char *line)
         }
         else if (i ==  3)
         {
-            strcpy(pos->expiry, token);
+            char output[11]; // "DD/MM/YYYY" requires 10 chars + 1 for null terminator
+            cleanDate(token, output);
+            strcpy(pos->expiry, output);
         }
         else if (i ==  4)
         {
@@ -2127,7 +2146,9 @@ LoadOldBondPosition(Bond_position *pos, char *line)
         }
         else if (i == 3)
         {
-            strcpy(pos->expiryDate, token);
+            char output[11]; // "DD/MM/YYYY" requires 10 chars + 1 for null terminator
+            cleanDate(token, output);
+            strcpy(pos->expiryDate, output);
         }
         else if (i == 4)
         {
@@ -3065,7 +3086,6 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
             }
             for (int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
             {
-
                 if (strcmp(bhav.symbol,
                            state->strategies[stratIndex].fpositions[i].symbol) == 0 &&
                     strcmp(bhav.expiry,

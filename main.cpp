@@ -1214,7 +1214,7 @@ LoadBSEBhav(FNO_bhav *bhav, char *line)
                 bhav->strike = 0;
             }
         }
-        else if (i == 18)
+        else if (i == 17)
         {
             bhav->ltp = (real64)atof(token);
         }
@@ -3660,11 +3660,12 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
 {
     (void)isUSD;
     (void)rate;
-    char line[1024];
+    char line[4096];
     int i = 0;
     int stratIndex = -1;
     while (fgets(line, sizeof(line), tradeFile))
     {
+        // printf("line is %s\n", line);
         if (i == 0)
         {
             i++;
@@ -3676,7 +3677,7 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
         /* NOTE(Akhil): this overwriting of stratId here is to 
          * allow for handling a trade file containing trades for
          * multiple strategies in the same file */
-        char copyLine[1024];
+        char copyLine[4096];
         strcpy(copyLine, line);
         LoadStratSymbolFromFile(copyLine, stratSymbol);
         int stratId = getStratId(stratSymbol, state->db); 

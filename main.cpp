@@ -4479,7 +4479,11 @@ getTotalCashUSD(State *state, int stratIndex)
 
 /* accrue interest of the day for all bond positions */
 void
-accrueInterest(State *state, int stratIndex, int stratId, real64 exRate)
+accrueInterest(State *state,
+               int stratIndex,
+               int stratId,
+               real64 exRate,
+               real64 prevRate)
 {
     real64 totalInterestToAccrue = 0;
     for (int i = 0; i < state->strategies[stratIndex].currBondIndex + 1; i++)
@@ -4489,6 +4493,12 @@ accrueInterest(State *state, int stratIndex, int stratId, real64 exRate)
     }
 
     /* update the mem as well as the db, always in USD */
+    /* first reevaluate the dollar value due to currency gain and later add the
+     * current interest */
+    real64 inrBalance = state->strategies[stratIndex].interestAccrued  * prevRate;
+    real64 currencyGain =
+        (inrBalance / exRate) - state->strategies[stratIndex].interestAccrued;  
+    state->strategies[stratIndex].interestAccrued += currencyGain;
     state->strategies[stratIndex].interestAccrued += (totalInterestToAccrue / exRate);
     printf("total interest accrued in usd is %f\n", state->strategies[stratIndex].interestAccrued);
     DBUpdateInterest(state->db, state->strategies[stratIndex].interestAccrued, stratId);
@@ -4535,7 +4545,7 @@ printNav(State *state,
     printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
     /* accrue interest of the day for all bond positions */
     real64 TDS = state->strategies[stratIndex].TDS; 
-    accrueInterest(state, stratIndex, dbStratId, exRate->rate);
+    accrueInterest(state, stratIndex, dbStratId, exRate->rate, prevRate->rate);
     real64 interestAccrued = state->strategies[stratIndex].interestAccrued;
     /* add the receivables now */
     real64 receivable = state->strategies[stratIndex].receivable;

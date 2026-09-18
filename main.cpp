@@ -126,6 +126,8 @@ typedef struct
     char billSymbol[100];
     char invName[100];
     char isUSD[100]; /* is it a usd strategy */
+    char inrValue[100];
+    char usdValue[100];
 
     char date[100];
     char expiryDate[100];
@@ -345,6 +347,8 @@ typedef struct
     char symbol[100];
     char isin[100];
     real64 qty;
+    real64 inrValue;
+    real64 usdValue;
     real64 price;
     real64 interestRate;
     char expiryDate[100];
@@ -1059,17 +1063,34 @@ DBInsertFNOPosition(PGconn *conn, FNO_position *pos, int stratId)
 }
 
 void
+DBUpdateBondPositionValue(PGconn *conn, Bond_position *pos, int stratId)
+{
+    char query[2096];
+    snprintf(query, sizeof(query),
+             "UPDATE bond_position SET inr_value = %f, usd_value = %f "
+             "WHERE isin = '%s' AND strategy_id = %d;",
+             pos->inrValue,
+             pos->usdValue,
+             pos->isin,
+             stratId);
+    PGresult *res = executeQuery(conn, query);
+    PQclear(res);   
+}
+
+void
 DBInsertBondPosition(PGconn *conn, Bond_position *pos, int stratId)
 {
     char query[2096];
     snprintf(query, sizeof(query),
-             "INSERT INTO bond_position (isin, symbol, date, expiry_date, qty, price, interest_rate, strategy_id) "
-             "VALUES ('%s', '%s', '%s', '%s', %f, %f, %f, %d) ",
+             "INSERT INTO bond_position (isin, symbol, date, expiry_date, qty, inr_value, usd_value, price, interest_rate, strategy_id) "
+             "VALUES ('%s', '%s', '%s', '%s', %f, %f, %f, %f, %f, %d) ",
              pos->isin,
              pos->symbol,
              pos->date,
              pos->expiryDate,
              pos->qty,
+             pos->inrValue,
+             pos->usdValue,
              pos->price,
              pos->interestRate,
              stratId);
@@ -2158,11 +2179,19 @@ LoadOldBondPosition(Bond_position *pos, char *line)
         {
             pos->qty = (real64)atof(token);
         }
-        else if (i == 8)
+        else if (i ==  7)
+        {
+            pos->inrValue = (real64)atof(token);
+        }
+        else if (i ==  8)
+        {
+            pos->usdValue = (real64)atof(token);
+        }
+        else if (i == 9)
         {
             pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
         }
-        else if (i == 9)
+        else if (i == 10)
         {
             pos->interestRate = (real64)atof(token); // NOTE(Akhil): needs to be different.
         }
@@ -2536,9 +2565,17 @@ loadStateFromDB(State *state)
                                 }
                                 else if (j == 6)
                                 {
-                                    pos.price = (real64)atof(str);
+                                    pos.inrValue = (real64)atof(str);
                                 }
                                 else if (j == 7)
+                                {
+                                    pos.usdValue = (real64)atof(str);
+                                }
+                                else if (j == 8)
+                                {
+                                    pos.price = (real64)atof(str);
+                                }
+                                else if (j == 9)
                                 {
                                     pos.interestRate = (real64)atof(str);
                                 }
@@ -4239,11 +4276,11 @@ printPositions(State *state, int stratIndex)
     {
         Bond_position pos = state->strategies[stratIndex].bondPositions[i];
         printf("name: %s, qty : %f, price: %f, \
-                value : %f\n",
+                usd_value : %f\n",
                pos.symbol,
                pos.qty,
                pos.price,
-               pos.qty * pos.price);
+               pos.usdValue);
     }
 }
 
@@ -4432,6 +4469,39 @@ makeVariationSettlements(State *state,
     printf("total variation is %f\n", totalVariation);
 }
 
+/* apply currency gain on bond positions */
+void
+accrueCurrencyGainToBond(State *state,
+                         int stratIndex,
+                         int stratId,
+                         real64 exRate,
+                         real64 prevRate)
+{
+    for (int i = 0; i < state->strategies[stratIndex].currBondIndex + 1; i++)
+    {
+        Bond_position pos = state->strategies[stratIndex].bondPositions[i];
+        real64 currencyGain =
+            (pos.inrValue/ exRate) - (pos.inrValue / prevRate);  
+        pos.usdValue += currencyGain;
+        state->strategies[stratIndex].bondPositions[i] = pos;
+        DBUpdateBondPositionValue(state->db, &pos, stratId);
+    }
+}
+
+real64
+getTotalBondPositionValue(State *state, int stratIndex)
+{
+    real64 totalValue = 0.0;
+    /* bond positions */
+    for (int i = 0; i < state->strategies[stratIndex].currBondIndex + 1; i++)
+    {
+        Bond_position pos = state->strategies[stratIndex].bondPositions[i];
+        totalValue  += pos.usdValue;
+    }
+
+    return totalValue;
+}
+
 real64
 getTotalPositionValue(State *state, int stratIndex)
 {
@@ -4451,13 +4521,6 @@ getTotalPositionValue(State *state, int stratIndex)
         {
             totalValue  += pos.qty * pos.ltp;
         }
-    }
-
-    /* bond positions */
-    for (int i = 0; i < state->strategies[stratIndex].currBondIndex + 1; i++)
-    {
-        Bond_position pos = state->strategies[stratIndex].bondPositions[i];
-        totalValue  += pos.qty * pos.price;
     }
 
     return totalValue;
@@ -4491,6 +4554,7 @@ accrueInterest(State *state,
         Bond_position pos = state->strategies[stratIndex].bondPositions[i];
         totalInterestToAccrue += pos.qty * pos.price * (pos.interestRate / (100 * 365));
     }
+
 
     /* update the mem as well as the db, always in USD */
     /* first reevaluate the dollar value due to currency gain and later add the
@@ -4542,20 +4606,25 @@ printNav(State *state,
     printf("closing cash balance in usd is %f\n", cashUSD);
     real64 totalValueUSD = totalValue / exRate->rate;
     printf("total position value in usd is %f\n", totalValueUSD);
-    printf("total market value in usd is %f\n", (totalValueUSD + cashUSD));
     /* accrue interest of the day for all bond positions */
     real64 TDS = state->strategies[stratIndex].TDS; 
+    accrueCurrencyGainToBond(state, stratIndex, dbStratId, exRate->rate, prevRate->rate);
     accrueInterest(state, stratIndex, dbStratId, exRate->rate, prevRate->rate);
+    real64 totalBondValueUSD = getTotalBondPositionValue(state, stratIndex); 
+    printf("total bond value in usd is %f\n", totalBondValueUSD);
+    printf("total market value in usd is %f\n", (totalValueUSD + totalBondValueUSD +cashUSD));
     real64 interestAccrued = state->strategies[stratIndex].interestAccrued;
     /* add the receivables now */
     real64 receivable = state->strategies[stratIndex].receivable;
-    real64 grossAssets = totalValueUSD + cashUSD - TDS + interestAccrued + receivable;
+    real64 grossAssets = totalValueUSD + cashUSD + totalBondValueUSD - TDS + interestAccrued + receivable;
     printf("calculation ---------%f\n" \
+           "                     %f\n" \
            "                     %f\n" \
            "                     %f\n" \
            "                     %f\n" \
            "                     %f\n",
            totalValueUSD,
+           totalBondValueUSD,
            cashUSD,
            -TDS,
            interestAccrued,
@@ -4735,6 +4804,8 @@ handleBondPosition(State *state,
                    char *expiryDate,
                    char *interestRate,
                    char *qty,
+                   char *inrValue,
+                   char *usdValue,
                    char *price,
                    char *res)
 {
@@ -4744,6 +4815,8 @@ handleBondPosition(State *state,
     strcpy(pos.expiryDate, expiryDate);
     strcpy(pos.isin, isin);
     pos.qty = atof(qty);
+    pos.inrValue = atof(inrValue);
+    pos.usdValue = atof(usdValue);
     pos.price = atof(price);
     pos.interestRate = atof(interestRate);
 
@@ -6213,6 +6286,12 @@ saveDailySnapshot(PGconn *conn,
         cJSON_AddItemToObject(position,
                               "qty",
                               cJSON_CreateNumber(strat->bondPositions[i].qty));
+        cJSON_AddItemToObject(position,
+                              "inrValue",
+                              cJSON_CreateNumber(strat->bondPositions[i].inrValue));
+        cJSON_AddItemToObject(position,
+                              "usdValue",
+                              cJSON_CreateNumber(strat->bondPositions[i].usdValue));
         cJSON_AddItemToObject(position,
                               "price",
                               cJSON_CreateNumber(strat->bondPositions[i].price));
@@ -7752,6 +7831,18 @@ iterate_post (void *coninfo_cls,
         con_info->isUSD[off + size] = '\0';
         return MHD_YES;
     }
+    else if (strcmp(key, "inrValue") == 0)
+    {
+        memcpy(con_info->inrValue+ off, data, size);
+        con_info->inrValue[off + size] = '\0';
+        return MHD_YES;
+    }
+    else if (strcmp(key, "usdValue") == 0)
+    {
+        memcpy(con_info->usdValue+ off, data, size);
+        con_info->usdValue[off + size] = '\0';
+        return MHD_YES;
+    }
     else if (strcmp(key, "symbol") == 0)
     {
         memcpy(con_info->symbol+ off, data, size);
@@ -8208,6 +8299,8 @@ answer_to_connection (void *cls,
                                con_info->expiryDate,
                                con_info->interestRate,
                                con_info->qty,
+                               con_info->inrValue,
+                               con_info->usdValue,
                                con_info->price,
                                con_info->answerstring);
         }

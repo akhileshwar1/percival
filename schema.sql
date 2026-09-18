@@ -157,6 +157,8 @@ CREATE TABLE bond_position (
     date DATE NOT NULL,                                              
     expiry_date DATE NOT NULL,                                              
     qty DOUBLE PRECISION NOT NULL,
+    inr_value DOUBLE PRECISION NOT NULL,
+    usd_value DOUBLE PRECISION NOT NULL,
     price DOUBLE PRECISION NOT NULL,
     interest_rate DOUBLE PRECISION NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

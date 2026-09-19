@@ -307,6 +307,8 @@ typedef struct
     real64 qty;
     real64 price;
     real64 ltp;
+    real64 prevLtp;
+    real64 priceGain; /* for the day */
     real64 pnl;
     char sys_id[100];
 } PositionEquity;
@@ -334,7 +336,9 @@ typedef struct
     int qty;
     real64 price;
     real64 ltp;
+    real64 prevLtp;
     real64 pnl;
+    real64 priceGain; /* for the day */
     char expiry[100];
     real64 strike;
     Opt_type optType;
@@ -579,20 +583,30 @@ int get_month_number(const char *month_str) {
     return -1; // Return -1 if the month is invalid
 }
 
-/* 1/4/2026 or 1/4/26 to 01/04/2026 */
+/* 1/4/2026 or 1-4-26 or 1/4/26 to 01/04/2026 */
 void cleanDate(const char *input_date, char *output_date) {
     int day, year, month;
 
     // Parse the input string (e.g., "30-Jun-2026")
-    if (sscanf(input_date, "%d/%d/%d", &day, &month, &year) != 3)
+    if (sscanf(input_date, "%d/%d/%d", &day, &month, &year) == 3)
+    {
+        /* incase it's 26 */
+        if (year < 2000) year += 2000;
+
+        sprintf(output_date, "%02d/%02d/%04d", day, month, year);
+    }
+    else if (sscanf(input_date, "%d-%d-%d", &day, &month, &year) == 3)
+    {
+        /* incase it's 26 */
+        if (year < 2000) year += 2000;
+
+        sprintf(output_date, "%02d/%02d/%04d", day, month, year);
+    }
+    else
     {
         return; // Parsing failed
     }
 
-    /* incase it's 26 */
-    if (year < 2000) year += 2000;
-
-    sprintf(output_date, "%02d/%02d/%04d", day, month, year);
 }
 
 /* 30-Jun-2026 or 30-Jun-26 to 30/06/2026 */
@@ -1045,14 +1059,16 @@ DBInsertFNOPosition(PGconn *conn, FNO_position *pos, int stratId)
     printf("Inserting fno position\n");
     char query[2096];
     snprintf(query, sizeof(query),
-             "INSERT INTO fno_position (sys_id, symbol, qty, price, ltp, pnl, strategy_id, expiry, strike, opt_type, inst_type) "
-             "VALUES ('%s','%s', %d, %f, %f, %f, %d, '%s', %f, '%s', '%s') ",
+             "INSERT INTO fno_position (sys_id, symbol, qty, price, ltp, prev_ltp, pnl, price_gain, strategy_id, expiry, strike, opt_type, inst_type) "
+             "VALUES ('%s','%s', %d, %f, %f, %f, %f, %f, %d, '%s', %f, '%s', '%s') ",
              pos->sys_id,
              pos->symbol,
              pos->qty,
              pos->price,
              pos->ltp,
+             pos->prevLtp,
              0.0,
+             pos->priceGain,
              stratId,
              pos->expiry,
              pos->strike,
@@ -1103,8 +1119,8 @@ DBInsertPosition(PGconn *conn, PositionEquity *pos, int stratId)
 {
     char query[2096];
     snprintf(query, sizeof(query),
-             "INSERT INTO position_equity (sys_id, isin, symbol, qty, price, ltp, pnl, strategy_id) "
-             "VALUES ('%s', '%s', '%s', %f, %f, %f, %f, %d) "
+             "INSERT INTO position_equity (sys_id, isin, symbol, qty, price, ltp, prev_ltp, pnl, price_gain, strategy_id) "
+             "VALUES ('%s', '%s', '%s', %f, %f, %f, %f, %f, %f, %d) "
              "ON CONFLICT (sys_id) DO UPDATE SET "
              "qty = EXCLUDED.qty, price = EXCLUDED.price, ltp = EXCLUDED.ltp, updated_at = CURRENT_TIMESTAMP;",
              pos->sys_id,
@@ -1113,7 +1129,9 @@ DBInsertPosition(PGconn *conn, PositionEquity *pos, int stratId)
              pos->qty,
              pos->price,
              pos->ltp,
+             pos->prevLtp,
              0.0,
+             pos->priceGain,
              stratId);
     PGresult *res = executeQuery(conn, query);
     PQclear(res);   
@@ -2142,9 +2160,14 @@ LoadOldFNOPosition(FNO_position *pos, char *line)
         }
         else if (i == 10)
         {
-            pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
             pos->ltp = (real64)atof(token);
+            pos->prevLtp = (real64)atof(token);
             pos->pnl = 0.0;
+            pos->priceGain= 0.0;
+        }
+        else if (i == 11)
+        {
+            pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
         }
         i++;
     }
@@ -2218,7 +2241,13 @@ LoadOldPosition(PositionEquity *pos, char *line)
         {
             pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
             pos->ltp = (real64)atof(token);
+            pos->prevLtp= (real64)atof(token);
             pos->pnl = 0.0;
+            pos->priceGain= 0.0;
+        }
+        else if (i == 7)
+        {
+            pos->price = (real64)atof(token); // NOTE(Akhil): needs to be different.
         }
         i++;
     }
@@ -2628,6 +2657,18 @@ loadStateFromDB(State *state)
                                 }
                                 else if (b == 6)
                                 {
+                                    pos.prevLtp = atof(str);
+                                }
+                                else if (b == 7)
+                                {
+                                    pos.pnl = atof(str);
+                                }
+                                else if (b == 8)
+                                {
+                                    pos.priceGain = atof(str);
+                                }
+                                else if (b == 9)
+                                {
                                     printf("expiry is %s\n", str);
 
                                     char formattedExpiry[100];
@@ -2635,11 +2676,11 @@ loadStateFromDB(State *state)
                                                            sizeof(formattedExpiry));
                                     strcpy(pos.expiry, formattedExpiry);
                                 }
-                                else if (b == 7)
+                                else if (b == 10)
                                 {
                                     pos.strike = atof(str);
                                 }
-                                else if (b == 8)
+                                else if (b == 11)
                                 {
                                     if (strcmp(str, "PE") == 0)
                                     {
@@ -2654,7 +2695,7 @@ loadStateFromDB(State *state)
                                         pos.optType = NA;
                                     }
                                 }
-                                else if (b == 9)
+                                else if (b == 12)
                                 {
                                     if (strcmp(str, "OPTIDX") == 0)
                                     {
@@ -2675,6 +2716,69 @@ loadStateFromDB(State *state)
                                 }
                             }
                             strat.fpositions[++strat.currFPosIndex] = pos; 
+                        }
+                        PQclear(pgResultPos);
+                    }
+
+                    // now, add the position_equity to the strat.
+                    sprintf(query,
+                            "SELECT * FROM position_equity WHERE strategy_id = %d",
+                            strat.id);
+
+                    pgResultPos = executeQuery(conn, query);
+                    ir = PQntuples(pgResultPos);
+                    ic = PQnfields(pgResultPos);
+                    if (ir == 0)
+                    {
+                        fprintf(stderr, "No position_equity found matching symbol: \n");
+                        PQclear(pgResultPos);
+                    }
+                    else
+                    {
+                        for (int a = 0; a < ir; a++)
+                        {
+                            PositionEquity pos = {};
+                            for (int b = 0; b < ic; b++)
+                            {
+                                char *str = PQgetvalue(pgResultPos, a, b);
+                                if (b == 1)
+                                {
+                                    strcpy(pos.sys_id, str);
+                                }
+                                else if (b == 2)
+                                {
+                                    strcpy(pos.isin, str);
+                                }
+                                else if (b == 3)
+                                {
+                                    strcpy(pos.symbol, str);
+                                }
+                                else if (b == 4)
+                                {
+                                    pos.qty = atoi(str);
+                                }
+                                else if (b == 5)
+                                {
+                                    pos.price = atof(str);
+                                }
+                                else if (b == 6)
+                                {
+                                    pos.ltp = atof(str);
+                                }
+                                else if (b == 7)
+                                {
+                                    pos.prevLtp = atof(str);
+                                }
+                                else if (b == 8)
+                                {
+                                    pos.pnl = atof(str);
+                                }
+                                else if (b == 9)
+                                {
+                                    pos.priceGain = atof(str);
+                                }
+                            }
+                            strat.positions[++strat.currPosIndex] = pos; 
                         }
                         PQclear(pgResultPos);
                     }
@@ -2873,7 +2977,9 @@ processPriceUpdates(FILE *bhavFile,
                 0 == strcmp(update.symbol,
                             state->strategies[stratIndex].positions[i].isin))
             {
+                real64 prevLtp = state->strategies[stratIndex].positions[i].ltp;
                 state->strategies[stratIndex].positions[i].ltp = update.price;
+                state->strategies[stratIndex].positions[i].prevLtp = prevLtp;
                 char query[512];
                 snprintf(query, sizeof(query),
                          "INSERT INTO equity_bhav (symbol, ltp, date) VALUES ('%s', %f, to_date('%s', 'DD/MM/YYYY')) "
@@ -2885,14 +2991,16 @@ processPriceUpdates(FILE *bhavFile,
                          ); 
                 PGresult *pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
-                state->strategies[stratIndex].positions[i].pnl =
+                state->strategies[stratIndex].positions[i].priceGain =
                     state->strategies[stratIndex].positions[i].qty *
                     (update.price -
-                    state->strategies[stratIndex].positions[i].price);
+                    state->strategies[stratIndex].positions[i].prevLtp); 
 
                 snprintf(query, sizeof(query),
-                         "UPDATE position_equity SET ltp = %f, pnl = %f WHERE symbol = '%s' AND strategy_id = %d",
+                         "UPDATE position_equity SET ltp = %f, prev_ltp = %f, price_gain = %f, pnl = %f WHERE symbol = '%s' AND strategy_id = %d",
                          update.price,
+                         prevLtp,
+                         state->strategies[stratIndex].positions[i].priceGain,
                          state->strategies[stratIndex].positions[i].pnl,
                          state->strategies[stratIndex].positions[i].symbol,
                          stratId
@@ -2912,7 +3020,9 @@ processPriceUpdates(FILE *bhavFile,
                 0 == strcmp(update.symbol,
                             state->strategies[stratIndex].fpositions[i].sys_id))
             {
+                real64 prevLtp = state->strategies[stratIndex].fpositions[i].ltp;
                 state->strategies[stratIndex].fpositions[i].ltp = update.price;
+                state->strategies[stratIndex].fpositions[i].prevLtp = prevLtp;
                 char query[512];
                 snprintf(query, sizeof(query),
                          "INSERT INTO fno_bhav (symbol, ltp, date, expiry, strike, opt_type, inst_type) "
@@ -2927,14 +3037,15 @@ processPriceUpdates(FILE *bhavFile,
                          ); 
                 PGresult *pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
-                state->strategies[stratIndex].fpositions[i].pnl =
+                state->strategies[stratIndex].positions[i].priceGain =
                     state->strategies[stratIndex].fpositions[i].qty *
                     (update.price -
-                    state->strategies[stratIndex].fpositions[i].price);
-
+                    state->strategies[stratIndex].fpositions[i].prevLtp); 
                 snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET ltp = %f, pnl = %f WHERE symbol = '%s' AND strategy_id = %d",
+                         "UPDATE fno_position SET ltp = %f, prev_ltp = %f, price_gain = %f,  pnl = %f WHERE symbol = '%s' AND strategy_id = %d",
                          update.price,
+                         prevLtp,
+                         state->strategies[stratIndex].fpositions[i].priceGain,
                          state->strategies[stratIndex].fpositions[i].pnl,
                          state->strategies[stratIndex].positions[i].symbol,
                          stratId
@@ -2983,7 +3094,9 @@ processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
                 if (strcmp(bhav.symbol,
                            state->strategies[stratIndex].positions[i].symbol) == 0)
                 {
+                    real64 prevLtp = state->strategies[stratIndex].positions[i].ltp;
                     state->strategies[stratIndex].positions[i].ltp = bhav.ltp;
+                    state->strategies[stratIndex].positions[i].prevLtp = prevLtp;
                     char query[512];
                     snprintf(query, sizeof(query),
                              "INSERT INTO equity_bhav (symbol, ltp, date) VALUES ('%s', %f, to_date('%s', 'DD/MM/YYYY')) "
@@ -2995,13 +3108,15 @@ processBhavEq(FILE *bhavFile, char *date, int stratIndex, State *state)
                              ); 
                     PGresult *pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
-                    state->strategies[stratIndex].positions[i].pnl =
+                    state->strategies[stratIndex].positions[i].priceGain =
                         state->strategies[stratIndex].positions[i].qty *
                         (bhav.ltp -
-                        state->strategies[stratIndex].positions[i].price);
+                        state->strategies[stratIndex].positions[i].prevLtp);
                     snprintf(query, sizeof(query),
-                             "UPDATE position_equity SET ltp = %f, pnl = %f WHERE sys_id = '%s'",
+                             "UPDATE position_equity SET ltp = %f, prev_ltp = %f, price_gain = %f, pnl = %f WHERE sys_id = '%s'",
                              bhav.ltp,
+                             prevLtp,
+                             state->strategies[stratIndex].positions[i].priceGain,
                              state->strategies[stratIndex].positions[i].pnl,
                              state->strategies[stratIndex].positions[i].sys_id
                              );
@@ -3059,7 +3174,9 @@ processBhavBSE(FILE *bhavFile, char *date, int dbStratId,
                     bhav.optType == state->strategies[stratIndex].fpositions[i].optType &&
                     bhav.instType == state->strategies[stratIndex].fpositions[i].instType)
                 {
+                    real64 prevLtp = state->strategies[stratIndex].fpositions[i].ltp;
                     state->strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
+                    state->strategies[stratIndex].fpositions[i].prevLtp = prevLtp;
 
                     printf("pos after bhav is %s, %d, %f\n",
                            state->strategies[stratIndex].fpositions[i].symbol,
@@ -3081,15 +3198,17 @@ processBhavBSE(FILE *bhavFile, char *date, int dbStratId,
                              );
                     PGresult *pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
-                    state->strategies[stratIndex].fpositions[i].pnl =
+                   state->strategies[stratIndex].positions[i].priceGain =
                         state->strategies[stratIndex].fpositions[i].qty *
                         (bhav.ltp -
-                        state->strategies[stratIndex].fpositions[i].price);
+                        state->strategies[stratIndex].fpositions[i].prevLtp); 
                     snprintf(query, sizeof(query),
-                             "UPDATE fno_position SET ltp = %f, pnl = %f WHERE symbol = '%s' "
+                             "UPDATE fno_position SET ltp = %f, prev_ltp = %f, price_gain = %f, pnl = %f WHERE symbol = '%s' "
                              "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
                              "AND inst_type = '%s';",
                              bhav.ltp,
+                             prevLtp,
+                             state->strategies[stratIndex].fpositions[i].priceGain,
                              state->strategies[stratIndex].fpositions[i].pnl,
                              state->strategies[stratIndex].fpositions[i].symbol,
                              state->strategies[stratIndex].fpositions[i].expiry,
@@ -3149,7 +3268,9 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
                     bhav.optType == state->strategies[stratIndex].fpositions[i].optType &&
                     bhav.instType == state->strategies[stratIndex].fpositions[i].instType)
                 {
+                    real64 prevLtp = state->strategies[stratIndex].fpositions[i].ltp;
                     state->strategies[stratIndex].fpositions[i].ltp = bhav.ltp;
+                    state->strategies[stratIndex].fpositions[i].prevLtp = prevLtp; 
 
                     printf("pos after bhav is %s, %d, %f\n",
                            state->strategies[stratIndex].fpositions[i].symbol,
@@ -3171,16 +3292,18 @@ processBhav(FILE *bhavFile, char *date, int dbStratId,
                              );
                     PGresult *pgResult = executeQuery(state->db, query);
                     PQclear(pgResult);
-                    state->strategies[stratIndex].fpositions[i].pnl =
+                    state->strategies[stratIndex].fpositions[i].priceGain =
                         state->strategies[stratIndex].fpositions[i].qty *
                         (bhav.ltp -
-                        state->strategies[stratIndex].fpositions[i].price);
+                        state->strategies[stratIndex].fpositions[i].prevLtp); 
 
                     snprintf(query, sizeof(query),
-                             "UPDATE fno_position SET ltp = %f, pnl = %f WHERE symbol = '%s' "
+                             "UPDATE fno_position SET ltp = %f, prev_ltp = %f, price_gain = %f, pnl = %f WHERE symbol = '%s' "
                              "AND expiry = '%s' AND strike = %f AND opt_type = '%s' "
                              "AND inst_type = '%s';",
                              bhav.ltp,
+                             prevLtp,
+                             state->strategies[stratIndex].fpositions[i].priceGain,
                              state->strategies[stratIndex].fpositions[i].pnl,
                              state->strategies[stratIndex].fpositions[i].symbol,
                              state->strategies[stratIndex].fpositions[i].expiry,
@@ -3355,10 +3478,10 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                                     + (trade.qty * priceAfterFee)) 
                                     / (state->strategies[stratIndex].positions[i].qty +
                                     trade.qty);
-                                /* unrealised price gain */
+                                /* unrealised pnl */
                                 state->strategies[stratIndex].fpositions[i].pnl =
                                     totalQty *
-                                    (priceAfterFee -
+                                    (state->strategies[stratIndex].fpositions[i].ltp -
                                     state->strategies[stratIndex].fpositions[i].price);
                             }
 
@@ -3458,10 +3581,10 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                                     (trade.qty * priceAfterFee)) 
                                     / (state->strategies[stratIndex].positions[i].qty +
                                     trade.qty);
-                                /* unrealised price gain */
+                                /* unrealised pnl */
                                 state->strategies[stratIndex].fpositions[i].pnl =
                                     totalQty *
-                                    (priceAfterFee -
+                                    (state->strategies[stratIndex].fpositions[i].ltp -
                                     state->strategies[stratIndex].fpositions[i].price);
                             }
                             state->strategies[stratIndex].positions[i].qty += trade.qty;
@@ -3578,6 +3701,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                         pgResult = executeQuery(state->db, query);
                         PQclear(pgResult);
                         pos.price = priceAfterFee;
+                        pos.prevLtp = priceAfterFee;
                         pos.qty = trade.qty;
                         pos.pnl = 0.0;
                         ++state->strategies[state->currStratIndex].currJournalId;
@@ -3651,6 +3775,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                         pgResult = executeQuery(state->db, query);
                         PQclear(pgResult);
                         pos.price = priceAfterFee;
+                        pos.prevLtp = priceAfterFee;
                         pos.qty = trade.qty;
                         pos.pnl = 0.0;
                         ++state->strategies[state->currStratIndex].currJournalId;
@@ -3867,10 +3992,10 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                                     + (trade.qty * priceAfterFee)) 
                                     / (state->strategies[stratIndex].fpositions[i].qty +
                                     trade.qty);
-                                /* unrealised price gain */
+                                /* unrealised pnl */
                                 state->strategies[stratIndex].fpositions[i].pnl =
                                     totalQty *
-                                    (priceAfterFee -
+                                    (state->strategies[stratIndex].fpositions[i].ltp -
                                     state->strategies[stratIndex].fpositions[i].price);
                             }
                             state->strategies[stratIndex].fpositions[i].qty += trade.qty;
@@ -3967,10 +4092,10 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                                     state->strategies[stratIndex].fpositions[i].qty) +
                                     (trade.qty * priceAfterFee)) 
                                     / (state->strategies[stratIndex].fpositions[i].qty + trade.qty);
-                                /* unrealised price gain */
+                                /* unrealised pnl */
                                 state->strategies[stratIndex].fpositions[i].pnl =
                                     totalQty *
-                                    (priceAfterFee -
+                                    (state->strategies[stratIndex].fpositions[i].ltp -
                                     state->strategies[stratIndex].fpositions[i].price);
                             }
                             state->strategies[stratIndex].fpositions[i].qty += trade.qty;
@@ -4120,6 +4245,7 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                                 currEntryId] = liabEntry;
                         }
                         pos.price = priceAfterFee;
+                        pos.prevLtp = priceAfterFee;
                         pos.qty = trade.qty;
                         break;
                     }
@@ -4191,6 +4317,7 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                                 currEntryId] = liabEntry;
                         }
                         pos.price = priceAfterFee;
+                        pos.prevLtp = priceAfterFee;
                         pos.qty = trade.qty;
                         break;
                     }
@@ -4198,13 +4325,14 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
             state->strategies[stratIndex].fpositions[++state->strategies[stratIndex].currFPosIndex] = pos;
             // persist the updates to price and qty.
             snprintf(query, sizeof(query),
-                     "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, ltp, pnl, expiry, strike, opt_type, inst_type) "
-                     "VALUES ('%s', %d, '%s', %d, %f, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
+                     "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, prevLtp, ltp, pnl, expiry, strike, opt_type, inst_type) "
+                     "VALUES ('%s', %d, '%s', %d, %f, %f, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
                      pos.sys_id,
                      dbStratId,
                      pos.symbol,
                      pos.qty,
                      pos.price,
+                     pos.prevLtp,
                      pos.ltp,
                      pos.pnl,
                      pos.expiry,
@@ -4381,7 +4509,7 @@ makeVariationSettlements(State *state,
             FNO_position pos = state->strategies[stratIndex].fpositions[i];
             if (pos.instType == FUTSTK || pos.instType == FUTIDX)
             {
-                real64 variation = pos.qty * (pos.ltp - pos.price); 
+                real64 variation = pos.qty * (pos.ltp - pos.prevLtp); 
                 printf("variation of %f against %s\n", variation, pos.symbol);
                 if (isUSD == 1)
                 {
@@ -4395,7 +4523,7 @@ makeVariationSettlements(State *state,
                                            dbStratId);
                 }
                 else
-            {
+                {
                     /* do the accounting in both base and settlement currencies */
                     state->strategies[stratIndex].accs[accIndex].inrBalance += variation;
                     /* persist the accs balance. */
@@ -4421,17 +4549,17 @@ makeVariationSettlements(State *state,
                 totalVariation += variation;
                 // move the ltp now to the price column,
                 // so that the next time variation is correct.
-                pos.price = pos.ltp;
-                sprintf(query,
-                        "UPDATE fno_position SET price = %f where symbol = '%s' "
-                        "AND strike = %f AND expiry = '%s' AND opt_type = '%s' "
-                        "AND inst_type = '%s';",
-                        pos.ltp,
-                        pos.symbol,
-                        pos.strike,
-                        pos.expiry,
-                        OptTypeStrings[pos.optType],
-                        InstrumentTypeStrings[pos.instType]);
+                // pos.price = pos.ltp;
+                // sprintf(query,
+                //         "UPDATE fno_position SET price = %f where symbol = '%s' "
+                //         "AND strike = %f AND expiry = '%s' AND opt_type = '%s' "
+                //         "AND inst_type = '%s';",
+                //         pos.ltp,
+                //         pos.symbol,
+                //         pos.strike,
+                //         pos.expiry,
+                //         OptTypeStrings[pos.optType],
+                //         InstrumentTypeStrings[pos.instType]);
                 pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
                 state->strategies[stratIndex].fpositions[i] = pos;
@@ -6221,8 +6349,14 @@ saveDailySnapshot(PGconn *conn,
                               "ltp",
                               cJSON_CreateNumber(strat->positions[i].ltp));
         cJSON_AddItemToObject(position,
+                              "prevLtp",
+                              cJSON_CreateNumber(strat->positions[i].prevLtp));
+        cJSON_AddItemToObject(position,
                               "pnl",
                               cJSON_CreateNumber(strat->positions[i].pnl));
+        cJSON_AddItemToObject(position,
+                              "priceGain",
+                              cJSON_CreateNumber(strat->positions[i].priceGain));
         cJSON_AddItemToObject(position,
                               "price",
                               cJSON_CreateNumber(strat->positions[i].price));
@@ -6255,8 +6389,14 @@ saveDailySnapshot(PGconn *conn,
                               "ltp",
                               cJSON_CreateNumber(strat->fpositions[i].ltp));
         cJSON_AddItemToObject(position,
+                              "prevLtp",
+                              cJSON_CreateNumber(strat->fpositions[i].prevLtp));
+        cJSON_AddItemToObject(position,
                               "pnl",
                               cJSON_CreateNumber(strat->fpositions[i].pnl));
+        cJSON_AddItemToObject(position,
+                              "priceGain",
+                              cJSON_CreateNumber(strat->fpositions[i].priceGain));
         cJSON_AddItemToObject(position,
                               "price",
                               cJSON_CreateNumber(strat->fpositions[i].price));

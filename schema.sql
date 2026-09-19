@@ -140,7 +140,9 @@ CREATE TABLE fno_position (
     qty DOUBLE PRECISION NOT NULL,
     price DOUBLE PRECISION NOT NULL,
     ltp DOUBLE PRECISION NOT NULL,
+    prev_ltp DOUBLE PRECISION NOT NULL,
     pnl DOUBLE PRECISION NOT NULL,
+    price_gain DOUBLE PRECISION NOT NULL,
     expiry DATE NOT NULL,                                              
     strike DOUBLE PRECISION NOT NULL,
     opt_type opt_type NOT NULL,
@@ -254,7 +256,9 @@ CREATE TABLE position_equity (
     qty DOUBLE PRECISION NOT NULL,
     price DOUBLE PRECISION NOT NULL,                                   
     ltp DOUBLE PRECISION NOT NULL,                                     
+    prev_ltp DOUBLE PRECISION NOT NULL,                                     
     pnl DOUBLE PRECISION NOT NULL,
+    price_gain DOUBLE PRECISION NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,      
     strategy_id INTEGER REFERENCES strategy(id) ON DELETE CASCADE     
 );

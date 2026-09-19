@@ -11,6 +11,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <cjson/cJSON.h>
+#include <math.h>
 
 typedef uint32_t uint32;
 typedef uint64_t uint64;
@@ -308,7 +309,8 @@ typedef struct
     real64 price;
     real64 ltp;
     real64 prevLtp;
-    real64 priceGain; /* for the day */
+    real64 priceGain; /* unrealised price gain for the day */
+    real64 realisedPriceGain; /* for the day */
     real64 pnl;
     char sys_id[100];
 } PositionEquity;
@@ -338,7 +340,8 @@ typedef struct
     real64 ltp;
     real64 prevLtp;
     real64 pnl;
-    real64 priceGain; /* for the day */
+    real64 priceGain; /* unrealised for the day */
+    real64 realisedPriceGain; /* for the day */
     char expiry[100];
     real64 strike;
     Opt_type optType;
@@ -2164,6 +2167,7 @@ LoadOldFNOPosition(FNO_position *pos, char *line)
             pos->prevLtp = (real64)atof(token);
             pos->pnl = 0.0;
             pos->priceGain= 0.0;
+            pos->realisedPriceGain= 0.0;
         }
         else if (i == 11)
         {
@@ -2244,6 +2248,7 @@ LoadOldPosition(PositionEquity *pos, char *line)
             pos->prevLtp= (real64)atof(token);
             pos->pnl = 0.0;
             pos->priceGain= 0.0;
+            pos->realisedPriceGain= 0.0;
         }
         else if (i == 7)
         {
@@ -2669,6 +2674,10 @@ loadStateFromDB(State *state)
                                 }
                                 else if (b == 9)
                                 {
+                                    pos.realisedPriceGain = atof(str);
+                                }
+                                else if (b == 10)
+                                {
                                     printf("expiry is %s\n", str);
 
                                     char formattedExpiry[100];
@@ -2676,11 +2685,11 @@ loadStateFromDB(State *state)
                                                            sizeof(formattedExpiry));
                                     strcpy(pos.expiry, formattedExpiry);
                                 }
-                                else if (b == 10)
+                                else if (b == 11)
                                 {
                                     pos.strike = atof(str);
                                 }
-                                else if (b == 11)
+                                else if (b == 12)
                                 {
                                     if (strcmp(str, "PE") == 0)
                                     {
@@ -2695,7 +2704,7 @@ loadStateFromDB(State *state)
                                         pos.optType = NA;
                                     }
                                 }
-                                else if (b == 12)
+                                else if (b == 13)
                                 {
                                     if (strcmp(str, "OPTIDX") == 0)
                                     {
@@ -2776,6 +2785,10 @@ loadStateFromDB(State *state)
                                 else if (b == 9)
                                 {
                                     pos.priceGain = atof(str);
+                                }
+                                else if (b == 10)
+                                {
+                                    pos.realisedPriceGain = atof(str);
                                 }
                             }
                             strat.positions[++strat.currPosIndex] = pos; 
@@ -3470,7 +3483,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                             else
                             {
                                 int totalQty = 
-                                    state->strategies[stratIndex].fpositions[i].qty +
+                                    state->strategies[stratIndex].positions[i].qty +
                                     trade.qty;
                                 state->strategies[stratIndex].positions[i].price =
                                     ((state->strategies[stratIndex].positions[i].price *
@@ -3479,10 +3492,27 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                                     / (state->strategies[stratIndex].positions[i].qty +
                                     trade.qty);
                                 /* unrealised pnl */
-                                state->strategies[stratIndex].fpositions[i].pnl =
+                                state->strategies[stratIndex].positions[i].pnl =
                                     totalQty *
-                                    (state->strategies[stratIndex].fpositions[i].ltp -
-                                    state->strategies[stratIndex].fpositions[i].price);
+                                    (state->strategies[stratIndex].positions[i].ltp -
+                                    state->strategies[stratIndex].positions[i].price);
+                            }
+
+                            /* if there is a partial close even, register realised gain
+                             * for the day, qty *(sale price - ltp) */
+                            real64 qty = state->strategies[stratIndex].positions[i].qty; 
+                            real64 ltp = state->strategies[stratIndex].positions[i].ltp; 
+                            real64 closedQty =
+                                fabs(qty) < fabs(trade.qty) ? fabs(qty) : fabs(trade.qty); 
+                            real64 realisedPriceGain;
+                            if ((trade.qty > 0 && qty < 0) ||
+                                (trade.qty < 0 && qty > 0))
+                            {
+                                
+                                realisedPriceGain =
+                                    closedQty * (priceAfterFee - ltp);
+                                state->strategies[stratIndex].positions[i].
+                                    realisedPriceGain += realisedPriceGain; 
                             }
 
                             state->strategies[stratIndex].positions[i].qty += trade.qty;
@@ -3573,7 +3603,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                             else
                             {
                                 int totalQty = 
-                                    state->strategies[stratIndex].fpositions[i].qty +
+                                    state->strategies[stratIndex].positions[i].qty +
                                     trade.qty;
                                 state->strategies[stratIndex].positions[i].price =
                                     ((state->strategies[stratIndex].positions[i].price *
@@ -3582,10 +3612,26 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                                     / (state->strategies[stratIndex].positions[i].qty +
                                     trade.qty);
                                 /* unrealised pnl */
-                                state->strategies[stratIndex].fpositions[i].pnl =
+                                state->strategies[stratIndex].positions[i].pnl =
                                     totalQty *
-                                    (state->strategies[stratIndex].fpositions[i].ltp -
-                                    state->strategies[stratIndex].fpositions[i].price);
+                                    (state->strategies[stratIndex].positions[i].ltp -
+                                    state->strategies[stratIndex].positions[i].price);
+                            }
+
+                            /* if there is a partial close even, register realised gain
+                             * for the day, qty *(sale price - ltp) */
+                            real64 qty = state->strategies[stratIndex].positions[i].qty; 
+                            real64 ltp = state->strategies[stratIndex].positions[i].ltp; 
+                            real64 closedQty = 
+                                fabs(qty) < fabs(trade.qty) ? fabs(qty) : fabs(trade.qty); 
+                            real64 realisedPriceGain;
+                            if ((trade.qty > 0 && qty < 0) ||
+                                (trade.qty < 0 && qty > 0))
+                            {
+                                realisedPriceGain =
+                                    closedQty * (priceAfterFee - ltp);
+                                state->strategies[stratIndex].positions[i].
+                                    realisedPriceGain += realisedPriceGain; 
                             }
                             state->strategies[stratIndex].positions[i].qty += trade.qty;
                             ++state->strategies[state->currStratIndex].currJournalId;
@@ -3616,11 +3662,12 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                 } 
                 /* persist the updates to price and qty. */
                 snprintf(query, sizeof(query),
-                         "UPDATE position_equity SET price = %f, qty = %f , pnl = %f"
+                         "UPDATE position_equity SET price = %f, qty = %f , pnl = %f, realised_price_gain = %f"
                          " WHERE sys_id = '%s'",
                          state->strategies[stratIndex].positions[i].price,
                          state->strategies[stratIndex].positions[i].qty,
                          state->strategies[stratIndex].positions[i].pnl,
+                         state->strategies[stratIndex].positions[i].realisedPriceGain,
                          state->strategies[stratIndex].positions[i].sys_id
                          );
                 pgResult = executeQuery(state->db, query);
@@ -3998,6 +4045,21 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                                     (state->strategies[stratIndex].fpositions[i].ltp -
                                     state->strategies[stratIndex].fpositions[i].price);
                             }
+                            /* if there is a partial close even, register realised gain
+                             * for the day, qty *(sale price - ltp) */
+                            real64 qty = state->strategies[stratIndex].fpositions[i].qty; 
+                            real64 ltp = state->strategies[stratIndex].fpositions[i].ltp; 
+                            real64 closedQty =
+                                fabs(qty) < fabs(trade.qty) ? fabs(qty) : fabs(trade.qty); 
+                            real64 realisedPriceGain;
+                            if ((trade.qty > 0 && qty < 0) ||
+                                (trade.qty < 0 && qty > 0))
+                            {
+                                realisedPriceGain =
+                                    closedQty * (priceAfterFee - ltp);
+                                state->strategies[stratIndex].fpositions[i].
+                                    realisedPriceGain += realisedPriceGain; 
+                            }
                             state->strategies[stratIndex].fpositions[i].qty += trade.qty;
 
                             // add the entries to the ledger.
@@ -4098,6 +4160,21 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                                     (state->strategies[stratIndex].fpositions[i].ltp -
                                     state->strategies[stratIndex].fpositions[i].price);
                             }
+                            /* if there is a partial close even, register realised gain
+                             * for the day, qty *(sale price - ltp) */
+                            real64 qty = state->strategies[stratIndex].fpositions[i].qty; 
+                            real64 ltp = state->strategies[stratIndex].fpositions[i].ltp; 
+                            real64 closedQty =
+                                fabs(qty) < fabs(trade.qty) ? fabs(qty) : fabs(trade.qty); 
+                            real64 realisedPriceGain;
+                            if ((trade.qty > 0 && qty < 0) ||
+                                (trade.qty < 0 && qty > 0))
+                            {
+                                realisedPriceGain =
+                                    closedQty * (priceAfterFee - ltp);
+                                state->strategies[stratIndex].fpositions[i].
+                                    realisedPriceGain += realisedPriceGain; 
+                            }
                             state->strategies[stratIndex].fpositions[i].qty += trade.qty;
                             ++state->strategies[state->currStratIndex].currJournalId;
                             strcat(assetEntry.accountName, stratSymbol);
@@ -4125,12 +4202,13 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                 } 
                 // persist the updates to price and qty.
                 snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET price = %f, qty = %d, pnl = %f "
+                         "UPDATE fno_position SET price = %f, qty = %d, pnl = %f, realisedPriceGain = %f "
                          "WHERE symbol = '%s' AND expiry = '%s' AND strike = %f "
                          "AND opt_type = '%s' AND inst_type = '%s';",
                          state->strategies[stratIndex].fpositions[i].price,
                          state->strategies[stratIndex].fpositions[i].qty,
                          state->strategies[stratIndex].fpositions[i].pnl,
+                         state->strategies[stratIndex].fpositions[i].realisedPriceGain,
                          state->strategies[stratIndex].fpositions[i].symbol,
                          state->strategies[stratIndex].fpositions[i].expiry,
                          state->strategies[stratIndex].fpositions[i].strike,
@@ -6358,6 +6436,9 @@ saveDailySnapshot(PGconn *conn,
                               "priceGain",
                               cJSON_CreateNumber(strat->positions[i].priceGain));
         cJSON_AddItemToObject(position,
+                             "realisedPriceGain",
+                             cJSON_CreateNumber(strat->positions[i].realisedPriceGain));
+        cJSON_AddItemToObject(position,
                               "price",
                               cJSON_CreateNumber(strat->positions[i].price));
         cJSON_AddItemToObject(position,
@@ -6397,6 +6478,9 @@ saveDailySnapshot(PGconn *conn,
         cJSON_AddItemToObject(position,
                               "priceGain",
                               cJSON_CreateNumber(strat->fpositions[i].priceGain));
+        cJSON_AddItemToObject(position,
+                              "realisedPriceGain",
+                              cJSON_CreateNumber(strat->positions[i].realisedPriceGain));
         cJSON_AddItemToObject(position,
                               "price",
                               cJSON_CreateNumber(strat->fpositions[i].price));

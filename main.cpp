@@ -6630,35 +6630,48 @@ handleNAV(State *state, char *stratSymbol, char *date, char *res)
         sprintf(res, "NAV already published for date: %s\n", date);
         return; 
     }
-
-    /* handle exchange_rate for the date from the db */
-    real64 rate = DBGetExchangeRate(state->db, date, stratId);
-    
-    if(rate == -1)
+    real64 rate, prevRate;
+    int isUSD = DBgetIsUSD(state->db, stratSymbol);
+    if (isUSD < 0)
     {
-        fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
-        sprintf(res, "No exchange_rate found matching symbol: %s\n", stratSymbol);
-        // return;
+        printf("No strategy found matching symbol: %s\n", stratSymbol);
+        return;
     }
+
+    if (isUSD == 1)
+    {
+        rate = 1;
+        prevRate = 1;
+    }
+    else
+    {
+        /* handle exchange_rate for the date from the db */
+        rate = DBGetExchangeRate(state->db, date, stratId);
+
+        if(rate == -1)
+        {
+            fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+            sprintf(res, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+            return;
+        }
+        char prevDate[11];
+        decrementDate(date, prevDate);
+        prevRate = DBGetExchangeRate(state->db, prevDate, stratId);
+
+        if(prevRate == -1)
+        {
+            fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+            sprintf(res, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+            return;
+        }
+    }
+
     Exchange_rate exRate = {};
-    exRate.rate = abs(rate); /* abs(-1) is 1 i.e it's a US strategy 
-                              * but still it might incorrectly take an inr
-                              * with no exchange rate as a US strategy */
-    strcpy(exRate.date, date);
-    char prevDate[11];
-    decrementDate(date, prevDate);
-    real64 prevRate = DBGetExchangeRate(state->db, prevDate, stratId);
+    exRate.rate = rate;
 
-    if(prevRate == -1)
-    {
-        fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
-        sprintf(res, "No exchange_rate found matching symbol: %s\n", stratSymbol);
-        // return;
-    }
+    strcpy(exRate.date, date);
     Exchange_rate prevExRate = {};
-    prevExRate.rate = abs(prevRate); /* abs(-1) is 1 i.e it's a US strategy 
-                              * but still it might incorrectly take an inr
-                              * with no exchange rate as a US strategy */
+    prevExRate.rate = prevRate;
     strcpy(exRate.date, date);
     nav = printNav(state,
                    &exRate,

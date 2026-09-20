@@ -3749,6 +3749,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                         PQclear(pgResult);
                         pos.price = priceAfterFee;
                         pos.prevLtp = priceAfterFee;
+                        pos.ltp = priceAfterFee;
                         pos.qty = trade.qty;
                         pos.pnl = 0.0;
                         ++state->strategies[state->currStratIndex].currJournalId;
@@ -3823,6 +3824,7 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
                         PQclear(pgResult);
                         pos.price = priceAfterFee;
                         pos.prevLtp = priceAfterFee;
+                        pos.ltp = priceAfterFee;
                         pos.qty = trade.qty;
                         pos.pnl = 0.0;
                         ++state->strategies[state->currStratIndex].currJournalId;
@@ -4324,6 +4326,7 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                         }
                         pos.price = priceAfterFee;
                         pos.prevLtp = priceAfterFee;
+                        pos.ltp = priceAfterFee;
                         pos.qty = trade.qty;
                         break;
                     }
@@ -4396,6 +4399,7 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                         }
                         pos.price = priceAfterFee;
                         pos.prevLtp = priceAfterFee;
+                        pos.ltp = priceAfterFee;
                         pos.qty = trade.qty;
                         break;
                     }
@@ -4403,7 +4407,7 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
             state->strategies[stratIndex].fpositions[++state->strategies[stratIndex].currFPosIndex] = pos;
             // persist the updates to price and qty.
             snprintf(query, sizeof(query),
-                     "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, prevLtp, ltp, pnl, expiry, strike, opt_type, inst_type) "
+                     "INSERT INTO fno_position (sys_id, strategy_id, symbol, qty, price, prev_ltp, ltp, pnl, expiry, strike, opt_type, inst_type) "
                      "VALUES ('%s', %d, '%s', %d, %f, %f, %f, %f, to_date('%s', 'DD/MM/YYYY'), %f, '%s', '%s');",
                      pos.sys_id,
                      dbStratId,
@@ -4640,7 +4644,7 @@ makeVariationSettlements(State *state,
                 //         InstrumentTypeStrings[pos.instType]);
                 pgResult = executeQuery(state->db, query);
                 PQclear(pgResult);
-                state->strategies[stratIndex].fpositions[i] = pos;
+                // state->strategies[stratIndex].fpositions[i] = pos;
                 // make the ledger entries.
                 char stratSymbol[100];
                 strcpy(stratSymbol, state->strategies[stratIndex].symbol);

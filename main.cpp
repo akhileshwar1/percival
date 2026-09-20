@@ -4204,7 +4204,7 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
                 } 
                 // persist the updates to price and qty.
                 snprintf(query, sizeof(query),
-                         "UPDATE fno_position SET price = %f, qty = %d, pnl = %f, realisedPriceGain = %f "
+                         "UPDATE fno_position SET price = %f, qty = %d, pnl = %f, realised_price_gain = %f "
                          "WHERE symbol = '%s' AND expiry = '%s' AND strike = %f "
                          "AND opt_type = '%s' AND inst_type = '%s';",
                          state->strategies[stratIndex].fpositions[i].price,

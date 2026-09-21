@@ -56,3 +56,6 @@ Net quantities implied by trade history
 * currency gain directly realised into bank balance whereas in WS its in seperate
   currency gain/loss account.
 * seperate accounts for almost every transition.
+* note that for futidx the realised gains won't show up like ws.
+* when reconciling the days realised/unrealised make sure to only consider the positions
+  whose trades happened during the day in question, ignore others.

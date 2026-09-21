@@ -3341,6 +3341,14 @@ processTradesEq(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *s
     char line[1024];
     int i = 0;
     int stratIndex = -1;
+    for(int i = 0; i < state->strategies[stratIndex].currPosIndex + 1; i++)
+    {
+        /* reset the realised price gain to 0 for each day, so that 
+         * we are only tracking the day's movement */
+        state->strategies[stratIndex].positions[i].realisedPriceGain = 0;
+    }
+
+
     while (fgets(line, sizeof(line), tradeFile))
     {
         TrimString(line);
@@ -3874,6 +3882,12 @@ processTrades(FILE *tradeFile, int dbStratId, int isUSD, real64 rate, State *sta
     char line[4096];
     int i = 0;
     int stratIndex = -1;
+    for(int i = 0; i < state->strategies[stratIndex].currFPosIndex + 1; i++)
+    {
+        /* reset the realised price gain to 0 for each day, so that 
+         * we are only tracking the day's movement */
+        state->strategies[stratIndex].fpositions[i].realisedPriceGain = 0;
+    }
     while (fgets(line, sizeof(line), tradeFile))
     {
         // printf("line is %s\n", line);

@@ -1,14 +1,8 @@
 #!/bin/bash
 # opening nav
-# 94165.32 - 8704.22 - 0.79 + (27741112 / 94.6543) + 7594.88 - 1402.34
+# 94165.32 - 8704.22 - 0.79 + (541112 / 94.6543) + 7594.88 - 1402.34 + 287494.80 - 989.34
 SERVER=http://localhost:8888
 # SERVER=http://13.53.138.234:8888
-
-# 2. Create Strategy
-curl -v -X POST \
-    -F "isUSD=0" \
-    -F "file=@alpha_India_FNO/eq_strat_India_FNO.csv" \
-    $SERVER/create-strategy
 
 # create bill group
 curl -v -X POST \
@@ -19,6 +13,12 @@ curl -v -X POST \
     -F "mgmtFee=1.5" \
     -F "date=21/03/2024" \
     $SERVER/bill-group
+
+# 2. Create Strategy
+curl -v -X POST \
+    -F "isUSD=0" \
+    -F "file=@alpha_India_FNO/eq_strat_India_FNO.csv" \
+    $SERVER/create-strategy
 
 # 1. Exchange Rate
 curl -v -X POST \

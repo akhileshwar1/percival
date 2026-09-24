@@ -2384,6 +2384,7 @@ loadStateFromDB(State *state)
             Strategy strat = {};
             strat.currInvestorIndex = -1;
             strat.currFPosIndex = -1;
+            strat.currPosIndex = -1;
             strat.currAccIndex = -1;
             strat.currBondIndex = -1;
             for (int j = 0; j < cols; j++)
@@ -2423,11 +2424,11 @@ loadStateFromDB(State *state)
                 }
                 else if (j == 10)
                 {
-                    strat.currFPosIndex = atoi(str);
+                    // strat.currFPosIndex = atoi(str);
                 }
                 else if (j == 11)
                 {
-                    strat.currInvestorIndex = atoi(str);
+                    // strat.currInvestorIndex = atoi(str);
                 }
                 else if (j == 12)
                 {
@@ -2439,11 +2440,11 @@ loadStateFromDB(State *state)
                 }
                 else if (j == 14)
                 {
-                    strat.currAccIndex = atoi(str);
+                    // strat.currAccIndex = atoi(str);
                 }
                 else if (j == 15)
                 {
-                    strat.currBondIndex = atoi(str);
+                    // strat.currBondIndex = atoi(str);
                 }
                 else if (j == 16)
                 {
@@ -2459,7 +2460,7 @@ loadStateFromDB(State *state)
                 }
                 else if (j == 9)
                 {
-                    strat.currPosIndex = atoi(str);
+                    // strat.currPosIndex = atoi(str);
                     // go for the investors, accs, and positions now.
                     sprintf(query,
                             "SELECT * FROM investor WHERE strategy_id = %d",

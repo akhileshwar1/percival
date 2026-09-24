@@ -1,3 +1,3 @@
-Account Name,Security,symbol,expiry,strike,opt_type,inst_type,Security Type Detail,Holding Quantity,Market Value,rate
-India Alpha 100,Torrent Pharmaceuticals Ltd. - 28/04/2026,TORNTPHARM,28/04/2026,0,NA,FUTSTK,Futures - Stock,250,1057575.00,4230.3
-India Alpha 100,Titan Company Limited - 28/04/2026,TITAN,28/04/2026,0,NA,FUTSTK,Futures - Stock,175,693507.50,3962.9
+Account Name,Security,symbol,expiry,strike,opt_type,inst_type,Security Type Detail,Holding Quantity,Market Value,rate,Buy rate
+India Alpha 100,Torrent Pharmaceuticals Ltd. - 28/04/2026,TORNTPHARM,28-04-26,0,NA,FUTSTK,Futures - Stock,250,1057575,4230,4234
+India Alpha 100,Titan Company Limited - 28/04/2026,TITAN,28-04-26,0,NA,FUTSTK,Futures - Stock,175,693508,3963,3943.2

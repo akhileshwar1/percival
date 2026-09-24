@@ -1,2 +1,2 @@
-Account Name,symbol,isin,expiry,date,Security Type Detail,Holding Quantity,Market Value,rate,interest_rate
-India Futures and Options,5.63% GS 2026,IN0020210012,12/4/2026,20/08/2026,Bonds / Debentures - GOI Security,272000,27200000,100,5.63
+Account Name,symbol,isin,expiry,date,Security Type Detail,Holding Quantity,Market Value,usd value,rate,interest_rate
+India Futures and Options,5.63% GS 2026,IN0020210012,12/4/2026,20/08/2026,Bonds / Debentures - GOI Security,272000,27200000,287494.80,100,5.63

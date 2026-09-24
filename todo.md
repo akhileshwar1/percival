@@ -42,6 +42,8 @@ Net quantities implied by trade history
 * apply perf fee api.
 * accounting all the transitions. gain, income, interest, currencygain etc
 
+* you are not updating the curr_pos_index and curr_fpos_index in db. not needed as 
+  such because on loading from db, you calculate it from the position tables.
 
 
 

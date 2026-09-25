@@ -5158,7 +5158,7 @@ handleCreateBillGroup(State *state,
              mgmtFee,
              frequency,
              billSymbol,
-             date); 
+             date);
 
     PGresult *pgResult = executeQuery(state->db, query);
     PQclear(pgResult);
@@ -8216,12 +8216,12 @@ iterate_post (void *coninfo_cls,
         con_info->snapshotDate[off + size] = '\0';
         return MHD_YES;
     }
-    else if (0 != strcmp (key, "file"))
-    {
-        con_info->answerstring = servererrorpage;
-        con_info->answercode = MHD_HTTP_BAD_REQUEST;
-        return MHD_YES;
-    }
+    // else if (0 != strcmp (key, "file"))
+    // {
+    //     con_info->answerstring = servererrorpage;
+    //     con_info->answercode = MHD_HTTP_BAD_REQUEST;
+    //     return MHD_YES;
+    // }
     if (! con_info->fp)
     {
         if (0 != con_info->answercode) /* something went wrong */

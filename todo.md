@@ -44,6 +44,7 @@ Net quantities implied by trade history
 
 * you are not updating the curr_pos_index and curr_fpos_index in db. not needed as 
   such because on loading from db, you calculate it from the position tables.
+* process dividend payment by moving it from receivable to bank account.
 
 
 

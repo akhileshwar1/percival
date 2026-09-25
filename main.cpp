@@ -6779,11 +6779,26 @@ handleCorpAction(State *state,
                     printf("processing dividend %s...\n", div.isin);
                     // make the dividend income.
                     // NOTE(Akhil): 2 stands for the equites bank acc.
-                    real64 rate = DBGetExchangeRate(state->db, date, stratId);
-                    if (rate == -1)
+                    real64 rate;
+                    int isUSD = DBgetIsUSD(state->db, stratSymbol);
+                    if (isUSD < 0)
                     {
-                        fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
-                        return; /* TODO(Akhil) : handle error */
+                        printf("No strategy found matching symbol: %s\n", stratSymbol);
+                        return;
+                    }
+
+                    if (isUSD == 1)
+                    {
+                        rate = 1;
+                    }
+                    else
+                    {
+                        rate = DBGetExchangeRate(state->db, date, stratId);
+                        if (rate == -1)
+                        {
+                            fprintf(stderr, "No exchange_rate found matching symbol: %s\n", stratSymbol);
+                            return; /* TODO(Akhil) : handle error */
+                        }
                     }
                     
                     real64 receivableUSD = (div.div * pos.qty) / rate; 

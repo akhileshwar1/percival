@@ -1,0 +1,11 @@
+Account Name,Security,symbol,expiry,strike,opt_type,inst_type,Security Type Detail,Holding Quantity,Market Value,rate
+India Active Futures and Options,BSE SENSEX - Call - 02/04/2026 - 73000,SENSEX,2/4/2026,73000,CE,OPTIDX,Options - Index,-200,85590,427.95
+India Active Futures and Options,BSE SENSEX - Call - 02/04/2026 - 74500,SENSEX,2/4/2026,74500,CE,OPTIDX,Options - Index,-200,31090,155.45
+India Active Futures and Options,BSE SENSEX - Put - 02/04/2026 - 74000,SENSEX,2/4/2026,74000,PE,OPTIDX,Options - Index,-200,426780,2133.9
+India Active Futures and Options,NIFTY50 - Call - 07/04/2026 - 23500,NIFTY,7/4/2026,23500,CE,OPTIDX,Options - Index,-1755,95033.25,54.15
+India Active Futures and Options,NIFTY50 - Call - 07/04/2026 - 22750,NIFTY,7/4/2026,22750,CE,OPTIDX,Options - Index,-1105,240669,217.8
+India Active Futures and Options,NIFTY50 - Call - 07/04/2026 - 23000,NIFTY,7/4/2026,23000,CE,OPTIDX,Options - Index,650,91780,141.2
+India Active Futures and Options,NIFTY50 - Put - 13/04/2026 - 22800,NIFTY,13/4/2026,22800,PE,OPTIDX,Options - Index,-1300,987350,759.5
+India Active Futures and Options,NIFTY50 - Put - 13/04/2026 - 23500,NIFTY,13/4/2026,23500,PE,OPTIDX,Options - Index,-650,818025,1258.5
+India Active Futures and Options,BSE SENSEX - Put - 09/04/2026 - 73300,SENSEX,9/4/2026,73300,PE,OPTIDX,Options - Index,-200,409300,2046.5
+India Active Futures and Options,BSE SENSEX - 30/04/2026,SENSEX,30/4/2026,0,XX,FUTIDX,Futures - Index,300,21793290,72644.3

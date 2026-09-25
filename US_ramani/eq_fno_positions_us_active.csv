@@ -1,0 +1,8 @@
+Account Name,Security,symbol,expiry,strike,opt_type,inst_type,Security Type Detail,Holding Quantity,Market Value,rate
+US Active Futures and Options,Palantir Technologies Inc.-A - Put - 02/04/2026 - 140,US69608A1088,02-04-26,140,PE,OPTIDX,Options - Index,"1,000",595,0.595
+US Active Futures and Options,ES - Call - 01/04/2026 - 6550,ES,01-04-26,6550,CE,OPTSTK,Options - Stock,50,"2,212.50",44.25
+US Active Futures and Options,NQM5 - Put - 01/04/2026 - 23450,NQM5,01-04-26,23450,PE,OPTSTK,Options - Stock,40,770,19.25
+US Active Futures and Options,NQM5 - Call - 01/04/2026 - 23500,NQM5,01-04-26,23500,CE,OPTSTK,Options - Stock,40,"17,570.00",439.25
+US Active Futures and Options,ES - Put - 01/04/2026 - 6420,ES,01-04-26,6420,PE,OPTSTK,Options - Stock,50,110,2.2
+US Active Futures and Options,ES - 18/06/2026,ES,18-06-26,0,XX,FUTIDX,Futures - Index,50,"328,537.50",6570.75
+US Active Futures and Options,NQM5 - 18/06/2026,NQM5,18-06-26,0,XX,FUTSTK,Futures - Stock,40,"956,600.00",23915

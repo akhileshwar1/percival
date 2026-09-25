@@ -1,0 +1,4 @@
+Account Name,Security,symbol,expiry,strike,opt_type,inst_type,Security Type Detail,Holding Quantity,Market Value,rate,Buy rate
+India Alpha 200,Cummins India Ltd. - 28/04/2026,CUMMINSIND,28-04-26,0,NA,FUTSTK,Futures - Stock,400,1809320,4523,4454.85
+India Alpha 200,Bharat Forge Ltd. - 28/04/2026,BHARATFORG,28-04-26,0,NA,FUTSTK,Futures - Stock,1000,1656400,1656,1645.1
+India Alpha 200,Hitachi Energy India Ltd. - 28/04/2026,POWERINDIA,28-04-26,0,NA,FUTSTK,Futures - Stock,50,1218000,24360,25050

@@ -35,6 +35,7 @@ CREATE TABLE strategy
     CONSTRAINT unique_strategy_symbol UNIQUE (symbol) -- Explicitly named constraint
 );
 
+DROP TYPE IF EXISTS frequency_enum CASCADE;
 CREATE TYPE frequency_enum AS ENUM (
 'ANNIVERSARY',
 'ANNUAL',
@@ -54,6 +55,7 @@ CREATE TABLE bill_group (
 );
 
 -- Create the custom status ENUM type
+DROP TYPE IF EXISTS investor_status_enum CASCADE;
 CREATE TYPE investor_status_enum AS ENUM (
     'PENDING',
     'ONBOARDED',

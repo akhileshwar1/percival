@@ -1,0 +1,26 @@
+[Unit]
+Description=Percival NAV Server
+After=network.target postgresql.service
+Wants=postgresql.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+
+User=ubuntu
+Group=ubuntu
+
+WorkingDirectory=/home/ubuntu/percival
+
+ExecStart=/home/ubuntu/percival/run.sh
+
+Restart=always
+RestartSec=3s
+
+# Log to the journal
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

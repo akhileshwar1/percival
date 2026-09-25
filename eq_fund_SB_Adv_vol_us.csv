@@ -1,0 +1,2 @@
+PlanId,TranDate,TranType,CashFlowValue,NAV,NAV Date,Bank Code,Bank Ac Id ,Ban Ac type,Chq No,Chq Detl,Remarks,NAV/Unit Flag,Face Value
+100151,09-09-26,I,5000.00,100.00,08-09-26,SBM,50100000661500,C,,,Subscription Inflow,N,100

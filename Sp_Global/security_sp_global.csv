@@ -1,0 +1,28 @@
+Symbol Code,Symbol Name,Upper(SymbolName),Security type,Security type Detail,ISIN,Classify,Face Value,Paid up capital,Lot size,Refrence Symbol 5,Sector,Sector Name,Reference Symbol,Reference Symbol 1,NSE Symbol,BSE Symbol,Custodian / FA Symbol,Reference Symbol 7,Dimension Code 1,Dimension Name 1,Dimension Code 2,Dimension Name 2,Dimension Code 3,Dimension Name 3,Dimension Code 4,Dimension Name 4,Dimension Code 5,Dimension Name 5,Dimension Code 6,Dimension Name 6,Dimension Code 7,Dimension Name 7,Dimension Code 8,Dimension Name 8,Dimension Code 9,Dimension Name 9,Dimension Code 10,Dimension Name 10,Reference Symbol 6,Reference Symbol 8,Reference Symbol 9,Reference Symbol 10,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Filler,Free float shares,Filler,NSE Series,Issuer,Issuername,currencyCode,countryCode
+GLD,SPDR Gold Shares - GLD,SPDR GOLD SHARES - GLD,s,s_LISTED,US78463V1070,EQ,,,,,S_BLANK,,,,GLD,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+GOOGL ,Alphabet Inc. Class A,ALPHABET INC. CLASS A,s,s_LISTED,US02079K3059,EQ,,,,,S_BLANK,,,,GOOGL ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+AMZN,Amazon.com Inc,AMAZON.COM INC,s,s_LISTED,US0231351067,EQ,,,,,S_BLANK,,,,AMZN,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+AVGO,Broadcom Inc.,BROADCOM INC.,s,s_LISTED,US11135F1012,EQ,,,,,S_BLANK,,,,AVGO,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+C,Citigroup Inc.,CITIGROUP INC.,s,s_LISTED,US1729674242,EQ,,,,,S_BLANK,,,,C,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+META,Meta Platforms Inc. Class A,META PLATFORMS INC. CLASS A,s,s_LISTED,US30303M1027,EQ,,,,,S_BLANK,,,,META,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+GE,GENERAL ELECTRIC CO,GENERAL ELECTRIC CO,s,s_LISTED,US369604301,EQ,,,,,S_BLANK,,,,GE,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+GS,Goldman Sachs Group Inc.,GOLDMAN SACHS GROUP INC.,s,s_LISTED,US38141G1040,EQ,,,,,S_BLANK,,,,GS,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+ISRG,Intuitive Surgical Inc.,INTUITIVE SURGICAL INC.,s,s_LISTED,US46120E6023,EQ,,,,,S_BLANK,,,,ISRG,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+EEM,EEM,EEM,s,s_LISTED,US4642872349,EQ,,,,,S_BLANK,,,,EEM,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+EUFN,Europe Financials ETF - EUFN,EUROPE FINANCIALS ETF - EUFN,s,s_LISTED,US4642891802,EQ,,,,,S_BLANK,,,,EUFN,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+SLV,iShares Silver Trust,ISHARES SILVER TRUST,s,s_LISTED,US46428Q1094,EQ,,,,,S_BLANK,,,,SLV,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+EWJ,iShares MSCI Japan ETF - EWJ,ISHARES MSCI JAPAN ETF - EWJ,s,s_LISTED,US46434G8226,EQ,,,,,S_BLANK,,,,EWJ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+JPM,Jpmorgan Chase & Co.,JPMORGAN CHASE & CO.,s,s_LISTED,US46625H1005,EQ,,,,,S_BLANK,,,,JPM,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+LLY,Eli Lilly & Co.,ELI LILLY & CO.,s,s_LISTED,US5324571083,EQ,,,,,S_BLANK,,,,LLY,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+LMT,Lockheed Martin Corp.,LOCKHEED MARTIN CORP.,s,s_LISTED,US5398301094,EQ,,,,,S_BLANK,,,,LMT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+MSFT,Microsoft Corp,MICROSOFT CORP,s,s_LISTED,US5949181045,EQ,,,,,S_BLANK,,,,MSFT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+MU,Micron Technology Inc.,MICRON TECHNOLOGY INC.,s,s_LISTED,US5951121038,EQ,,,,,S_BLANK,,,,MU,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+NFLX,Netflix Inc,NETFLIX INC,s,s_LISTED,US64110L1061,EQ,,,,,S_BLANK,,,,NFLX,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+NOC,Northrop Grumman Corp.,NORTHROP GRUMMAN CORP.,s,s_LISTED,US6668071029,EQ,,,,,S_BLANK,,,,NOC,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+NVDA,Nvidia Corp,NVIDIA CORP,s,s_LISTED,US67066G1040,EQ,,,,,S_BLANK,,,,NVDA,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+ORCL,Oracle Corp,ORACLE CORP,s,s_LISTED,US68389X1054,EQ,,,,,S_BLANK,,,,ORCL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+PANW,Palo Alto Networks Inc.,PALO ALTO NETWORKS INC.,s,s_LISTED,US6974351057,EQ,,,,,S_BLANK,,,,PANW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+RTX,Rtx Corporation,RTX CORPORATION,s,s_LISTED,US75513E1010,EQ,,,,,S_BLANK,,,,RTX,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+VGK,Vanguard FTSE Europe ETF - VGK,VANGUARD FTSE EUROPE ETF - VGK,s,s_LISTED,US9220428745,EQ,,,,,S_BLANK,,,,VGK,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+WMT,Walmart Inc.,WALMART INC.,s,s_LISTED,US9311421039,EQ,,,,,S_BLANK,,,,WMT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
+EPI,WisdomTree India Earnings ETF - EPI,WISDOMTREE INDIA EARNINGS ETF - EPI,s,s_LISTED,US97717W4226,EQ,,,,,S_BLANK,,,,EPI,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,EQ,,,USD,US
